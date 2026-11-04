@@ -17,6 +17,21 @@ export const normalizeApiCredential = (value: unknown): string =>
 export const normalizeApiModel = (value: unknown): string =>
   cleanEdgeCharacters(value);
 
+/** Keep only valid, browser-sendable custom header names and string values. */
+export const normalizeApiHeaders = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result: Record<string, string> = {};
+  for (const [rawName, rawValue] of Object.entries(value as Record<string, unknown>)) {
+    const name = cleanEdgeCharacters(rawName).trim();
+    const headerValue = String(rawValue ?? '').trim();
+    if (!name || !headerValue || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) continue;
+    const lower = name.toLowerCase();
+    if (lower === 'host' || lower === 'content-length' || lower === 'origin' || lower === 'referer' || lower === 'cookie' || lower.startsWith('sec-') || lower.startsWith('proxy-')) continue;
+    result[name] = headerValue;
+  }
+  return result;
+};
+
 export function normalizeApiConfig(config: APIConfig): APIConfig {
   const visionApi = config.visionApi;
   return {
@@ -24,6 +39,7 @@ export function normalizeApiConfig(config: APIConfig): APIConfig {
     baseUrl: normalizeLlmBaseUrl(normalizeApiBaseUrl(config.baseUrl), config.apiType),
     apiKey: normalizeApiCredential(config.apiKey),
     model: normalizeApiModel(config.model),
+    customHeaders: normalizeApiHeaders(config.customHeaders),
     ...(visionApi ? {
       visionApi: {
         enabled: visionApi.enabled === true,
