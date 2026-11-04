@@ -6,7 +6,7 @@ import {
 import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
 import {
-  generateGptImage, generateNaiImage,
+  generateGptImage, editGptImage, generateNaiImage,
   type GptImageConfig, type NaiImageConfig, type ImageEngine,
 } from '../utils/imageGeneration';
 
@@ -46,6 +46,8 @@ const ImageStudioApp: React.FC = () => {
   const [engine, setEngine] = useState<ImageEngine>('gpt');
   const [config, setConfig] = useState<StudioConfig>(readConfig);
   const [prompt, setPrompt] = useState('');
+  const [referenceImage, setReferenceImage] = useState<File | null>(null);
+  const [referencePreview, setReferencePreview] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('low quality, worst quality, blurry, bad anatomy');
   const [gptSize, setGptSize] = useState('1024x1024');
   const [gptQuality, setGptQuality] = useState('high');
@@ -81,6 +83,13 @@ const ImageStudioApp: React.FC = () => {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
   }, [config]);
 
+  useEffect(() => {
+    if (!referenceImage) { setReferencePreview(''); return; }
+    const url = URL.createObjectURL(referenceImage);
+    setReferencePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [referenceImage]);
+
   useEffect(() => { imagesRef.current = images; }, [images]);
   useEffect(() => () => imagesRef.current.forEach(item => URL.revokeObjectURL(item.url)), []);
 
@@ -112,7 +121,9 @@ const ImageStudioApp: React.FC = () => {
     setError('');
     try {
       const blob = engine === 'gpt'
-        ? await generateGptImage(config.gpt, prompt, { size: gptSize, quality: gptQuality })
+        ? referenceImage
+          ? await editGptImage(config.gpt, referenceImage, prompt, { size: gptSize, quality: gptQuality })
+          : await generateGptImage(config.gpt, prompt, { size: gptSize, quality: gptQuality })
         : await generateNaiImage(config.nai, prompt, negativePrompt, {
             width: Number(naiSize.split('x')[0]), height: Number(naiSize.split('x')[1]),
             steps: naiSteps, scale: naiScale, sampler: naiSampler,
@@ -209,7 +220,33 @@ const ImageStudioApp: React.FC = () => {
 
           <section className="glass rounded-[24px] p-4 space-y-3">
             <div className="flex items-center justify-between"><div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">YOUR IMAGINATION</div><div className="text-sm font-semibold mt-1">描述你想要的画面</div></div><span className="text-[10px] text-slate-400">PROMPT</span></div>
-            <textarea className="field min-h-[132px] resize-y leading-6" value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={engine === 'gpt' ? '例如：雨后的玻璃花房，蓝色月光落在白色花瓣上，电影感构图……' : 'masterpiece, best quality, 1girl, ...'} />
+            <textarea className="field min-h-[132px] resize-y leading-6" value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={engine === 'gpt' ? (referenceImage ? '描述你希望如何修改这张参考图……' : '例如：雨后的玻璃花房，蓝色月光落在白色花瓣上，电影感构图……') : 'masterpiece, best quality, 1girl, ...'} />
+            {engine === 'gpt' && (
+              <div className="rounded-2xl border border-dashed border-sky-200 bg-sky-50/55 p-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div><div className="text-xs font-semibold text-slate-700">参考图编辑 <span className="font-normal text-slate-400">· 可选</span></div><p className="text-[10px] text-slate-400 mt-1">上传图片后，GPT 会按上方描述修改它</p></div>
+                  {referenceImage && <button type="button" onClick={() => setReferenceImage(null)} className="text-[10px] text-rose-500 font-semibold">移除图片</button>}
+                </div>
+                {referencePreview ? (
+                  <div className="flex items-center gap-3">
+                    <img src={referencePreview} alt="参考图预览" className="w-20 h-20 rounded-xl object-cover border border-white shadow-sm"/>
+                    <div className="min-w-0"><div className="text-xs text-slate-600 truncate">{referenceImage?.name}</div><div className="text-[10px] text-slate-400 mt-1">{((referenceImage?.size || 0) / 1024 / 1024).toFixed(1)} MB</div></div>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 rounded-xl bg-white/75 border border-white py-3 text-xs font-semibold text-sky-700 cursor-pointer">
+                    <ImageSquare size={16}/>选择一张参考图片
+                    <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={event => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 20 * 1024 * 1024) { setError('参考图片不能超过 20 MB'); event.target.value = ''; return; }
+                      setError('');
+                      setReferenceImage(file);
+                      event.target.value = '';
+                    }}/>
+                  </label>
+                )}
+              </div>
+            )}
             {engine === 'nai' && <>
               <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">反向提示词</label><button onClick={() => copyPrompt(negativePrompt)} className="text-[10px] text-sky-700 flex items-center gap-1"><Copy size={12}/>复制</button></div>
               <textarea className="field min-h-[76px] resize-y leading-5" value={negativePrompt} onChange={event => setNegativePrompt(event.target.value)} placeholder="不希望出现在画面中的内容……"/>
@@ -239,7 +276,7 @@ const ImageStudioApp: React.FC = () => {
 
           {error && <div className="rounded-2xl border border-rose-200 bg-rose-50/90 p-3 text-xs text-rose-700 leading-5">{error}</div>}
           <button onClick={handleGenerate} disabled={generating || !configured || !prompt.trim()} className="primary w-full rounded-2xl py-4 flex items-center justify-center gap-2 text-sm font-bold">
-            {generating ? <><ArrowsClockwise size={18} className="animate-spin"/>正在绘制，请稍候…</> : <><Sparkle size={18}/>开始生成</>}
+            {generating ? <><ArrowsClockwise size={18} className="animate-spin"/>{referenceImage ? '正在编辑参考图…' : '正在绘制，请稍候…'}</> : <><Sparkle size={18}/>{referenceImage && engine === 'gpt' ? '开始编辑图片' : '开始生成'}</>}
           </button>
           <p className="text-center text-[10px] text-slate-400">生成费用由对应平台收取 · 作品只保存在本机设备</p>
         </main>
