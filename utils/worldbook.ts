@@ -380,7 +380,7 @@ export const parseStandardWorldbook = (
             updatedAt: now,
             key: primary,
             keysecondary: secondary,
-            constant: value.constant === true || value.enabled === true && value.disable !== true,
+            constant: value.constant === true,
             selective: value.selective === true || (value.selective == null && secondary.length > 0),
             selectiveLogic: clamp(value.selectiveLogic == null ? undefined : value.selectiveLogic, 0, 3, 0) as WorldbookSelectiveLogic,
             order: Number.isFinite(rawOrder) ? rawOrder : Number.isFinite(Number(value.insertion_order)) ? Number(value.insertion_order) : 100,
