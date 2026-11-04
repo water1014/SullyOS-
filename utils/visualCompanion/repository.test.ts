@@ -69,6 +69,42 @@ describe('视觉人格本地仓库', () => {
         expect((await visualCompanionRepository.listMemories('char_1')).map(x => x.content)).toEqual(['黑色短发']);
     });
 
+    it('角色形象档案必须按版本递增，拒绝旧版本覆盖新设定', async () => {
+        const original = {
+            id: 'profile_versioned',
+            charId: 'char_1',
+            version: 1,
+            status: 'active' as const,
+            identity: [{ key: 'hair', value: '银色长发', confirmed: true, source: 'user' as const, locked: true, updatedAt: now }],
+            anchorPrompt: 'Silver long hair, amber eyes.',
+            createdAt: now,
+            updatedAt: now,
+        };
+        await visualCompanionRepository.saveProfile(original);
+
+        const updated = { ...original, version: 2, anchorPrompt: 'Silver long hair, amber eyes, a small scar.' };
+        await visualCompanionRepository.saveProfile(updated);
+        await expect(visualCompanionRepository.saveProfile({
+            ...original,
+            anchorPrompt: '旧自动整理结果',
+        })).rejects.toThrow('版本冲突');
+        await expect(visualCompanionRepository.saveProfile({
+            ...updated,
+            version: 4,
+            anchorPrompt: '跳过版本的写入',
+        })).rejects.toThrow('版本冲突');
+        await expect(visualCompanionRepository.saveProfile({
+            ...updated,
+            charId: 'another_character',
+            version: 3,
+        })).rejects.toThrow('不能转移到其他角色');
+
+        const saved = await visualCompanionRepository.getProfile(original.id);
+        expect(saved?.version).toBe(2);
+        expect(saved?.anchorPrompt).toBe(updated.anchorPrompt);
+        expect(saved?.identity[0].locked).toBe(true);
+    });
+
     it('拒绝跨越非法任务状态，允许有效推进', async () => {
         await visualCompanionRepository.saveTask(task());
         await expect(visualCompanionRepository.transitionTask('task_1', 'delivered')).rejects.toThrow('不允许的视觉任务状态转换');
