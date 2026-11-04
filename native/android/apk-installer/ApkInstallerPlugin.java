@@ -106,8 +106,11 @@ public class ApkInstallerPlugin extends Plugin {
             PackageInfo installed = getContext().getPackageManager().getPackageInfo(
                 getContext().getPackageName(), signingFlags()
             );
+            String candidateSigner = archiveSignerFingerprint(candidate);
+            String installedSigner = installedSignerFingerprint(installed);
             if (!getContext().getPackageName().equals(candidate.packageName)
-                || !archiveSignerFingerprint(candidate).equals(installedSignerFingerprint(installed))
+                || candidateSigner.length() != 64
+                || !candidateSigner.equals(installedSigner)
                 || packageVersionCode(candidate) <= packageVersionCode(installed)) {
                 throw new SecurityException("APK 包名、签名或版本不匹配");
             }
@@ -182,12 +185,13 @@ public class ApkInstallerPlugin extends Plugin {
     private String installedSignerFingerprint(PackageInfo info) throws Exception {
         if (Build.VERSION.SDK_INT >= 28 && info.signingInfo != null) {
             android.content.pm.Signature[] signatures = info.signingInfo.getApkContentsSigners();
-            if (signatures.length > 0) return digest(signatures[0].toByteArray());
+            if (signatures.length != 1) throw new SecurityException("不支持多签名 APK");
+            return digest(signatures[0].toByteArray());
         }
-        if (info.signatures != null && info.signatures.length > 0) {
-            return digest(info.signatures[0].toByteArray());
+        if (info.signatures == null || info.signatures.length != 1) {
+            throw new SecurityException("APK 缺少唯一签名证书");
         }
-        return "";
+        return digest(info.signatures[0].toByteArray());
     }
 
     private String archiveSignerFingerprint(PackageInfo info) throws Exception {
