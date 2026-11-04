@@ -27,13 +27,13 @@ function errorMessage(payload: any, fallback: string): string {
 }
 
 export function normalizeOpenAIImagesEndpoint(baseUrl: string): string {
-  const clean = baseUrl.trim().replace(/\\/+$/, '');
+  const clean = baseUrl.trim().replace(/\/+$/, '');
   if (!clean) throw new Error('请填写 GPT API Base URL');
   return clean.endsWith('/images/generations') ? clean : `${clean}/images/generations`;
 }
 
 export function normalizeOpenAIImageEditsEndpoint(baseUrl: string): string {
-  const clean = baseUrl.trim().replace(/\\/+$/, '');
+  const clean = baseUrl.trim().replace(/\/+$/, '');
   if (!clean) throw new Error('请填写 GPT API Base URL');
   return clean.endsWith('/images/edits') ? clean : `${clean}/images/edits`;
 }
