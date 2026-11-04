@@ -11,10 +11,12 @@ import {
     updateLocalSyncDeviceLabel,
     setSyncPreference,
     getCompanionSyncConnection,
+    getCompanionSyncConnection,
     type CompanionSyncConnection,
     type LocalSyncConflict,
     type SyncQueueSummary,
 } from '../../utils/localSyncStore';
+import { pairCompanionDevice, syncCompanionOnce, disconnectCompanionDevice } from '../../utils/companionSyncClient';
 
 const SYNC_LABELS = [{ entityType: 'room_note' as const, label: '房间便签', detail: '只允许同步便签文字，不包含关联聊天或附件。' }];
 
@@ -34,6 +36,12 @@ export default function LocalSyncSettingsPanel() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [connection, setConnection] = useState<{ baseUrl: string; label: string; accountId: string } | null>(null);
+    const [serverUrl, setServerUrl] = useState('');
+    const [pairingCode, setPairingCode] = useState('');
+    const [pairing, setPairing] = useState(false);
+    const [syncing, setSyncing] = useState(false);
+    const [syncMessage, setSyncMessage] = useState('');
 
     const refresh = useCallback(async () => {
         try {
@@ -44,10 +52,12 @@ export default function LocalSyncSettingsPanel() {
                 listUnresolvedSyncConflicts(),
                 getOrCreateLocalSyncDeviceIdentity(),
                 getCompanionSyncConnection(),
+                getCompanionSyncConnection(),
             ]);
             setEnabled(preference.enabled && preference.mode === 'text');
             setLocalDeviceId(identity.deviceId);
             setDeviceLabel(identity.label || '这台手机');
+            setConnection(remoteConnection ? { baseUrl: remoteConnection.baseUrl, label: remoteConnection.label, accountId: remoteConnection.accountId } : null);
             setConnection(savedConnection);
 
             setQueue(summary);
@@ -68,6 +78,10 @@ export default function LocalSyncSettingsPanel() {
         setError('');
         try {
             await setSyncPreference('room_note', next, next ? 'text' : 'local_only');
+            if (connection) {
+                const { setCompanionRemoteSyncPolicy } = await import('../../utils/companionSyncClient');
+                await setCompanionRemoteSyncPolicy(next);
+            }
             setEnabled(next);
             if (!next && connection) {
                 try {
@@ -191,6 +205,51 @@ export default function LocalSyncSettingsPanel() {
                         className="shrink-0 rounded-lg bg-sky-100 px-3 py-2 text-[10px] font-semibold text-sky-700 disabled:opacity-50"
                     >{savingDeviceLabel ? '保存中' : '保存名称'}</button>
                 </div>
+            </div>
+            <div className="space-y-2 rounded-xl border border-sky-100 bg-white/90 p-3">
+                <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-700">云端设备配对</span>
+                    <span className={connection ? "text-[10px] text-emerald-600" : "text-[10px] text-slate-400"}>{connection ? '已配对' : '尚未配对'}</span>
+                </div>
+                {connection ? (
+                    <>
+                        <p className="text-[11px] text-slate-500 break-all">{connection.baseUrl}</p>
+                        <p className="text-[11px] text-slate-500">设备：{connection.label}</p>
+                        <div className="flex gap-2">
+                            <button type="button" disabled={syncing || !enabled} onClick={async () => {
+                                setSyncing(true); setSyncMessage('正在同步…'); setError('');
+                                try {
+                                    const result = await syncCompanionOnce();
+                                    setSyncMessage(`完成：上传 ${result.pushed} 条，接收 ${result.received} 条，应用 ${result.applied} 条，冲突 ${result.conflicts} 条`);
+                                    await refresh();
+                                } catch (e) { setError(e instanceof Error ? e.message : '同步失败'); setSyncMessage(''); }
+                                finally { setSyncing(false); }
+                            }} className="flex-1 rounded-lg bg-sky-600 px-3 py-2 text-[11px] font-semibold text-white disabled:opacity-50">{syncing ? '同步中…' : '立即同步'}</button>
+                            <button type="button" disabled={syncing} onClick={async () => {
+                                if (!window.confirm('断开后将撤销这台设备的云端令牌。确定继续吗？')) return;
+                                try { await disconnectCompanionDevice(true); setConnection(null); setSyncMessage('已断开并撤销设备令牌'); }
+                                catch (e) { setError(e instanceof Error ? e.message : '断开失败'); }
+                            }} className="rounded-lg bg-slate-100 px-3 py-2 text-[11px] font-semibold text-slate-600 disabled:opacity-50">断开</button>
+                        </div>
+                        {syncMessage && <p className="text-[10px] text-sky-700">{syncMessage}</p>}
+                    </>
+                ) : (
+                    <>
+                        <input value={serverUrl} onChange={e => setServerUrl(e.target.value)} placeholder="云端服务地址，例如 https://sync.example.com" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs" aria-label="云端服务地址" />
+                        <input value={pairingCode} onChange={e => setPairingCode(e.target.value)} placeholder="一次性配对码" maxLength={128} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs" aria-label="一次性配对码" />
+                        <button type="button" disabled={pairing || !serverUrl.trim() || !pairingCode.trim()} onClick={async () => {
+                            setPairing(true); setError('');
+                            try {
+                                const result = await pairCompanionDevice({ baseUrl: serverUrl, pairingCode, label: deviceLabel });
+                                setPairingCode('');
+                                setSyncMessage(result.persistentTokenStorage ? '配对成功，令牌已保存到 Android 安全存储' : '配对成功，但当前预览环境仅临时保存令牌，关闭页面后需要重新配对');
+                                await refresh();
+                            } catch (e) { setError(e instanceof Error ? e.message : '配对失败'); }
+                            finally { setPairing(false); }
+                        }} className="w-full rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{pairing ? '配对中…' : '连接云端设备'}</button>
+                        <p className="text-[10px] leading-relaxed text-slate-400">需要已经部署并初始化的云端服务及一次性配对码。请勿把配对码或设备令牌发给别人。</p>
+                    </>
+                )}
             </div>
             {SYNC_LABELS.map(item => (
                 <label key={item.entityType} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-white/90 p-3">
