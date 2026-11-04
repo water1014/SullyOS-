@@ -40,6 +40,9 @@ export function createOpenCodeGoTransport(
 
     const method = (init?.method || request?.method || 'GET').toUpperCase();
     const headers = new Headers(init?.headers || request?.headers);
+    // OpenCode Go asks third-party clients to identify themselves with a stable,
+    // product-specific User-Agent. Native HTTP can set this header (browser fetch cannot).
+    if (!headers.has('user-agent')) headers.set('user-agent', 'SullyOS/1.0');
     const body = init?.body ?? (request && method !== 'GET' && method !== 'HEAD'
       ? await request.clone().text()
       : undefined);
