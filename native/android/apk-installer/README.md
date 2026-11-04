@@ -1,11 +1,13 @@
 # ApkInstaller 原生插件接入说明
 
-这里保存 Capacitor 6 Android 自定义插件的源码片段，不是完整 Android Studio 工程。当前仓库尚未生成 `android/`，所以这份 Java 代码还不能独立编译或在手机上运行。
+这里保存 Capacitor 6 Android 自定义插件的源码片段，不是完整 Android Studio 工程。构建脚本会从仓库生成 Android 工程，并把安装器、安全存储和屏幕感知插件接入其中。
 
 ## 文件
 
 - `ApkInstallerPlugin.java`：读取安装信息、校验 APK 包名/版本/签名/SHA-256、请求系统安装权限并调用系统安装器。
 - `apk_installer_paths.xml`：FileProvider 仅暴露应用缓存中的 `verified-updates/` 子目录。
+- `../secure-storage/SecureStoragePlugin.java`：使用 Android Keystore + AES-GCM 保存小型秘密值。
+- `../screen-awareness/ScreenAwarenessPlugin.java` 和 `ScreenAwarenessService.java`：由用户明确授权后启动 MediaProjection，持续显示停止通知，只在本机缓存最新画面。
 
 ## 接入完整 Capacitor Android 工程时
 
@@ -25,7 +27,7 @@
    }
    ```
 
-4. 确认 `AndroidManifest.xml` 在 `<application>` 外声明 `android.permission.REQUEST_INSTALL_PACKAGES`。接入脚本会自动补上该权限声明。
+4. 确认 `AndroidManifest.xml` 在 `<application>` 外声明安装器和屏幕感知所需权限。接入脚本会自动补上 `REQUEST_INSTALL_PACKAGES`、`FOREGROUND_SERVICE` 和 `FOREGROUND_SERVICE_MEDIA_PROJECTION`，并注册 `ScreenAwarenessService`。
 
 5. 在 `AndroidManifest.xml` 的 `<application>` 内注册 FileProvider：
 
@@ -63,4 +65,4 @@
 - [ ] Android 7 及以下兼容分支（如仍支持）验证。
 - [ ] Android 12-16 真实设备测试 FileProvider URI 与安装器行为。
 
-不要在没有完成这些检查前发布正式 APK。
+屏幕感知另有真实设备验收项：Android 系统授权弹窗、持续通知、通知栏停止、系统撤销投屏、屏幕旋转，以及 Android 14+ 前台服务权限。当前屏幕感知只做本机缓存预览，不会上传或附加到聊天。\n\n不要在没有完成这些检查前发布正式 APK。
