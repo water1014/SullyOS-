@@ -48,7 +48,7 @@ const DB_NAME = 'AetherOS_Data';
 // v73: direct home-turn lookups for incremental journal writes.
 // v74: merge master delivery lookup with both home indexes, including existing v73 databases.
 // v75: add isolated visual companion metadata stores; existing chat, gallery and blob stores are untouched.
-const DB_VERSION = 75;
+const DB_VERSION = 76;
 
 const STORE_CHARACTERS = 'characters';
 const STORE_CHAR_GROUPS = 'character_groups'; // 角色分组定义（角色通过 groupId 指向；与群聊 groups 无关）
@@ -598,6 +598,40 @@ export const openDB = (): Promise<IDBDatabase> => {
       createVisualStore('private_visual_blobs', [
           { name: 'charId', keyPath: 'charId' },
           { name: 'createdAt', keyPath: 'createdAt' },
+      ]);
+
+      // ─── v76: local-first sync metadata; business stores remain untouched ───
+      const createSyncStore = (
+          name: string,
+          indexes: Array<{ name: string; keyPath: string | string[] }>
+      ) => {
+          const store = db.objectStoreNames.contains(name)
+              ? upgradeTransaction.objectStore(name)
+              : db.createObjectStore(name, { keyPath: name === 'sync_outbox' || name === 'sync_inbox' ? 'eventId' : name === 'sync_conflicts' ? 'conflictId' : name === 'sync_preferences' ? 'entityType' : 'id' });
+          for (const index of indexes) {
+              if (!store.indexNames.contains(index.name)) {
+                  store.createIndex(index.name, index.keyPath, { unique: false });
+              }
+          }
+      };
+      createSyncStore('sync_outbox', [
+          { name: 'state', keyPath: 'state' },
+          { name: 'createdAt', keyPath: 'createdAt' },
+          { name: 'entity', keyPath: ['entityType', 'entityId'] },
+      ]);
+      createSyncStore('sync_inbox', [
+          { name: 'serverSequence', keyPath: 'serverSequence' },
+          { name: 'applyState', keyPath: 'applyState' },
+      ]);
+      createSyncStore('sync_state', [
+          { name: 'updatedAt', keyPath: 'updatedAt' },
+      ]);
+      createSyncStore('sync_conflicts', [
+          { name: 'entity', keyPath: ['entityType', 'entityId'] },
+          { name: 'resolutionState', keyPath: 'resolutionState' },
+      ]);
+      createSyncStore('sync_preferences', [
+          { name: 'enabled', keyPath: 'enabled' },
       ]);
     };
   });

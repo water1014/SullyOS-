@@ -1,0 +1,94 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { DB } from './db';
+import {
+    enqueueRoomNoteSyncEvent,
+    getSyncPreference,
+    getSyncQueueSummary,
+    listPendingSyncEvents,
+    removeSyncEvent,
+    serializeRoomNoteForSync,
+    setSyncPreference,
+    updateSyncEventState,
+} from './localSyncStore';
+
+const note = {
+    id: 'note-1',
+    charId: 'char-1',
+    timestamp: 1700000000000,
+    content: '今晚的月亮很好看',
+    type: 'thought' as const,
+};
+
+describe('local-first sync outbox', () => {
+    beforeEach(async () => {
+        await DB.deleteDB();
+    });
+
+    it('defaults to local-only and does not queue without explicit opt-in', async () => {
+        expect(await getSyncPreference('room_note')).toMatchObject({
+            enabled: false,
+            mode: 'local_only',
+        });
+        expect(await enqueueRoomNoteSyncEvent(note, 'create')).toBeNull();
+        expect(await getSyncQueueSummary()).toEqual({ pending: 0, inFlight: 0, blocked: 0 });
+    });
+
+    it('queues a text-only allowlisted room-note event after explicit opt-in', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        const event = await enqueueRoomNoteSyncEvent({
+            ...note,
+            relatedMessageId: 99,
+            privateBlobId: 'must-not-leak',
+        } as typeof note, 'create');
+
+        expect(event).not.toBeNull();
+        expect(event?.payload).toEqual({
+            id: note.id,
+            charId: note.charId,
+            timestamp: note.timestamp,
+            content: note.content,
+            type: note.type,
+        });
+        expect(JSON.stringify(event)).not.toContain('must-not-leak');
+        expect(await listPendingSyncEvents()).toHaveLength(1);
+        expect(await getSyncQueueSummary()).toEqual({ pending: 1, inFlight: 0, blocked: 0 });
+    });
+
+    it('keeps event identity stable while retrying and increments attempts', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        const event = await enqueueRoomNoteSyncEvent(note, 'create');
+        expect(event).not.toBeNull();
+
+        await updateSyncEventState(event!.eventId, 'in_flight');
+        await updateSyncEventState(event!.eventId, 'pending', 'NETWORK_UNAVAILABLE');
+
+        const [pending] = await listPendingSyncEvents();
+        expect(pending.eventId).toBe(event!.eventId);
+        expect(pending.attemptCount).toBe(1);
+        expect(pending.lastErrorCode).toBe('NETWORK_UNAVAILABLE');
+    });
+
+    it('uses an empty payload for delete events', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        const event = await enqueueRoomNoteSyncEvent(note, 'delete');
+        expect(event?.payload).toEqual({});
+        expect(event?.operation).toBe('delete');
+    });
+
+    it('removes an event after it has been acknowledged', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        const event = await enqueueRoomNoteSyncEvent(note, 'create');
+        await removeSyncEvent(event!.eventId);
+        expect(await listPendingSyncEvents()).toHaveLength(0);
+    });
+
+    it('serializes only the explicit room-note allowlist', () => {
+        const payload = serializeRoomNoteForSync({
+            ...note,
+            relatedMessageId: 42,
+            secret: 'no',
+        } as typeof note);
+        expect(payload).not.toHaveProperty('relatedMessageId');
+        expect(payload).not.toHaveProperty('secret');
+    });
+});

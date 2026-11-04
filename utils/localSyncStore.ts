@@ -1,0 +1,190 @@
+import { openDB } from './db';
+
+export type SyncEntityType = 'room_note';
+export type SyncOperation = 'create' | 'update' | 'delete';
+export type SyncPolicyMode = 'local_only' | 'text';
+
+export interface SyncPreference {
+    entityType: SyncEntityType;
+    mode: SyncPolicyMode;
+    enabled: boolean;
+    updatedAt: number;
+}
+
+export interface LocalSyncEvent<TPayload = Record<string, unknown>> {
+    eventId: string;
+    entityType: SyncEntityType;
+    entityId: string;
+    operation: SyncOperation;
+    baseVersion: number | null;
+    clientVersion: number;
+    clientCreatedAt: number;
+    payload: TPayload;
+    state: 'pending' | 'in_flight' | 'blocked';
+    createdAt: number;
+    retryAt: number;
+    attemptCount: number;
+    lastErrorCode?: string;
+}
+
+export interface SyncQueueSummary {
+    pending: number;
+    inFlight: number;
+    blocked: number;
+}
+
+const OUTBOX = 'sync_outbox';
+const PREFERENCES = 'sync_preferences';
+
+function createEventId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `evt_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+}
+
+function requestResult<T>(request: IDBRequest<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'));
+    });
+}
+
+function transactionDone(transaction: IDBTransaction): Promise<void> {
+    return new Promise((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error ?? new Error('IndexedDB transaction failed'));
+        transaction.onabort = () => reject(transaction.error ?? new Error('IndexedDB transaction aborted'));
+    });
+}
+
+/** Sync is opt-in per entity type. The default is always local_only. */
+export async function getSyncPreference(entityType: SyncEntityType): Promise<SyncPreference> {
+    const db = await openDB();
+    const tx = db.transaction(PREFERENCES, 'readonly');
+    const record = await requestResult(tx.objectStore(PREFERENCES).get(entityType)) as SyncPreference | undefined;
+    await transactionDone(tx);
+    return record ?? { entityType, mode: 'local_only', enabled: false, updatedAt: 0 };
+}
+
+export async function setSyncPreference(
+    entityType: SyncEntityType,
+    enabled: boolean,
+    mode: SyncPolicyMode = enabled ? 'text' : 'local_only'
+): Promise<SyncPreference> {
+    if (enabled && mode !== 'text') throw new Error('Unsupported sync mode for this entity');
+    const preference: SyncPreference = {
+        entityType,
+        enabled: enabled && mode === 'text',
+        mode: enabled ? mode : 'local_only',
+        updatedAt: Date.now(),
+    };
+    const db = await openDB();
+    const tx = db.transaction(PREFERENCES, 'readwrite');
+    tx.objectStore(PREFERENCES).put(preference);
+    await transactionDone(tx);
+    return preference;
+}
+
+/**
+ * Room-note allowlist serializer. It intentionally excludes relatedMessageId,
+ * local-only identifiers, media references, and any unknown extension fields.
+ */
+export function serializeRoomNoteForSync(note: {
+    id: string;
+    charId: string;
+    timestamp: number;
+    content: string;
+    type: 'lyric' | 'doodle' | 'thought' | 'search' | 'gossip';
+}): Record<string, unknown> {
+    return {
+        id: note.id,
+        charId: note.charId,
+        timestamp: note.timestamp,
+        content: note.content,
+        type: note.type,
+    };
+}
+
+export async function enqueueRoomNoteSyncEvent(
+    note: Parameters<typeof serializeRoomNoteForSync>[0],
+    operation: SyncOperation,
+    options: { baseVersion?: number | null; clientVersion?: number } = {}
+): Promise<LocalSyncEvent | null> {
+    const preference = await getSyncPreference('room_note');
+    if (!preference.enabled || preference.mode !== 'text') return null;
+
+    const payload = operation === 'delete' ? {} : serializeRoomNoteForSync(note);
+    const event: LocalSyncEvent = {
+        eventId: createEventId(),
+        entityType: 'room_note',
+        entityId: note.id,
+        operation,
+        baseVersion: options.baseVersion ?? null,
+        clientVersion: Math.max(1, options.clientVersion ?? 1),
+        clientCreatedAt: Date.now(),
+        payload,
+        state: 'pending',
+        createdAt: Date.now(),
+        retryAt: 0,
+        attemptCount: 0,
+    };
+
+    const db = await openDB();
+    const tx = db.transaction(OUTBOX, 'readwrite');
+    tx.objectStore(OUTBOX).add(event);
+    await transactionDone(tx);
+    return event;
+}
+
+export async function listPendingSyncEvents(limit = 50): Promise<LocalSyncEvent[]> {
+    const db = await openDB();
+    const tx = db.transaction(OUTBOX, 'readonly');
+    const index = tx.objectStore(OUTBOX).index('state');
+    const events = await requestResult(index.getAll('pending')) as LocalSyncEvent[];
+    await transactionDone(tx);
+    return events.sort((a, b) => a.createdAt - b.createdAt).slice(0, Math.max(1, limit));
+}
+
+export async function updateSyncEventState(
+    eventId: string,
+    state: LocalSyncEvent['state'],
+    errorCode?: string
+): Promise<void> {
+    const db = await openDB();
+    const tx = db.transaction(OUTBOX, 'readwrite');
+    const store = tx.objectStore(OUTBOX);
+    const current = await requestResult(store.get(eventId)) as LocalSyncEvent | undefined;
+    if (!current) {
+        tx.abort();
+        throw new Error('Sync event not found');
+    }
+    store.put({
+        ...current,
+        state,
+        attemptCount: state === 'in_flight' ? current.attemptCount + 1 : current.attemptCount,
+        retryAt: state === 'pending' ? Date.now() : current.retryAt,
+        lastErrorCode: errorCode ? errorCode.slice(0, 80) : undefined,
+    });
+    await transactionDone(tx);
+}
+
+export async function removeSyncEvent(eventId: string): Promise<void> {
+    const db = await openDB();
+    const tx = db.transaction(OUTBOX, 'readwrite');
+    tx.objectStore(OUTBOX).delete(eventId);
+    await transactionDone(tx);
+}
+
+export async function getSyncQueueSummary(): Promise<SyncQueueSummary> {
+    const db = await openDB();
+    const tx = db.transaction(OUTBOX, 'readonly');
+    const store = tx.objectStore(OUTBOX);
+    const [pending, inFlight, blocked] = await Promise.all([
+        requestResult(store.index('state').count('pending')),
+        requestResult(store.index('state').count('in_flight')),
+        requestResult(store.index('state').count('blocked')),
+    ]);
+    await transactionDone(tx);
+    return { pending, inFlight, blocked };
+}
