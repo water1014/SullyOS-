@@ -84,4 +84,34 @@ describe('image generation clients', () => {
       { size: '1024x1024', quality: 'high' },
     )).rejects.toThrow('invalid api key');
   });
+
+  it('requests NovelAI tag suggestions with the selected model and token', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      tags: [
+        { tag: 'blue hair', count: 1200, confidence: 0.98 },
+        { tag: 'blue eyes', count: 900, confidence: 0.87 },
+      ],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const suggestions = await suggestNaiTags(
+      { apiKey: 'pst-test', model: 'nai-diffusion-5-full' },
+      'blue',
+    );
+
+    expect(suggestions.map(item => item.tag)).toEqual(['blue hair', 'blue eyes']);
+    const [url, request] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/ai/generate-image/suggest-tags?');
+    expect(String(url)).toContain('model=nai-diffusion-5-full');
+    expect(String(url)).toContain('prompt=blue');
+    expect(request.headers.Authorization).toBe('Bearer pst-test');
+  });
+
+  it('rejects NovelAI tag suggestions without a persistent token', async () => {
+    await expect(suggestNaiTags(
+      { apiKey: '', model: 'nai-diffusion-5-full' },
+      'blue',
+    )).rejects.toThrow('Persistent API Token');
+  });
+
 });
