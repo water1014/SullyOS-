@@ -95,8 +95,8 @@ async function main() {
     if (applicationIndex < 0) throw new Error('AndroidManifest.xml has no application element');
     const declarations = missingPermissions
       .map(permission => `    <uses-permission android:name="${permission}" />`)
-      .join('\\n');
-    manifest = manifest.slice(0, applicationIndex) + declarations + '\\n' + manifest.slice(applicationIndex);
+      .join('\n');
+    manifest = manifest.slice(0, applicationIndex) + declarations + '\n' + manifest.slice(applicationIndex);
   }
   const serviceName = 'android:name=".ScreenAwarenessService"';
   if (!manifest.includes(serviceName)) {
@@ -105,10 +105,10 @@ async function main() {
       '            android:name=".ScreenAwarenessService"',
       '            android:exported="false"',
       '            android:foregroundServiceType="mediaProjection" />',
-    ].join('\\n');
+    ].join('\n');
     const applicationClose = manifest.lastIndexOf('</application>');
     if (applicationClose < 0) throw new Error('AndroidManifest.xml has no application closing tag');
-    manifest = manifest.slice(0, applicationClose) + service + '\\n' + manifest.slice(applicationClose);
+    manifest = manifest.slice(0, applicationClose) + service + '\n' + manifest.slice(applicationClose);
   }
 
   let xmlResourceName = 'apk_installer_paths';
