@@ -17,9 +17,16 @@ const TEMPLATES_KEY = 'sully-image-studio:nai-templates:v1';
 const IMAGE_CATEGORIES = ['未分类', '人物', '场景', '头像', '壁纸', '灵感草稿', '其他'];
 const DEFAULT_CONFIG = {
   gpt: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-image-2.5-flare' },
-  nai: { provider: 'official' as const, baseUrl: 'https://image.novelai.net', apiKey: '', model: 'nai-diffusion-5-full' },
+  naiOfficial: { provider: 'official' as const, baseUrl: 'https://image.novelai.net', apiKey: '', model: 'nai-diffusion-5-full' },
+  naiThirdParty: { provider: 'thirdparty' as const, baseUrl: '', apiKey: '', model: 'nai-diffusion-5-full' },
 };
-type StudioConfig = { gpt: GptImageConfig; nai: NaiImageConfig };
+type NaiProviderProfile = Pick<NaiImageConfig, 'apiKey' | 'model' | 'baseUrl'>;
+type StudioConfig = {
+  gpt: GptImageConfig;
+  nai: NaiImageConfig;
+  naiOfficial: NaiProviderProfile;
+  naiThirdParty: NaiProviderProfile;
+};
 type SavedImage = {
   id: string; blobId: string; engine: ImageEngine; prompt: string; negativePrompt: string;
   model: string; createdAt: number; mimeType: string;
@@ -31,11 +38,30 @@ type NaiPromptTemplate = { id: string; name: string; prompt: string; negativePro
 const readConfig = (): StudioConfig => {
   try {
     const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+    const legacyNai = saved?.nai || {};
+    const naiOfficial = {
+      ...DEFAULT_CONFIG.naiOfficial,
+      ...(saved?.naiOfficial || (legacyNai.provider !== 'thirdparty' ? legacyNai : {})),
+    };
+    const naiThirdParty = {
+      ...DEFAULT_CONFIG.naiThirdParty,
+      ...(saved?.naiThirdParty || (legacyNai.provider === 'thirdparty' ? legacyNai : {})),
+    };
+    const provider = legacyNai.provider === 'thirdparty' ? 'thirdparty' : 'official';
     return {
       gpt: { ...DEFAULT_CONFIG.gpt, ...(saved?.gpt || {}) },
-      nai: { ...DEFAULT_CONFIG.nai, ...(saved?.nai || {}) },
+      naiOfficial,
+      naiThirdParty,
+      nai: { ...(provider === 'official' ? naiOfficial : naiThirdParty), provider },
     };
-  } catch { return DEFAULT_CONFIG; }
+  } catch {
+    return {
+      gpt: DEFAULT_CONFIG.gpt,
+      naiOfficial: DEFAULT_CONFIG.naiOfficial,
+      naiThirdParty: DEFAULT_CONFIG.naiThirdParty,
+      nai: { ...DEFAULT_CONFIG.naiOfficial, provider: 'official' },
+    };
+  }
 };
 const readItems = (): SavedImage[] => {
   try {
@@ -147,7 +173,19 @@ const ImageStudioApp: React.FC = () => {
   const updateGpt = (updates: Partial<GptImageConfig>) =>
     setConfig(current => ({ ...current, gpt: { ...current.gpt, ...updates } }));
   const updateNai = (updates: Partial<NaiImageConfig>) =>
-    setConfig(current => ({ ...current, nai: { ...current.nai, ...updates } }));
+    setConfig(current => {
+      const nai = { ...current.nai, ...updates };
+      const profileKey = nai.provider === 'thirdparty' ? 'naiThirdParty' : 'naiOfficial';
+      return { ...current, nai, [profileKey]: { ...current[profileKey], ...updates } };
+    });
+  const switchNaiProvider = (provider: 'official' | 'thirdparty') =>
+    setConfig(current => ({
+      ...current,
+      nai: {
+        ...(provider === 'official' ? current.naiOfficial : current.naiThirdParty),
+        provider,
+      },
+    }));
 
   const addNaiTag = (tag: string) => {
     const existing = prompt.split(',').map(value => value.trim()).filter(Boolean);
@@ -461,7 +499,7 @@ const ImageStudioApp: React.FC = () => {
                 <div className="flex items-center justify-between gap-1"><span className="text-xs font-bold text-slate-700">OpenAI 兼容</span>{engine === 'gpt' && <Check size={13} className="text-sky-600"/>}</div>
                 <div className="text-[9px] text-slate-500 mt-1">第三方兼容接口</div>
               </button>
-              <button onClick={() => { setEngine('nai'); updateNai({ provider: 'thirdparty', baseUrl: config.nai.baseUrl === 'https://image.novelai.net' ? '' : config.nai.baseUrl }); }} className={`rounded-2xl p-2.5 text-left border ${engine === 'nai' && config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
+              <button onClick={() => { setEngine('nai'); switchNaiProvider('thirdparty'); }} className={`rounded-2xl p-2.5 text-left border ${engine === 'nai' && config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
                 <div className="flex items-center justify-between gap-1"><span className="text-xs font-bold text-slate-700">NAI 第三方</span>{engine === 'nai' && config.nai.provider === 'thirdparty' && <Check size={13} className="text-sky-600"/>}</div>
                 <div className="text-[9px] text-slate-500 mt-1">自定义代理地址</div>
               </button>
@@ -667,8 +705,8 @@ const ImageStudioApp: React.FC = () => {
             <div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">ENGINE 02 / 03</div><div className="text-base font-semibold mt-1">NovelAI 接口配置</div></div>
             <label className="block text-xs font-semibold text-slate-600">NAI 接口类型</label>
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => updateNai({provider:'official',baseUrl:'https://image.novelai.net'})} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'official' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>官方接口</button>
-              <button type="button" onClick={() => updateNai({provider:'thirdparty',baseUrl:config.nai.baseUrl === 'https://image.novelai.net' ? '' : config.nai.baseUrl})} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>第三方 / 代理</button>
+              <button type="button" onClick={() => switchNaiProvider('official')} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'official' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>官方接口</button>
+              <button type="button" onClick={() => switchNaiProvider('thirdparty')} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>第三方 / 代理</button>
             </div>
             {config.nai.provider === 'thirdparty' && <>
               <label className="block text-xs font-semibold text-slate-600">第三方 API Base URL</label>
