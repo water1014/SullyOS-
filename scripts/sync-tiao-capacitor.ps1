@@ -93,6 +93,8 @@ try {
 Write-Host '[3/4] Syncing Capacitor Android plugins and assets...'
 & (Join-Path $PSScriptRoot 'install-apk-installer.ps1') -WrapperRoot $wrapperRoot
 if ($LASTEXITCODE -ne 0) { throw "ApkInstaller integration failed with exit code $LASTEXITCODE" }
+& (Join-Path $PSScriptRoot 'install-secure-storage.ps1') -WrapperRoot $wrapperRoot
+if ($LASTEXITCODE -ne 0) { throw "SecureStorage integration failed with exit code $LASTEXITCODE" }
 
 & node (Join-Path $PSScriptRoot 'sync-native-app-name.mjs') $wrapperRoot
 if ($LASTEXITCODE -ne 0) { throw "App display name sync failed with exit code $LASTEXITCODE" }
