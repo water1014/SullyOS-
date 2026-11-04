@@ -198,6 +198,18 @@ describe('image generation clients', () => {
     expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
   });
 
+  it('rejects invalid NovelAI seeds before making a network request', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(generateNaiImage(
+      { apiKey: 'pst-test', model: 'nai-diffusion-5-full', provider: 'official' },
+      '1girl',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 4294967296 },
+    )).rejects.toThrow('0 到 4294967295');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('passes cancellation signals through to NovelAI generation requests', async () => {
     const controller = new AbortController();
     const zip = new JSZip();
