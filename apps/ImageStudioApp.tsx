@@ -152,7 +152,8 @@ const ImageStudioApp: React.FC = () => {
   const downloadImage = (item: DisplayImage) => {
     const anchor = document.createElement('a');
     anchor.href = item.url;
-    anchor.download = `nuomi-${item.engine}-${new Date(item.createdAt).toISOString().slice(0, 10)}.png`;
+    const extension = item.mimeType === 'image/webp' ? 'webp' : item.mimeType === 'image/jpeg' ? 'jpg' : 'png';
+    anchor.download = `nuomi-${item.engine}-${new Date(item.createdAt).toISOString().slice(0, 10)}.${extension}`;
     anchor.click();
   };
 
@@ -322,6 +323,7 @@ const ImageStudioApp: React.FC = () => {
             <input className="field" type="password" autoComplete="off" value={config.gpt.apiKey} onChange={event => updateGpt({apiKey:event.target.value})} placeholder="sk-..."/>
             <label className="block text-xs font-semibold text-slate-600">图片模型</label>
             <select className="field" value={config.gpt.model} onChange={event => updateGpt({model:event.target.value})}><option value="gpt-image-2.5-flare">gpt-image-2.5-flare</option><option value="gpt-image-2.5-sunburst">gpt-image-2.5-sunburst</option><option value="gpt-image-2">gpt-image-2</option><option value="gpt-image-1.5">gpt-image-1.5</option></select>
+            <p className="text-[10px] text-slate-400 leading-5">GPT API Key 保存在当前设备浏览器的本地存储中，不会上传到糯米机服务器。请勿在公共设备上保存密钥。</p>
           </section>
           <section className="glass rounded-[24px] p-4 space-y-3">
             <div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">ENGINE 02</div><div className="text-base font-semibold mt-1">NovelAI 生图接口</div></div>
@@ -329,7 +331,7 @@ const ImageStudioApp: React.FC = () => {
             <input className="field" type="password" autoComplete="off" value={config.nai.apiKey} onChange={event => updateNai({apiKey:event.target.value})} placeholder="pst-..."/>
             <label className="block text-xs font-semibold text-slate-600">图片模型</label>
             <select className="field" value={config.nai.model} onChange={event => updateNai({model:event.target.value})}><option value="nai-diffusion-5-full">NovelAI Diffusion V5 Full</option><option value="nai-diffusion-5-curated">NovelAI Diffusion V5 Curated</option><option value="nai-diffusion-4-5-full">NovelAI Diffusion V4.5 Full</option><option value="nai-diffusion-4-5-curated">NovelAI Diffusion V4.5 Curated</option></select>
-            <p className="text-[10px] text-slate-400 leading-5">使用 NovelAI 的 Persistent API Token。密钥仅存于本机浏览器，不会写入作品记录。</p>
+            <p className="text-[10px] text-slate-400 leading-5">使用 NovelAI 的 Persistent API Token。密钥保存在当前设备浏览器本地存储中，不会写入作品记录；请勿在公共设备上保存密钥。</p>
           </section>
           <div className="rounded-2xl bg-sky-50/80 border border-sky-100 p-3 text-[10px] text-sky-800 leading-5">提示：部分 API 中转站不开放图片生成接口；如果出现 CORS 或 404，需要使用支持 Images API 的服务地址。NAI 需要浏览器能直接访问 image.novelai.net。</div>
           <button onClick={() => { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); addToast('生图引擎配置已保存', 'success'); }} className="primary w-full rounded-2xl py-3 text-sm font-bold">保存配置</button>
