@@ -438,7 +438,17 @@ export async function markInboxEventApplied(eventId: string): Promise<void> {
     await done;
 }
 
+function assertSyncIdentity(accountId: string, deviceId: string): void {
+    if (typeof accountId !== 'string' || typeof deviceId !== 'string'
+        || !accountId.trim() || !deviceId.trim()
+        || accountId.length > 128 || deviceId.length > 128
+        || /\\s/.test(accountId) || /\\s/.test(deviceId)) {
+        throw new Error('SYNC_IDENTITY_REQUIRED');
+    }
+}
+
 export async function getSyncCursorState(accountId: string, deviceId: string): Promise<SyncCursorState> {
+    assertSyncIdentity(accountId, deviceId);
     const id = getSyncCursorKey(accountId, deviceId);
     const db = await openDB();
     const tx = db.transaction(SYNC_STATE, 'readonly');
@@ -453,7 +463,14 @@ export async function updateSyncCursorState(
     deviceId: string,
     patch: Partial<Pick<SyncCursorState, 'lastPulledSequence' | 'lastAckedSequence' | 'lastSuccessfulSyncAt' | 'lastErrorCode'>>
 ): Promise<SyncCursorState> {
-    if (!accountId.trim() || !deviceId.trim()) throw new Error('SYNC_IDENTITY_REQUIRED');
+    assertSyncIdentity(accountId, deviceId);
+    if (patch.lastSuccessfulSyncAt !== undefined && patch.lastSuccessfulSyncAt !== null
+        && (!Number.isFinite(patch.lastSuccessfulSyncAt) || patch.lastSuccessfulSyncAt < 0)) {
+        throw new Error('INVALID_SYNC_CURSOR');
+    }
+    if (patch.lastErrorCode !== undefined && patch.lastErrorCode !== null && typeof patch.lastErrorCode !== 'string') {
+        throw new Error('INVALID_SYNC_ERROR_CODE');
+    }
     for (const key of ['lastPulledSequence', 'lastAckedSequence'] as const) {
         const value = patch[key];
         if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
