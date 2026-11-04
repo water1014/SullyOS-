@@ -131,6 +131,12 @@ importers:
     devDependencies:
       '@capacitor/cli':
         specifier: ^6.0.0
+        version: 6.2.1(@capacitor/core@6.2.1)
+      '@types/node':
+        specifier: ^25.9.0
+        version: 25.9.0
+      '@capacitor/cli':
+        specifier: ^6.0.0
         version: 6.2.1
       '@rei-standard/amsg-server':
         specifier: 3.1.0
