@@ -152,8 +152,8 @@ async function runVisualTaskInForeground(taskId: string, signal: AbortSignal): P
             if (signal.aborted || (await visualCompanionRepository.getTask(task.id))?.status === 'cancelled') return visualCompanionRepository.getTask(task.id);
             const assetId = task.resultAssetIds[0];
             const asset = assetId ? await visualCompanionRepository.getAsset(assetId) : null;
-            if (!asset || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
-                throw new Error('生成图片的本地资产记录缺失，无法安全投递');
+            if (!asset || asset.charId !== task.charId || asset.taskId !== task.id || asset.status !== 'ready' || asset.privacyScope !== task.privacyScope || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
+                throw new Error('生成图片的本地资产记录缺失、归属不匹配或隐私级别不符，无法安全投递');
             }
             task = await markVisualAssetsPersisted(task.id);
         }
@@ -162,8 +162,8 @@ async function runVisualTaskInForeground(taskId: string, signal: AbortSignal): P
             if (signal.aborted || (await visualCompanionRepository.getTask(task.id))?.status === 'cancelled') return visualCompanionRepository.getTask(task.id);
             const assetId = task.resultAssetIds[0];
             const asset = assetId ? await visualCompanionRepository.getAsset(assetId) : null;
-            if (!asset || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
-                throw new Error('待投递图片资产不存在或不是标准资产');
+            if (!asset || asset.charId !== task.charId || asset.taskId !== task.id || asset.status !== 'ready' || asset.privacyScope !== task.privacyScope || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
+                throw new Error('待投递图片资产不存在、归属不匹配或隐私级别不符');
             }
             const delivered = await deliverVisualTaskToChat(task.id, asset.storage.ref);
             window.dispatchEvent(new CustomEvent('active-msg-progress', {
@@ -260,4 +260,36 @@ export function executeVisualTaskInForeground(taskId: string): Promise<VisualTas
     });
     inFlightVisualTasks.set(taskId, execution);
     return execution;
+}
+
+
+/**
+ * Recover only checkpoints that cannot trigger a second paid generation.
+ * A retry checkpoint at "generating" is deliberately left untouched because
+ * the provider may already have accepted and billed the previous request.
+ */
+export async function recoverSafeVisualTasksForCharacter(charId: string): Promise<void> {
+    if (!charId.trim()) return;
+    const tasks = await visualCompanionRepository.listTasks(charId);
+    const now = Date.now();
+    const recoverable = tasks
+        .filter(task => task.status === 'queued'
+            || (task.status === 'retry_wait'
+                && !!task.retryStage
+                && task.retryStage !== 'generating'
+                && (!task.nextAttemptAt || task.nextAttemptAt <= now)))
+        .sort((a, b) => a.createdAt - b.createdAt);
+
+    for (const task of recoverable) {
+        try {
+            await executeVisualTaskInForeground(task.id);
+        } catch (error) {
+            console.warn('[VisualCompanion] safe task recovery failed', {
+                taskId: task.id,
+                status: task.status,
+                retryStage: task.retryStage,
+                error,
+            });
+        }
+    }
 }
