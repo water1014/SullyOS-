@@ -239,6 +239,38 @@ describe('local-first sync outbox', () => {
         expect(inbox.applyState).toBe('applied');
     });
 
+    it('applies a later remote version when the local copy matches the previous server version', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        await persistInboxEvents([{
+            eventId: 'remote-v1', serverSequence: 1, entityType: 'room_note',
+            entityId: 'remote-versioned-note', operation: 'create', entityVersion: 1,
+            payload: { id: 'remote-versioned-note', charId: 'char-1', timestamp: 10, content: '第一版', type: 'thought' },
+        }]);
+        expect(await applyPendingRoomNoteInboxEvent('remote-v1')).toEqual({ status: 'applied' });
+        await persistInboxEvents([{
+            eventId: 'remote-v2', serverSequence: 2, entityType: 'room_note',
+            entityId: 'remote-versioned-note', operation: 'update', entityVersion: 2,
+            payload: { id: 'remote-versioned-note', charId: 'char-1', timestamp: 10, content: '第二版', type: 'thought' },
+        }]);
+        expect(await applyPendingRoomNoteInboxEvent('remote-v2')).toEqual({ status: 'applied' });
+        const db = await openDB();
+        const tx = db.transaction(['room_notes', 'sync_state'], 'readonly');
+        const [saved, version] = await Promise.all([
+            new Promise<any>((resolve, reject) => {
+                const request = tx.objectStore('room_notes').get('remote-versioned-note');
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }),
+            new Promise<any>((resolve, reject) => {
+                const request = tx.objectStore('sync_state').get('entity_version:room_note:remote-versioned-note');
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }),
+        ]);
+        expect(saved.content).toBe('第二版');
+        expect(version.version).toBe(2);
+    });
+
     it('does not overwrite local edits and applies remote choice only after conflict resolution', async () => {
         await setSyncPreference('room_note', true, 'text');
         const db = await openDB();
