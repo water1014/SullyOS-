@@ -386,7 +386,8 @@ interface OSContextType {
   
   // Worldbooks
   worldbooks: Worldbook[];
-  addWorldbook: (wb: Worldbook) => void;
+  addWorldbook: (wb: Worldbook) => Promise<void>;
+  addWorldbooks: (books: Worldbook[]) => Promise<void>;
   updateWorldbook: (id: string, updates: Partial<Worldbook>) => Promise<void>;
   deleteWorldbook: (id: string) => Promise<void>;
   updateWorldbooks: (ids: string[], updates: Partial<Worldbook>) => Promise<void>;
@@ -3644,8 +3645,14 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   // Worldbook Methods
   const addWorldbook = async (wb: Worldbook) => {
-      setWorldbooks(prev => [...prev, wb]);
       await DB.saveWorldbook(wb);
+      setWorldbooks(prev => [...prev.filter(item => item.id !== wb.id), wb]);
+  };
+
+  const addWorldbooks = async (books: Worldbook[]) => {
+      await DB.saveWorldbooks(books);
+      const incomingIds = new Set(books.map(book => book.id));
+      setWorldbooks(prev => [...prev.filter(book => !incomingIds.has(book.id)), ...books]);
   };
 
   const mutateWorldbooks = async (ids: string[], updates: Partial<Worldbook> | null) => {
@@ -5506,6 +5513,7 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     deleteCharacterGroup,
     worldbooks,
     addWorldbook,
+    addWorldbooks,
     updateWorldbook,
     deleteWorldbook,
     updateWorldbooks,
