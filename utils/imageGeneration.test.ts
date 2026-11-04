@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
-import { generateGptImage, generateNaiImage, normalizeOpenAIImagesEndpoint } from './imageGeneration';
+import { editGptImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint } from './imageGeneration';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -8,6 +8,34 @@ describe('image generation clients', () => {
   it('normalizes an OpenAI-compatible images endpoint', () => {
     expect(normalizeOpenAIImagesEndpoint('https://api.openai.com/v1/')).toBe('https://api.openai.com/v1/images/generations');
     expect(normalizeOpenAIImagesEndpoint('https://proxy.example/v1/images/generations')).toBe('https://proxy.example/v1/images/generations');
+  });
+
+  it('normalizes the GPT image edits endpoint', () => {
+    expect(normalizeOpenAIImageEditsEndpoint('https://api.openai.com/v1/')).toBe('https://api.openai.com/v1/images/edits');
+    expect(normalizeOpenAIImageEditsEndpoint('https://proxy.example/v1/images/edits')).toBe('https://proxy.example/v1/images/edits');
+  });
+
+  it('sends an uploaded reference image to GPT edits and decodes the result', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: [{ b64_json: btoa('edited-png') }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const source = new Blob(['source-png'], { type: 'image/png' });
+    const result = await editGptImage(
+      { baseUrl: 'https://api.example/v1', apiKey: 'test-key', model: 'gpt-image-2' },
+      source,
+      '把天空改成蓝色',
+      { size: '1024x1024', quality: 'high' },
+    );
+
+    expect(result.type).toBe('image/png');
+    expect(await result.text()).toBe('edited-png');
+    const [url, request] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://api.example/v1/images/edits');
+    const body = JSON.parse(String(request.body));
+    expect(body).toMatchObject({ model: 'gpt-image-2', prompt: '把天空改成蓝色', n: 1 });
+    expect(body.images[0].image_url).toBe(`data:image/png;base64,${btoa('source-png')}`);
   });
 
   it('decodes GPT Image base64 output into a PNG Blob', async () => {
