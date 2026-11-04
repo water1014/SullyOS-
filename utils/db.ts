@@ -3717,6 +3717,13 @@ export const DB = {
 
       const mainState = bankData.find((d: any) => d.id === 'main_state');
       const dollhouseRecord = bankData.find((d: any) => d.id === 'dollhouse_state');
+      const standardVisualAssets = visualAssets.filter((item: any) => item?.privacyScope === 'standard');
+      const standardVisualAssetIds = new Set(standardVisualAssets.map((item: any) => item.id));
+      const visualProfilesForBackup = visualProfiles.map((profile: any) =>
+          profile?.baseAssetId && !standardVisualAssetIds.has(profile.baseAssetId)
+              ? { ...profile, baseAssetId: undefined }
+              : profile
+      );
 
       return {
           characters, characterGroups, messages, customThemes: themes, savedEmojis: emojis, emojiCategories, assets, galleryImages, userProfile, diaries, tasks, anniversaries, roomTodos, roomNotes, groups, savedJournalStickers: journalStickers, socialPosts, courses, games, worldbooks, storyTheaters, storyTheaterPresets, storyTheaterMasks, novels,
@@ -3761,11 +3768,11 @@ export const DB = {
           beautyAuthorLocal: exportBeautyAuthorBackup(),
           beautyPreferences: exportBeautyPreferences(),
           desktopSkinLocal: await exportDesktopSkinLocal(), // 桌面皮肤：界面配色 + 看板 banner（看板图令牌解析为 data URL）
-          visualProfiles,
+          visualProfiles: visualProfilesForBackup,
           visualMemories: visualMemories.filter((item: any) => item?.privacyScope === 'standard'),
           visualProjects: visualProjects.filter((item: any) => item?.privacyScope === 'standard'),
           visualTaskMirror: visualTaskMirror.filter((item: any) => item?.privacyScope === 'standard'),
-          visualAssets: visualAssets.filter((item: any) => item?.privacyScope === 'standard'),
+          visualAssets: standardVisualAssets,
           // private_visual_blobs 故意不进入标准备份，后续由独立私密保险库处理。
       };
   },
