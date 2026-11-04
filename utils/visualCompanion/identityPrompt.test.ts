@@ -39,6 +39,19 @@ describe('character appearance prompt', () => {
         expect(buildCharacterAppearancePrompt({ ...profile, status: 'draft' })).toBe('');
     });
 
+    it('deduplicates repeated appearance details from legacy and canonical fields', () => {
+        const prompt = buildCharacterAppearancePrompt({
+            ...profile,
+            anchorPrompt: '黑色长发，灰蓝色眼睛',
+            identity: [
+                { key: 'hair', value: '黑色长发', confirmed: true, source: 'user', updatedAt: 1 },
+                { key: 'eyes', value: '灰蓝色眼睛', confirmed: true, source: 'user', updatedAt: 1 },
+            ],
+        });
+        expect(prompt.match(/黑色长发/g)).toHaveLength(1);
+        expect(prompt.match(/灰蓝色眼睛/g)).toHaveLength(1);
+    });
+
     it('keeps the scene prompt after the fixed identity block', () => {
         const prompt = mergeCharacterAppearancePrompt('雨夜里的咖啡馆', profile);
         expect(prompt.indexOf('黑色长发')).toBeLessThan(prompt.indexOf('雨夜里的咖啡馆'));
@@ -81,5 +94,16 @@ describe('character visual change timeline', () => {
         ], 100);
         expect(prompt.indexOf('[Fixed character appearance]')).toBeLessThan(prompt.indexOf('[Confirmed permanent visual changes]'));
         expect(prompt.indexOf('[Confirmed permanent visual changes]')).toBeLessThan(prompt.indexOf('海边黄昏'));
+    });
+
+    it('orders visual history newest first and explains conflict precedence', () => {
+        const prompt = buildCharacterVisualChangePrompt([
+            memory({ id: 'older', content: '短发', visualChangeKind: 'permanent', confirmedAt: 10 }),
+            memory({ id: 'newer', content: '及肩长发', visualChangeKind: 'permanent', confirmedAt: 20 }),
+            memory({ id: 'duplicate', content: '及肩长发', visualChangeKind: 'permanent', confirmedAt: 15 }),
+        ], 100);
+        expect(prompt.indexOf('及肩长发')).toBeLessThan(prompt.indexOf('短发'));
+        expect(prompt.match(/及肩长发/g)).toHaveLength(1);
+        expect(prompt).toContain('newer confirmed note takes precedence');
     });
 });
