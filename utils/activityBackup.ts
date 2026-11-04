@@ -1,4 +1,5 @@
 import type { FriendFeedState } from './friendFeed';
+import { resolveFriendFeedSettings } from './friendFeedSettings';
 import type { FriendFeedImage } from './friendFeedSource';
 import { isLocalFriendImage } from './friendFeedImages';
 import { stripBackupImages } from './backupExport';
@@ -33,5 +34,14 @@ export function applyFriendFeedMedia(feed: FriendFeedState, media: FriendFeedMed
     }
     if(media.coverImages!==undefined&&(!media.coverImages||typeof media.coverImages!=='object'||Array.isArray(media.coverImages)||Object.values(media.coverImages).some(image=>!isLocalFriendImage(image))))throw new Error('哔哔封面备份格式不正确');
     const pictures = new Map(media.posts.map(p => [p.id, p.images]));
-    return { ...feed, ...(media.coverImages?{settings:{...feed.settings,coverImages:{...feed.settings?.coverImages,...media.coverImages}}}:{}), posts: feed.posts.map(p => pictures.has(p.id) ? { ...p, images: pictures.get(p.id)!.map(i => ({ ...i })) } : p) };
+    const settings = media.coverImages
+        ? {
+            ...resolveFriendFeedSettings(feed.settings),
+            coverImages: {
+                ...resolveFriendFeedSettings(feed.settings).coverImages,
+                ...media.coverImages,
+            },
+        }
+        : feed.settings;
+    return { ...feed, ...(media.coverImages ? { settings } : {}), posts: feed.posts.map(p => pictures.has(p.id) ? { ...p, images: pictures.get(p.id)!.map(i => ({ ...i })) } : p) };
 }
