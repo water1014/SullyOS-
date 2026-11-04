@@ -40,7 +40,19 @@
 
 私密二进制不复用普通 `blob_assets` 的 GC 生命周期，v75 已预留独立 `private_visual_blobs` Store；实际写入前仍须实现加密容器，并单独定义访问、备份、清理和恢复流程。若选择云端 R2 私密桶，必须使用服务端授权短时访问，不生成永久公开 URL。
 
-## 4. 云端 D1 任务表候选
+## 4. 本地仓库实现
+
+`utils/visualCompanion/repository.ts` 提供带领域类型的本地读写入口：
+
+- 角色视觉档案、视觉记忆、写真企划：按角色索引查询，支持单条读写。
+- 写真分镜：只更新目标 shot，不允许改变分镜 ID。
+- 视觉任务：通过显式状态转换表推进，拒绝跳过阶段的非法转换；角色 ID、deliveryId、隐私范围和创建时间在状态更新时不可被覆盖。
+- 视觉资产：标准资产必须使用 `blobref:`；私密资产必须使用独立存储引用并提供密钥版本。
+- 私密资产不能通过普通删除入口移除元数据，必须等待私密保险库实现原子化加密销毁。
+
+测试覆盖 v74→v75 升级保留旧聊天/画廊/Blob、标准备份隔离、任务状态转换和资产隐私边界。CI 对应测试文件为 `utils/visualCompanion/data.test.ts`、`utils/visualCompanion/repository.test.ts` 和 `utils/blobGc.test.ts`。
+
+## 11. 云端 D1 任务表候选
 
 建议由视觉任务 Worker 管理以下表（实际 SQL 以现有 Worker 依赖和迁移机制核验后再写）：
 
