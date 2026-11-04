@@ -9,7 +9,7 @@ import { loadVisualAutonomySettings } from './autonomySettings';
 import { createAutonomousVisualTask } from './orchestrator';
 import { executeVisualTaskInForeground } from './foregroundExecutor';
 import { visualCompanionRepository } from './repository';
-import type { VisualProviderKind } from './types';
+import type { VisualAutonomySettings, VisualProviderKind } from './types';
 import type { VisualShareContextKind } from './autonomyPolicy';
 
 const IMAGE_CONFIG_KEY = 'sully-image-studio:config:v1';
