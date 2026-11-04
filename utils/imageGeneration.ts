@@ -339,7 +339,7 @@ export async function editNaiImage(
 
   const archive = await JSZip.loadAsync(await response.arrayBuffer());
   const imageFile = Object.values(archive.files).find(file =>
-    !file.dir && /\\.(png|webp|jpe?g)$/i.test(file.name),
+    !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
   );
   if (!imageFile) throw new Error('NAI 图生图成功，但压缩包中没有找到图片文件');
   const resultBytes = await imageFile.async('uint8array');
