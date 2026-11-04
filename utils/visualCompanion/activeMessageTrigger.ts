@@ -124,9 +124,19 @@ async function queueVisualShareForActiveMessage(
         && asset.createdAt >= dayStart
         && !!asset.taskId
         && spontaneousTaskIds.has(asset.taskId)
+    ).length + tasks.filter(task =>
+        task.kind === 'spontaneous_share'
+        && task.createdAt >= dayStart
+        && task.status === 'failed'
+        && task.errorCode === 'generation_outcome_unknown'
     ).length;
+    // An ambiguous provider outcome may already have been billed. Count it toward both
+    // the daily image budget and cooldown so the next scheduled message cannot immediately
+    // trigger another potentially paid generation.
     const lastShareAt = tasks
-        .filter(task => task.kind === 'spontaneous_share' && task.status === 'delivered')
+        .filter(task => task.kind === 'spontaneous_share'
+            && (task.status === 'delivered'
+                || (task.status === 'failed' && task.errorCode === 'generation_outcome_unknown')))
         .reduce<number | undefined>((latest, task) =>
             latest === undefined || task.updatedAt > latest ? task.updatedAt : latest, undefined);
 
