@@ -1,10 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
-import { editGptImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint, normalizeNaiGenerateEndpoint, suggestNaiTags, getNaiQualityTags } from './imageGeneration';
+import { editGptImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint, normalizeNaiGenerateEndpoint, buildImageRequestHeaders, suggestNaiTags, getNaiQualityTags } from './imageGeneration';
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('image generation clients', () => {
+  it('merges optional custom request headers and validates their JSON', () => {
+    const headers = buildImageRequestHeaders({ Authorization: 'Bearer standard', 'Content-Type': 'application/json' }, '{"x-api-key":"custom","Authorization":"Bearer override"}');
+    expect(headers.get('x-api-key')).toBe('custom');
+    expect(headers.get('authorization')).toBe('Bearer override');
+    expect(() => buildImageRequestHeaders({}, 'not-json')).toThrow('合法 JSON 对象');
+    expect(() => buildImageRequestHeaders({}, '[]')).toThrow('JSON 对象');
+  });
+
   it('normalizes NovelAI official and third-party generation endpoints', () => {
     expect(normalizeNaiGenerateEndpoint('https://image.novelai.net')).toBe('https://image.novelai.net/ai/generate-image');
     expect(normalizeNaiGenerateEndpoint('https://proxy.example/api', 'thirdparty')).toBe('https://proxy.example/api/ai/generate-image');
