@@ -30,7 +30,7 @@ type StudioConfig = {
 type SavedImage = {
   id: string; blobId: string; engine: ImageEngine; prompt: string; negativePrompt: string;
   model: string; createdAt: number; mimeType: string;
-  note?: string; category?: string; favorite?: boolean;
+  note?: string; category?: string; favorite?: boolean; backupSourceId?: string;
 };
 type DisplayImage = SavedImage & { url: string };
 type NaiPromptTemplate = { id: string; name: string; prompt: string; negativePrompt: string; createdAt: number };
@@ -133,6 +133,8 @@ const ImageStudioApp: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkCategory, setBulkCategory] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [importProgress, setImportProgress] = useState('');
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -372,7 +374,7 @@ const ImageStudioApp: React.FC = () => {
         const filename = String(index + 1).padStart(3, '0') + '-' + item.engine + '-' + item.id + '.' + extension;
         zip.file('images/' + filename, blob);
         manifest.push({
-          filename: 'images/' + filename, engine: item.engine, model: item.model,
+          filename: 'images/' + filename, sourceId: item.id, engine: item.engine, model: item.model,
           prompt: item.prompt, negativePrompt: item.negativePrompt, note: item.note || '',
           category: item.category || '未分类', favorite: !!item.favorite,
           createdAt: item.createdAt, mimeType: item.mimeType,
@@ -396,6 +398,90 @@ const ImageStudioApp: React.FC = () => {
       addToast(message, 'error');
     } finally {
       setBulkBusy(false);
+    }
+  };
+
+  const importImageBackup = async (file: File | null) => {
+    if (!file || bulkBusy) return;
+    setBulkBusy(true);
+    setImportProgress('正在读取备份…');
+    try {
+      const archive = await JSZip.loadAsync(file);
+      const manifestFile = archive.file('作品清单.json');
+      if (!manifestFile) throw new Error('备份中没有找到「作品清单.json」');
+      const manifest = JSON.parse(await manifestFile.async('text'));
+      if (manifest?.format !== 'SullyOS Image Studio Backup' || manifest?.version !== 1 || !Array.isArray(manifest.items)) {
+        throw new Error('备份格式不受支持，请选择生图室导出的 ZIP 文件');
+      }
+
+      const existing = readItems();
+      const knownSourceIds = new Set(existing.map(item => item.backupSourceId).filter(Boolean));
+      const imported: DisplayImage[] = [];
+      let skipped = 0;
+      let failed = 0;
+      for (let index = 0; index < manifest.items.length; index += 1) {
+        const record = manifest.items[index];
+        setImportProgress(`正在恢复 ${index + 1}/${manifest.items.length}…`);
+        if (!record || typeof record.filename !== 'string' || !record.filename.startsWith('images/')) {
+          failed += 1;
+          continue;
+        }
+        const sourceId = typeof record.sourceId === 'string' ? record.sourceId : '';
+        if (sourceId && knownSourceIds.has(sourceId)) {
+          skipped += 1;
+          continue;
+        }
+        const imageFile = archive.file(record.filename);
+        if (!imageFile) {
+          failed += 1;
+          continue;
+        }
+        try {
+          const bytes = await imageFile.async('uint8array');
+          if (!bytes.length) { failed += 1; continue; }
+          const extension = record.filename.toLowerCase().split('.').pop();
+          const mimeType = extension === 'webp' ? 'image/webp' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : extension === 'png' ? 'image/png' : '';
+          if (!mimeType) { failed += 1; continue; }
+          const blob = new Blob([bytes], { type: mimeType });
+          const id = `studio_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+          const blobId = `image-studio:${id}`;
+          await DB.putBlobAsset(blobId, blob);
+          const item: SavedImage = {
+            id, blobId,
+            engine: record.engine === 'nai' ? 'nai' : 'gpt',
+            prompt: typeof record.prompt === 'string' ? record.prompt : '',
+            negativePrompt: typeof record.negativePrompt === 'string' ? record.negativePrompt : '',
+            model: typeof record.model === 'string' ? record.model : '',
+            createdAt: Number.isFinite(record.createdAt) ? record.createdAt : Date.now(),
+            mimeType,
+            note: typeof record.note === 'string' ? record.note : '',
+            category: IMAGE_CATEGORIES.includes(record.category) ? record.category : '未分类',
+            favorite: record.favorite === true,
+            ...(sourceId ? { backupSourceId: sourceId } : {}),
+          };
+          imported.push({ ...item, url: URL.createObjectURL(blob) });
+          if (sourceId) knownSourceIds.add(sourceId);
+        } catch {
+          failed += 1;
+        }
+      }
+
+      if (imported.length) {
+        const nextItems = [...imported.map(({ url: _url, ...item }) => item), ...existing];
+        persistItems(nextItems);
+        setImages(current => [...imported, ...current]);
+      }
+      setSelected(null);
+      setSelectionMode(false);
+      setSelectedIds(new Set());
+      addToast(`备份恢复完成：导入 ${imported.length} 张，跳过重复 ${skipped} 张，失败 ${failed} 张`, imported.length || skipped ? 'success' : 'error');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '备份导入失败';
+      addToast(message, 'error');
+    } finally {
+      setBulkBusy(false);
+      setImportProgress('');
+      if (importInputRef.current) importInputRef.current.value = '';
     }
   };
 
@@ -625,6 +711,12 @@ const ImageStudioApp: React.FC = () => {
 
       {tab === 'gallery' && (
         <main className="studio-scroll flex-1 px-4 pb-6">
+          <input ref={importInputRef} type="file" accept=".zip,application/zip" className="hidden" onChange={event => void importImageBackup(event.target.files?.[0] || null)}/>
+          <div className="flex justify-end py-2">
+            <button onClick={() => importInputRef.current?.click()} disabled={bulkBusy} className="soft rounded-full px-3 py-2 text-[10px] font-semibold disabled:opacity-50">
+              {bulkBusy && importProgress ? importProgress : '导入 ZIP 备份'}
+            </button>
+          </div>
           {selected ? (
             <div className="space-y-3">
               <button onClick={() => setSelected(null)} className="soft rounded-full px-3 py-2 text-xs flex items-center gap-1"><ArrowLeft size={14}/>返回作品列表</button>
