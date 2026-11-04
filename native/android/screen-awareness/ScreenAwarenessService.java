@@ -221,7 +221,7 @@ public final class ScreenAwarenessService extends Service {
             );
             padded.copyPixelsFromBuffer(buffer);
             Bitmap frame = Bitmap.createBitmap(padded, 0, 0, image.getWidth(), image.getHeight());
-            padded.recycle();
+            if (frame != padded) padded.recycle();
 
             File directory = new File(getCacheDir(), "screen-awareness");
             if (!directory.exists() && !directory.mkdirs()) {
