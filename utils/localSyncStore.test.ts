@@ -244,6 +244,28 @@ describe('local-first sync outbox', () => {
         expect(await listUnresolvedSyncConflicts()).toHaveLength(0);
     });
 
+    it('merges concurrent cursor updates atomically without losing the highest sequence', async () => {
+        await Promise.all(Array.from({ length: 24 }, (_, index) =>
+            updateSyncCursorState('account-concurrent', 'device-concurrent', {
+                lastPulledSequence: index + 1,
+                lastAckedSequence: index,
+            })
+        ));
+        expect(await getSyncCursorState('account-concurrent', 'device-concurrent')).toMatchObject({
+            lastPulledSequence: 24,
+            lastAckedSequence: 23,
+        });
+    });
+
+    it('rejects invalid cursor values and missing sync identity', async () => {
+        await expect(updateSyncCursorState('', 'device-1', { lastPulledSequence: 1 }))
+            .rejects.toThrow('SYNC_IDENTITY_REQUIRED');
+        await expect(updateSyncCursorState('account-1', 'device-1', { lastPulledSequence: -1 }))
+            .rejects.toThrow('INVALID_SYNC_CURSOR');
+        await expect(updateSyncCursorState('account-1', 'device-1', { lastAckedSequence: 1.5 }))
+            .rejects.toThrow('INVALID_SYNC_CURSOR');
+    });
+
     it('defaults to local-only and does not queue without explicit opt-in', async () => {
         expect(await getSyncPreference('room_note')).toMatchObject({
             enabled: false,
