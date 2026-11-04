@@ -59,6 +59,16 @@ describe('image generation clients', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://nai-proxy.example/ai/generate-image', expect.objectContaining({ method: 'OPTIONS' }));
   });
 
+  it('does not report a missing third-party generation route as a successful check', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not found', { status: 404 })));
+    const result = await testNaiImageConnection({
+      provider: 'thirdparty', baseUrl: 'https://nai-proxy.example', apiKey: 'proxy-token', model: 'nai-model',
+    });
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(404);
+    expect(result.message).toContain('生图路径返回 404');
+  });
+
   it('normalizes NovelAI official and third-party generation endpoints', () => {
     expect(normalizeNaiGenerateEndpoint('https://image.novelai.net')).toBe('https://image.novelai.net/ai/generate-image');
     expect(normalizeNaiGenerateEndpoint('https://proxy.example///', 'thirdparty')).toBe('https://proxy.example/ai/generate-image');
