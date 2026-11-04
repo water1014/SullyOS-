@@ -442,7 +442,7 @@ function assertSyncIdentity(accountId: string, deviceId: string): void {
     if (typeof accountId !== 'string' || typeof deviceId !== 'string'
         || !accountId.trim() || !deviceId.trim()
         || accountId.length > 128 || deviceId.length > 128
-        || /\\s/.test(accountId) || /\\s/.test(deviceId)) {
+        || /\s/.test(accountId) || /\s/.test(deviceId)) {
         throw new Error('SYNC_IDENTITY_REQUIRED');
     }
 }
