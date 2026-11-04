@@ -1,4 +1,5 @@
 import { isAnthropicEndpoint, nativeRequestUrl } from './llmEndpoint';
+import { fetchOpenCodeGo } from './openCodeGoTransport';
 import { modelRejectsSamplingParams } from './samplingParamCompat';
 
 type Block = Record<string, any>;
@@ -208,7 +209,7 @@ function convertAnthropicStream(response: Response): Response {
 }
 
 /** All transformations are request-local. No credential registry or automatic retry/proxy fallback. */
-export async function fetchLlm(resource: RequestInfo | URL, init?: RequestInit, transport: typeof fetch = globalThis.fetch, browser = typeof window !== 'undefined'): Promise<Response> {
+export async function fetchLlm(resource: RequestInfo | URL, init?: RequestInit, transport: typeof fetch = fetchOpenCodeGo, browser = typeof window !== 'undefined'): Promise<Response> {
     if ((transport as FetchTransport).__sullyAnthropic) return transport(resource,init);
     const inputUrl = typeof resource === 'string' ? resource : resource instanceof URL ? resource.href : resource.url;
     if (!isAnthropicEndpoint(inputUrl)) return transport(resource,init);
@@ -242,7 +243,7 @@ export async function fetchLlm(resource: RequestInfo | URL, init?: RequestInit, 
 
 export function installAnthropicFetch(browser = false): void {
     if((globalThis.fetch as FetchTransport).__sullyAnthropic)return;
-    const original=globalThis.fetch.bind(globalThis);
+    const original=fetchOpenCodeGo;
     const wrapped:FetchTransport=(resource,init)=>fetchLlm(resource,init,original,browser);
     wrapped.__sullyAnthropic=true;
     globalThis.fetch=wrapped;
