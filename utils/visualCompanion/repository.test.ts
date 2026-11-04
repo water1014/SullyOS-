@@ -136,6 +136,10 @@ describe('视觉人格本地仓库', () => {
             ...privateAsset,
             storage: { kind: 'blobref', ref: 'blobref:b_private' },
         } as any)).toThrow('私密视觉资产必须使用独立私密存储');
+        expect(() => assertAssetPrivacy({
+            ...privateAsset,
+            storage: { kind: 'private_remote', ref: 'remote:asset_private' },
+        } as any)).toThrow('私密视觉资产必须使用独立私密存储');
         await expect(visualCompanionRepository.deleteAsset('asset_private')).rejects.toThrow('私密资产必须先通过私密保险库');
         await visualCompanionRepository.deleteAsset('asset_1');
         expect(await visualCompanionRepository.getAsset('asset_1')).toBeNull();
