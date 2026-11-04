@@ -3,7 +3,7 @@ import { DB } from '../db';
 import { assertAssetPrivacy, TASK_TRANSITIONS, visualCompanionRepository } from './repository';
 import { deliverVisualTaskToChat } from './delivery';
 import type { VisualAssetRecord, VisualTask } from './types';
-import { claimNextVisualTask, createVisualTask, markVisualAssetsPersisted, markVisualTaskDelivered, recordGeneratedVisualAssets, resumeVisualTaskRetry, scheduleVisualTaskRetry, startVisualGeneration } from './orchestrator';
+import { claimNextVisualTask, createAutonomousVisualTask, createVisualTask, markVisualAssetsPersisted, markVisualTaskDelivered, recordGeneratedVisualAssets, resumeVisualTaskRetry, scheduleVisualTaskRetry, startVisualGeneration } from './orchestrator';
 
 const now = 1_800_000_000_000;
 
@@ -139,6 +139,50 @@ describe('视觉人格本地仓库', () => {
         await expect(visualCompanionRepository.deleteAsset('asset_private')).rejects.toThrow('私密资产必须先通过私密保险库');
         await visualCompanionRepository.deleteAsset('asset_1');
         expect(await visualCompanionRepository.getAsset('asset_1')).toBeNull();
+    });
+
+    it('自主分享策略未放行时不会创建任务，特殊情境放行后才入队', async () => {
+        const settings = {
+            enabled: true,
+            frequency: 'natural' as const,
+            allowSpontaneousShare: true,
+            allowPrivateCreation: false,
+            requireApprovalForNewIdentity: true,
+            dailyImageLimit: 2,
+            updatedAt: now,
+        };
+        const input = {
+            charId: 'char_policy',
+            kind: 'spontaneous_share' as const,
+            privacyScope: 'standard' as const,
+            provider: 'openai' as const,
+            providerConfigId: 'provider_ref_only',
+            model: 'gpt-image',
+            prompt: '一张自然日常照片',
+            referenceAssetIds: [],
+            maxAttempts: 3,
+            budget: { maxImages: 1 },
+        };
+        const denied = await createAutonomousVisualTask(settings, {
+            kind: 'ordinary_conversation',
+            now,
+            localTime: '12:00',
+            imagesGeneratedToday: 0,
+            sample: 0.9,
+        }, input);
+        expect(denied.decision).toEqual({ allowed: false, reason: 'not_selected' });
+        expect(await visualCompanionRepository.listTasks('char_policy')).toHaveLength(0);
+
+        const allowed = await createAutonomousVisualTask(settings, {
+            kind: 'milestone',
+            now,
+            localTime: '12:00',
+            imagesGeneratedToday: 0,
+            sample: 0.5,
+        }, input);
+        expect(allowed.decision).toEqual({ allowed: true, reason: 'special_moment' });
+        expect(allowed.task?.status).toBe('queued');
+        expect(await visualCompanionRepository.listTasks('char_policy')).toHaveLength(1);
     });
 
     it('任务编排支持创建、认领、生成和进入投递阶段', async () => {
