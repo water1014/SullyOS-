@@ -67,6 +67,7 @@ export function normalizeApiConfig(config: APIConfig): APIConfig {
         baseUrl: normalizeApiBaseUrl(visionApi.baseUrl),
         apiKey: normalizeApiCredential(visionApi.apiKey),
         model: normalizeApiModel(visionApi.model),
+        ...(visionApi.customHeaders ? { customHeaders: normalizeApiHeaders(visionApi.customHeaders) } : {}),
       },
     } : {}),
   };
