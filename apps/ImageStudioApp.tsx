@@ -611,12 +611,30 @@ const ImageStudioApp: React.FC = () => {
             </div>
           ) : images.length ? (
             <>
+
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="text-[11px] text-slate-500">共 {images.length} 张作品</div>
+                <button onClick={() => { setSelectionMode(value => !value); setSelectedIds(new Set()); }} className={selectionMode ? 'primary rounded-full px-3 py-2 text-[10px] font-semibold' : 'soft rounded-full px-3 py-2 text-[10px] font-semibold'}>{selectionMode ? '退出多选' : '批量管理'}</button>
+              </div>
+              {selectionMode && <div className="glass rounded-2xl p-3 mb-3 space-y-2">
+                <div className="flex items-center justify-between"><span className="text-xs font-semibold text-slate-700">已选择 {selectedIds.size} 张</span><button onClick={selectVisibleImages} className="text-[10px] text-sky-700 font-semibold">全选当前筛选</button></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button disabled={!selectedIds.size || bulkBusy} onClick={() => void exportSelectedImages()} className="primary rounded-xl py-2.5 text-[11px] font-semibold disabled:opacity-50">{bulkBusy ? '处理中…' : '打包导出 ZIP'}</button>
+                  <button disabled={!selectedIds.size || bulkBusy} onClick={() => void deleteSelectedImages()} className="soft rounded-xl py-2.5 text-[11px] font-semibold text-rose-600 disabled:opacity-50">批量删除</button>
+                </div>
+                <div className="flex gap-2">
+                  <select className="field min-w-0 flex-1 py-2" value={bulkCategory} onChange={event => setBulkCategory(event.target.value)}><option value="">批量设置分类…</option>{IMAGE_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select>
+                  <button disabled={!selectedIds.size || !bulkCategory} onClick={applyBulkCategory} className="soft rounded-xl px-3 text-[10px] font-semibold disabled:opacity-50">应用</button>
+                </div>
+              </div>}
               <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-                {['全部', ...IMAGE_CATEGORIES].map(category => <button key={category} onClick={() => setGalleryCategory(category)} className={`shrink-0 rounded-full px-3 py-2 text-[10px] font-semibold ${galleryCategory === category ? 'primary' : 'soft'}`}>{category}</button>)}
-                <button onClick={() => setShowFavoritesOnly(value => !value)} className={`shrink-0 rounded-full px-3 py-2 text-[10px] font-semibold ${showFavoritesOnly ? 'primary' : 'soft'}`}>{showFavoritesOnly ? '★ 仅收藏' : '☆ 收藏'}</button>
+                {['全部', ...IMAGE_CATEGORIES].map(category => <button key={category} onClick={() => setGalleryCategory(category)} className={galleryCategory === category ? 'shrink-0 rounded-full px-3 py-2 text-[10px] font-semibold primary' : 'shrink-0 rounded-full px-3 py-2 text-[10px] font-semibold soft'}>{category}</button>)}
+                <button onClick={() => setShowFavoritesOnly(value => !value)} className={showFavoritesOnly ? 'shrink-0 rounded-full px-3 py-2 text-[10px] font-semibold primary' : 'shrink-0 rounded-full px-3 py-2 text-[10px] font-semibold soft'}>{showFavoritesOnly ? '★ 仅收藏' : '☆ 收藏'}</button>
               </div>
               {visibleImages.length ? <div className="grid grid-cols-2 gap-3">
-                {visibleImages.map(item => <button key={item.id} onClick={() => setSelected(item)} className="art-tile rounded-[18px] p-1.5 text-left overflow-hidden relative"><img src={item.url} alt="生成作品" loading="lazy" className="w-full aspect-[3/4] object-cover rounded-[13px]"/>{item.favorite && <span className="absolute top-3 right-3 rounded-full bg-white/90 px-2 py-1 text-[10px] text-amber-600">★</span>}<div className="px-1.5 py-2"><div className="text-[10px] font-semibold text-slate-600 truncate">{item.engine === 'gpt' ? 'GPT Image' : 'NovelAI'} · {item.category || '未分类'}</div><div className="text-[9px] text-slate-400 mt-1">{new Date(item.createdAt).toLocaleDateString()}</div>{item.note && <div className="text-[9px] text-slate-500 mt-1 truncate">{item.note}</div>}</div></button>)}
+                {visibleImages.map(item => <div key={item.id} className={selectionMode && selectedIds.has(item.id) ? 'art-tile rounded-[18px] p-1.5 relative ring-2 ring-sky-400' : 'art-tile rounded-[18px] p-1.5 relative'}>
+                  <button onClick={() => selectionMode ? toggleImageSelection(item.id) : setSelected(item)} className="w-full text-left relative"><img src={item.url} alt="生成作品" loading="lazy" className="w-full aspect-[3/4] object-cover rounded-[13px]"/>{item.favorite && <span className="absolute top-2 right-2 rounded-full bg-white/90 px-2 py-1 text-[10px] text-amber-600">★</span>}{selectionMode && <span className={selectedIds.has(item.id) ? 'absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs bg-sky-600 border-sky-600 text-white' : 'absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs bg-white/90 border-white text-transparent'}>✓</span>}<div className="px-1.5 py-2"><div className="text-[10px] font-semibold text-slate-600 truncate">{item.engine === 'gpt' ? 'GPT Image' : 'NovelAI'} · {item.category || '未分类'}</div><div className="text-[9px] text-slate-400 mt-1">{new Date(item.createdAt).toLocaleDateString()}</div>{item.note && <div className="text-[9px] text-slate-500 mt-1 truncate">{item.note}</div>}</div></button>
+                </div>)}
               </div> : <div className="glass rounded-2xl p-6 text-center text-xs text-slate-400">这个筛选条件下还没有作品。</div>}
             </>
           ) : (
