@@ -246,7 +246,18 @@ export default function LocalSyncSettingsPanel() {
                             try {
                                 const result = await pairCompanionDevice({ baseUrl: serverUrl, pairingCode, label: deviceLabel });
                                 setPairingCode('');
-                                setSyncStatus(result.persistentTokenStorage ? '设备配对成功，令牌已存入 Android Keystore。' : '配对成功，但当前预览环境令牌仅保存在页面内存。');
+                                let status = result.persistentTokenStorage
+                                    ? '设备配对成功，令牌已存入 Android Keystore。'
+                                    : '配对成功，但当前预览环境令牌仅保存在页面内存。';
+                                if (enabled) {
+                                    try {
+                                        await setCompanionRemoteSyncPolicy(true);
+                                        status += ' 云端已同步开启便签文字授权。';
+                                    } catch {
+                                        status += ' 本机已同意同步，但云端授权尚未确认，请稍后重试。';
+                                    }
+                                }
+                                setSyncStatus(status);
                                 await refresh();
                             } catch (pairError) {
                                 setError(pairError instanceof Error ? `配对失败：${pairError.message}` : '配对失败，请检查服务器地址和配对码。');
