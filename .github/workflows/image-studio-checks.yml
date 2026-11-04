@@ -53,6 +53,8 @@ jobs:
           cp server/companion-sync/.env.example server/companion-sync/.env
           docker compose --env-file server/companion-sync/.env -f server/companion-sync/compose.yaml config --quiet
           rm server/companion-sync/.env
+      - name: Check VPS deployment script syntax
+        run: bash -n server/companion-sync/deploy.sh
       - name: Build companion sync production image
         run: docker build -f server/companion-sync/Dockerfile -t sullyos-companion-sync:ci .
       - name: Run companion sync PostgreSQL integration test
