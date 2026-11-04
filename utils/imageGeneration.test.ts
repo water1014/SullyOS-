@@ -178,6 +178,48 @@ describe('image generation clients', () => {
     expect(vi.mocked(fetch)).toHaveBeenCalledWith('https://nai-proxy.example/ai/generate-image', expect.any(Object));
   });
 
+  it('passes cancellation signals through to GPT generation requests', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(new Blob(['image'], { type: 'image/png' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await generateGptImage(
+      { baseUrl: 'https://api.example/v1', apiKey: 'test-key', model: 'gpt-image-2' },
+      'test image',
+      { size: '1024x1024', quality: 'high', signal: controller.signal },
+    );
+    expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
+  it('passes cancellation signals through to NovelAI generation requests', async () => {
+    const controller = new AbortController();
+    const zip = new JSZip();
+    zip.file('image_0.png', 'nai-png');
+    const archive = await zip.generateAsync({ type: 'uint8array' });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(archive, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await generateNaiImage(
+      { apiKey: 'pst-test', model: 'nai-diffusion-5-full', provider: 'official' },
+      '1girl',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
+      controller.signal,
+    );
+    expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
+  it('rejects successful NovelAI responses that contain no image in the ZIP', async () => {
+    const zip = new JSZip();
+    zip.file('readme.txt', 'not an image');
+    const archive = await zip.generateAsync({ type: 'uint8array' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(archive, { status: 200 })));
+    await expect(generateNaiImage(
+      { apiKey: 'pst-test', model: 'nai-diffusion-5-full', provider: 'official' },
+      '1girl',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
+    )).rejects.toThrow('压缩包中没有找到图片文件');
+  });
+
   it('surfaces provider errors instead of silently returning an empty image', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       error: { message: 'invalid api key' },
