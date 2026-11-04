@@ -23,7 +23,15 @@ describe('character appearance prompt', () => {
         expect(prompt).toContain('黑色长发');
         expect(prompt).toContain('灰蓝色眼睛');
         expect(prompt).toContain('左眼下有一颗小痣');
+        expect(prompt).toContain('[Fixed character appearance]');
         expect(prompt).not.toContain('金色翅膀');
+    });
+
+    it('uses one free-form appearance paragraph as the canonical description', () => {
+        const paragraph = 'A man with silver hair, amber eyes and a small scar near his eyebrow.';
+        const prompt = buildCharacterAppearancePrompt({ ...profile, identity: [], anchorPrompt: paragraph });
+        expect(prompt).toContain(paragraph);
+        expect(prompt).not.toContain('黑色长发');
     });
 
     it('does not inject draft profiles', () => {
