@@ -394,7 +394,7 @@ export async function evaluateEmotionBackground(
             (friendFeedTask?.prompt || '') + (secretTask?.prompt || ''));
 
         const baseUrl = api.baseUrl.replace(/\/+$/, '');
-        const headers = buildApiRequestHeaders(api.apiKey || 'sk-none', api.customHeaders);
+        const headers = buildApiRequestHeaders(api.apiKey || 'sk-none', api.customHeaders, { baseUrl: api.baseUrl, sessionId: charData.id });
 
         const evalBody = {
             model: api.model,
@@ -738,7 +738,7 @@ export const useChatAI = ({
             await replyStep(async () => KeepAlive.start());
             const keepAliveMs = Math.round(performance.now() - perfSendT0);
             const baseUrl = effectiveApi.baseUrl.replace(/\/+$/, '');
-            const headers = buildApiRequestHeaders(effectiveApi.apiKey || 'sk-none', effectiveApi.customHeaders);
+            const headers = buildApiRequestHeaders(effectiveApi.apiKey || 'sk-none', effectiveApi.customHeaders, { baseUrl: effectiveApi.baseUrl, sessionId: char.id });
 
             // ── 分段计时（从用户发送到 API 发出）──
             const perfStages: Record<string, number> = { keepAlive: keepAliveMs };
