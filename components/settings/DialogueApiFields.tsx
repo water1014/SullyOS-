@@ -40,7 +40,7 @@ export default function DialogueApiFields({ value, onChange, fetchModels, isLoad
 
                 <div className="group">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Key</label>
-                    <input type="password" value={localKey} onChange={(e) => setLocalKey(e.target.value)} placeholder="sk-..." className="w-full bg-white/50 border border-slate-200/60 rounded-xl px-4 py-2.5 text-sm font-mono focus:bg-white transition-all" />
+                    <input type="password" value={localKey} onChange={(e) => setLocalKey(e.target.value)} placeholder={value.baseUrl.includes("opencode.ai") ? "oc_sk_..." : "sk-..."} className="w-full bg-white/50 border border-slate-200/60 rounded-xl px-4 py-2.5 text-sm font-mono focus:bg-white transition-all" />
                 </div>
 
                 <div className="rounded-xl border border-slate-200/70 bg-white/60 p-3 space-y-2">
@@ -62,7 +62,7 @@ export default function DialogueApiFields({ value, onChange, fetchModels, isLoad
                         <button type="button" onClick={() => onChange({ baseUrl: 'https://opencode.ai/inference/openai/v1', apiType: 'openai' })} className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[10px] font-semibold text-sky-700">填入 OpenCode Go · OpenAI Chat</button>
                         <button type="button" onClick={() => onChange({ baseUrl: 'https://opencode.ai/inference/anthropic/v1', apiType: 'anthropic' })} className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[10px] font-semibold text-sky-700">填入 OpenCode Go · Anthropic Messages</button>
                     </div>
-                    <p className="text-[9px] leading-relaxed text-slate-400">Go 订阅密钥填在上方 Key。OpenAI Chat Completions 模型使用 OpenAI 入口；Claude / Qwen 等 Messages 模型使用 Anthropic 入口。GPT 模型走 Responses API，当前聊天内核暂不支持。模型 ID 请以 Go 控制台当前列表为准。聊天请求会自动附带稳定的 x-opencode-session；如需手动覆盖，可在上方自定义请求头中添加同名字段。自定义请求头保存在本机 API 配置中。</p>
+                    <p className="text-[9px] leading-relaxed text-slate-400">Go 订阅密钥填在上方 Key。OpenAI Chat Completions 模型使用 OpenAI 入口；Claude / Qwen 等 Messages 模型使用 Anthropic 入口。GPT 模型走 Responses API、Gemini 走 Gemini API，当前聊天内核暂不支持。模型 ID 请以 Go 控制台当前列表为准。聊天请求会自动附带稳定的 x-opencode-session；如需手动覆盖，可在上方自定义请求头中添加同名字段。自定义请求头保存在本机 API 配置中。</p>
                 </div>
 
                 {/* 高级（流式 / 温度）— 默认折叠，灰色低调，明确写"不建议修改" */}
