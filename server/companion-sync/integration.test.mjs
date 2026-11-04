@@ -204,12 +204,10 @@ async function main() {
     method: 'POST', token: deviceOne, body: { entityType: 'room_note', enabled: false },
   });
   assertStatus(disable, 200, 'disable sync');
-  const replicas = await pool.query('SELECT count(*)::int AS count FROM companion_sync_events WHERE account_id = $1', [firstPair.body.deviceId]);
   // The account is discovered from the authenticated device row, never trusted from the client.
   const account = await pool.query('SELECT account_id FROM companion_devices WHERE id = $1', [firstPair.body.deviceId]);
   const remaining = await pool.query('SELECT count(*)::int AS count FROM companion_sync_events WHERE account_id = $1', [account.rows[0].account_id]);
   assert.equal(remaining.rows[0].count, 0);
-  assert.equal(replicas.rows[0].count, 0);
 
   const watermarkPull = await request(`/v1/sync/pull?cursor=${sequenceTwo}&limit=50`, { token: deviceOne });
   assertStatus(watermarkPull, 200, 'account watermark survives opt-out');
