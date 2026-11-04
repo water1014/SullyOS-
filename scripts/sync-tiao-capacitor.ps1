@@ -32,7 +32,7 @@ $sourceDist = (Resolve-Path -LiteralPath $sourceDist).Path
 $targetDist = (Resolve-Path -LiteralPath $targetDist).Path
 $expectedTarget = [IO.Path]::GetFullPath((Join-Path $wrapperRoot 'dist'))
 $wrapperPrefix = $wrapperRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
-if ($targetDist -ne $expectedTarget -or -not $targetDist.StartsWith($wrapperPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+if ($targetDist -ne $expectedTarget -or -not $targetDist.StartsWith($wrapperPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
   throw "Refusing to replace an unexpected directory: $targetDist"
 }
 
