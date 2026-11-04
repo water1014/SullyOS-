@@ -38,13 +38,15 @@ export function normalizeOpenAIImageEditsEndpoint(baseUrl: string): string {
   return clean.endsWith('/images/edits') ? clean : `${clean}/images/edits`;
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('无法读取参考图片'));
-    reader.onerror = () => reject(new Error('读取参考图片失败'));
-    reader.readAsDataURL(blob);
-  });
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  const mimeType = blob.type || 'image/png';
+  return `data:${mimeType};base64,${btoa(binary)}`;
 }
 
 /** Edit an uploaded reference image through the OpenAI-compatible Images Edits API. */
