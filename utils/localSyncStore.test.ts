@@ -346,6 +346,39 @@ describe('local-first sync outbox', () => {
         expect(event).toMatchObject({ baseVersion: 7, clientVersion: 8, operation: 'delete', payload: {} });
     });
 
+    it('queues the chosen local snapshot after resolving a remote edit conflict', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        const db = await openDB();
+        const tx = db.transaction('room_notes', 'readwrite');
+        tx.objectStore('room_notes').put({ ...note, content: '本机修改版本' });
+        await new Promise<void>((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error);
+        });
+        await persistInboxEvents([{
+            eventId: 'remote-conflict-event',
+            serverSequence: 12,
+            entityType: 'room_note',
+            entityId: note.id,
+            operation: 'update',
+            entityVersion: 4,
+            payload: { ...note, content: '另一台设备修改版本' },
+        }]);
+        const applied = await applyPendingRoomNoteInboxEvent('remote-conflict-event');
+        expect(applied.status).toBe('conflict');
+        await resolveRoomNoteSyncConflict('remote-conflict-event', 'keep_local');
+        const queued = await listPendingSyncEvents();
+        expect(queued).toHaveLength(1);
+        expect(queued[0]).toMatchObject({
+            entityId: note.id,
+            operation: 'update',
+            baseVersion: 4,
+            clientVersion: 5,
+            payload: { ...note, content: '本机修改版本' },
+        });
+    });
+
     it('creates one stable local device identity even when requested concurrently', async () => {
         const identities = await Promise.all(Array.from({ length: 20 }, () => getOrCreateLocalSyncDeviceIdentity()));
         expect(new Set(identities.map(identity => identity.deviceId)).size).toBe(1);
