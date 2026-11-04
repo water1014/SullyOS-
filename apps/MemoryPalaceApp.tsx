@@ -34,6 +34,7 @@ import { confirmExportSafety } from '../utils/exportGuard';
 import type { CharacterAccommodationPolicy, CharacterProfile, MemoryPalaceWaterlinePreset, Message } from '../types';
 import { CharacterGroupFilterBar, filterCharactersByGroup, GROUP_FILTER_ALL } from '../components/character/CharacterGroupFilter';
 import TokenImg from '../components/os/TokenImg';
+import CharacterVisualProfileEditor from '../components/character/CharacterVisualProfileEditor';
 import {
     CONTEXT_RANGE_POLICY_VERSION,
     DEFAULT_MANUAL_CONTEXT_LIMIT,
@@ -61,9 +62,10 @@ import {
 
 const PixelHomeView = React.lazy(() => import('./pixelHome/PixelHomeView'));
 
-function CharacterHomePages({pixel=false,onChange}:{pixel?:boolean;onChange:(page:'palace'|'pixelHome')=>void}) {
-    return <nav aria-label="角色房间页面" style={{display:'flex',gap:4,padding:4,margin:'12px 0',borderRadius:14,background:pixel?'#1e293b':'#f3f0fa'}}>
-        {([{id:'palace',label:'记忆房间'},{id:'pixelHome',label:'像素家园'}] as const).map(page=><button key={page.id} type="button" aria-pressed={(page.id==='pixelHome')===pixel} onClick={()=>onChange(page.id)} style={{flex:1,padding:'10px 8px',border:0,borderRadius:10,fontSize:12,fontWeight:600,cursor:'pointer',background:(page.id==='pixelHome')===pixel?(pixel?'#475569':'#fff'):'transparent',color:pixel?'#e2e8f0':'#715588'}}>{page.label}</button>)}
+function CharacterHomePages({pixel=false,activePage,onChange}:{pixel?:boolean;activePage?:'palace'|'pixelHome'|'appearance';onChange:(page:'palace'|'pixelHome'|'appearance')=>void}) {
+    const current = activePage || (pixel ? 'pixelHome' : 'palace');
+    return <nav aria-label="角色空间页面" style={{display:'flex',gap:4,padding:4,margin:'12px 0',borderRadius:14,background:pixel?'#1e293b':'#f3f0fa'}}>
+        {([{id:'palace',label:'记忆房间'},{id:'pixelHome',label:'像素家园'},{id:'appearance',label:'人物外貌'}] as const).map(page=><button key={page.id} type="button" aria-pressed={page.id===current} onClick={()=>onChange(page.id)} style={{flex:1,padding:'10px 5px',border:0,borderRadius:10,fontSize:11,fontWeight:600,cursor:'pointer',background:page.id===current?(pixel?'#475569':'#fff'):'transparent',color:pixel?'#e2e8f0':'#715588'}}>{page.label}</button>)}
     </nav>;
 }
 
@@ -678,7 +680,7 @@ export default function MemoryPalaceApp() {
     const char = characters.find(c => c.id === activeCharacterId);
     const [selectGroupId, setSelectGroupId] = useState(GROUP_FILTER_ALL); // 选角色页的分组筛选
 
-    const [view, setView] = useState<'picker' | 'palace' | 'pixelHome' | 'room' | 'memory' | 'settings' | 'globalSettings' | 'all' | 'boxes'>(() => guideStep === 1 ? 'globalSettings' : 'picker');
+    const [view, setView] = useState<'picker' | 'palace' | 'pixelHome' | 'appearance' | 'room' | 'memory' | 'settings' | 'globalSettings' | 'all' | 'boxes'>(() => guideStep === 1 ? 'globalSettings' : 'picker');
     useEffect(() => {
         const reveal = () => {
             if (guideStep === 1) setView('globalSettings');
@@ -2938,7 +2940,7 @@ export default function MemoryPalaceApp() {
     // it does not require enabling memory extraction or changing the active owner.
     if (view === 'pixelHome' && char) {
         return <React.Suspense fallback={<div role="status" className="h-full grid place-items-center bg-slate-900 text-slate-200">正在打开像素家园…</div>}>
-            <PixelHomeView key={char.id} charId={char.id} charName={char.name} charAvatar={char.avatar} userName={userProfile?.name || '用户'} onBack={()=>setView('palace')} navigation={<CharacterHomePages pixel onChange={setView}/>} />
+            <PixelHomeView key={char.id} charId={char.id} charName={char.name} charAvatar={char.avatar} userName={userProfile?.name || '用户'} onBack={()=>setView('palace')} navigation={<CharacterHomePages pixel activePage="pixelHome" onChange={setView}/>} />
         </React.Suspense>;
     }
 
@@ -2955,7 +2957,7 @@ export default function MemoryPalaceApp() {
                 >
                     ← 返回
                 </div>
-                <CharacterHomePages onChange={setView} />
+                <CharacterHomePages activePage="palace" onChange={setView} />
                 <div style={{ textAlign: 'center', color: '#9ca3af' }}>
                     <div style={{ marginBottom: 16, color: '#c4b5fd', display: 'inline-flex' }}>
                         <Icon name="palace" size={56} />
@@ -5783,6 +5785,23 @@ create table if not exists memory_vectors (
                         );
                     })
                 )}
+            </div>
+        );
+    }
+
+    // ─── 人物外貌连接：独立保存角色稳定外貌，并供每次生图调用 ─────
+    if (view === 'appearance' && char) {
+        return (
+            <div style={{ paddingLeft: 16, paddingRight: 16, paddingBottom: 24, paddingTop: SAFE_PAD_TOP, maxHeight: '100%', overflowY: 'auto', background: 'linear-gradient(180deg,#f8fbff 0%,#f1f6ff 100%)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                    <button type="button" onClick={() => setView('palace')} style={{ border: 0, background: '#e6eefb', color: '#42628f', borderRadius: 11, padding: '8px 11px', fontSize: 12 }}>← 返回</button>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 17, fontWeight: 750, color: '#263c5b' }}>神经连接 · 人物外貌</div>
+                        <div style={{ fontSize: 11, color: '#7d8da5', marginTop: 3 }}>独立于普通记忆的长期形象设定</div>
+                    </div>
+                </div>
+                <CharacterHomePages activePage="appearance" onChange={setView} />
+                <CharacterVisualProfileEditor charId={char.id} charName={char.name} />
             </div>
         );
     }
