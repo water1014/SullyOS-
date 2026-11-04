@@ -4,7 +4,7 @@ import NavigationBallSettings from '../components/settings/NavigationBallSetting
 import { useSettingsFocus } from '../utils/settingsNavigation';
 import ApiPresetGroups from '../components/settings/ApiPresetGroups';
 import DialogueApiFields from '../components/settings/DialogueApiFields';
-import { llmApiType, normalizeLlmBaseUrl, type LlmApiType } from '../utils/llmEndpoint';
+import { llmApiType, normalizeLlmBaseUrl, describeLlmConnectionError, type LlmApiType } from '../utils/llmEndpoint';
 import { fetchLlm } from '../utils/anthropicApi';
 import { fetchOpenCodeGo } from '../utils/openCodeGoTransport';
 import ModelPicker from '../components/settings/ModelPicker';
@@ -1331,7 +1331,7 @@ const Settings: React.FC = () => {
       setShowVisionModelModal(true);
     } catch (error: any) {
       console.error('Fetch Vision Models Error', error);
-      setVisionStatusMsg(`拉取失败${error?.message ? `：${error.message}` : ''}`);
+      setVisionStatusMsg(`拉取失败：${describeLlmConnectionError(error, Capacitor.isNativePlatform())}`);
     } finally {
       setIsLoadingVisionModels(false);
     }
@@ -1357,7 +1357,7 @@ const Settings: React.FC = () => {
       trackEvent('测试识图 API', { result: '成功' });
     } catch (error: any) {
       console.error('Test Vision API Error', error);
-      setVisionTestResult(`❌ 识图失败：${error?.message || '未知错误'}`);
+      setVisionTestResult(`❌ 识图失败：${describeLlmConnectionError(error, Capacitor.isNativePlatform())}`);
       trackEvent('测试识图 API', { result: '失败' });
     } finally {
       setTestingVisionApi(false);
@@ -1464,7 +1464,7 @@ const Settings: React.FC = () => {
         } else { setStatusMsg('模型列表为空或格式不兼容'); }
     } catch (error: any) {
         console.error(error);
-        setStatusMsg(`连接失败${error?.message ? `：${error.message}` : ''}`);
+        setStatusMsg(`连接失败：${describeLlmConnectionError(error, Capacitor.isNativePlatform())}`);
     } finally {
         setIsLoadingModels(false);
     }
@@ -2744,7 +2744,7 @@ const Settings: React.FC = () => {
                                 setTestApiResult(`❌ HTTP ${res.status}: ${text.slice(0, 100)}`);
                             }
                         } catch (err: any) {
-                            setTestApiResult(`❌ 连接失败: ${err.message}`);
+                            setTestApiResult(`❌ 连接失败: ${describeLlmConnectionError(err, Capacitor.isNativePlatform())}`);
                         } finally {
                             setTestingApi(false);
                         }
