@@ -679,17 +679,21 @@ const ImageStudioApp: React.FC = () => {
 
   const deleteImage = async (item: DisplayImage) => {
     if (!window.confirm('确定删除这张作品吗？')) return;
+    const originalBlob = await DB.getBlobAsset(item.blobId).catch(() => null);
     try {
-      await DB.deleteBlobAsset(item.blobId);
-    } catch {
-      addToast('图片文件删除失败，作品记录已保留，请稍后重试', 'error');
-      return;
+      if (originalBlob) await DB.deleteBlobAsset(item.blobId);
+      const next = readItems().filter(saved => saved.id !== item.id);
+      persistItems(next);
+      setImages(current => current.filter(saved => saved.id !== item.id));
+      if (selected?.id === item.id) setSelected(null);
+      URL.revokeObjectURL(item.url);
+      addToast('作品已删除', 'success');
+    } catch (error) {
+      // If metadata could not be updated after deleting the binary, restore the
+      // original blob so the still-visible gallery entry remains usable.
+      if (originalBlob) await DB.putBlobAsset(item.blobId, originalBlob).catch(() => undefined);
+      addToast('删除未能完整提交，已尽力恢复图片文件；作品记录仍保留，请稍后重试', 'error');
     }
-    const next = readItems().filter(saved => saved.id !== item.id);
-    persistItems(next);
-    setImages(current => current.filter(saved => saved.id !== item.id));
-    if (selected?.id === item.id) setSelected(null);
-    URL.revokeObjectURL(item.url);
   };
 
   const downloadImage = (item: DisplayImage) => {
