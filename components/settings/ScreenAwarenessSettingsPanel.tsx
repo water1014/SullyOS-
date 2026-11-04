@@ -47,7 +47,7 @@ const ScreenAwarenessSettingsPanel: React.FC = () => {
         try {
             await startScreenAwareness();
             setActive(true);
-            setMessage('请在 Android 系统弹窗中确认屏幕共享。开启后，通知栏会一直显示停止入口。');
+            setMessage('请在 Android 系统弹窗中确认屏幕共享。开启后可从通知栏截取此刻、暂停或停止。');
         } catch (error) {
             setMessage(error instanceof Error ? error.message : '屏幕感知没有开启');
             await refreshStatus();
@@ -132,7 +132,7 @@ const ScreenAwarenessSettingsPanel: React.FC = () => {
                     </div>
                 </div>
                 <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {active ? '正在运行' : '已停止'}
+                    {active ? (frozen ? '已截取并暂停' : '正在运行') : '已停止'}
                 </span>
             </div>
 
