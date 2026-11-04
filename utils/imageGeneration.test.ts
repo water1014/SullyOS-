@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
-import { editGptImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint, normalizeNaiGenerateEndpoint, buildImageRequestHeaders, suggestNaiTags, getNaiQualityTags, testGptImageConnection, testNaiImageConnection } from './imageGeneration';
+import { editGptImage, editNaiImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint, normalizeNaiGenerateEndpoint, buildImageRequestHeaders, suggestNaiTags, getNaiQualityTags, testGptImageConnection, testNaiImageConnection } from './imageGeneration';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -176,6 +176,45 @@ describe('image generation clients', () => {
 
     expect(await blob.text()).toBe('nai-png');
     expect(vi.mocked(fetch)).toHaveBeenCalledWith('https://nai-proxy.example/ai/generate-image', expect.any(Object));
+  });
+
+  it('sends a confirmed PNG reference image through NovelAI img2img', async () => {
+    const zip = new JSZip();
+    zip.file('image_0.png', 'nai-img2img-result');
+    const archive = await zip.generateAsync({ type: 'uint8array' });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(archive, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const source = new Blob(['confirmed-base-image'], { type: 'image/png' });
+    const result = await editNaiImage(
+      {
+        apiKey: 'pst-test',
+        model: 'nai-diffusion-5-full',
+        provider: 'official',
+        customHeaders: '{"x-provider":"visual-companion"}',
+      },
+      source,
+      'same character, quiet evening at home',
+      'blurry, bad anatomy',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', strength: 0.35, noise: 0.05 },
+    );
+
+    expect(await result.text()).toBe('nai-img2img-result');
+    const [url, request] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://image.novelai.net/ai/generate-image');
+    expect(request.headers.get('x-provider')).toBe('visual-companion');
+    const body = JSON.parse(String(request.body));
+    expect(body).toMatchObject({
+      action: 'img2img',
+      model: 'nai-diffusion-5-full',
+      parameters: {
+        image: btoa('confirmed-base-image'),
+        strength: 0.35,
+        noise: 0.05,
+        width: 832,
+        height: 1216,
+      },
+    });
   });
 
   it('passes cancellation signals through to GPT generation requests', async () => {
