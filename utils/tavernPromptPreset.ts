@@ -80,7 +80,7 @@ export const parseTavernPromptPreset = (
         }))
         : [];
 
-    const baseName = fileName.replace(/\\.json$/i, '').trim();
+    const baseName = fileName.replace(/\.json$/i, '').trim();
     return {
         name: typeof parsed.name === 'string' && parsed.name.trim()
             ? parsed.name.trim()
