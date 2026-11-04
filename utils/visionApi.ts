@@ -33,7 +33,7 @@ export const visionApiConfigFromPreset = (preset: ApiPreset, enabled = true): Vi
   baseUrl: normalizeApiBaseUrl(preset.config.baseUrl),
   apiKey: normalizeApiCredential(preset.config.apiKey),
   model: normalizeApiModel(preset.config.model),
-  customHeaders: normalizeApiHeaders(preset.config.customHeaders),
+  ...(preset.config.customHeaders ? { customHeaders: normalizeApiHeaders(preset.config.customHeaders) } : {}),
 });
 
 export const isVisionApiReady = (config?: VisionApiConfig | null): config is VisionApiConfig =>
