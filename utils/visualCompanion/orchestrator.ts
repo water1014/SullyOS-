@@ -104,7 +104,15 @@ export function recordGeneratedVisualAssets(taskId: string, assetIds: string[]):
 }
 
 /** 标准/私密资产适配器完成各自的安全保存后，进入聊天投递阶段。 */
-export function markVisualAssetsPersisted(taskId: string): Promise<VisualTask> {
+export async function markVisualAssetsPersisted(taskId: string): Promise<VisualTask> {
+    const task = await visualCompanionRepository.getTask(taskId);
+    if (!task) throw new Error('视觉任务不存在：' + taskId);
+    if (!task.resultAssetIds.length) throw new Error('没有可持久化的视觉资产');
+    const assets = await Promise.all(task.resultAssetIds.map(id => visualCompanionRepository.getAsset(id)));
+    const missing = assets.findIndex(asset => !asset || asset.status !== 'ready' || asset.privacyScope !== task.privacyScope);
+    if (missing !== -1) {
+        throw new Error('视觉资产尚未完成安全保存或隐私级别不匹配：' + task.resultAssetIds[missing]);
+    }
     return visualCompanionRepository.transitionTask(taskId, 'delivery_pending', {
         errorCode: undefined,
         errorMessage: undefined,
