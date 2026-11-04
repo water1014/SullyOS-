@@ -26,8 +26,6 @@ export default function LocalSyncSettingsPanel() {
     const [tokenAvailable, setTokenAvailable] = useState(false);
     const [remoteDevices, setRemoteDevices] = useState<CompanionRemoteDevice[]>([]);
     const [devicesLoading, setDevicesLoading] = useState(false);
-    const [remoteDevices, setRemoteDevices] = useState<CompanionRemoteDevice[]>([]);
-    const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
     const [serverUrl, setServerUrl] = useState('');
     const [pairingCode, setPairingCode] = useState('');
     const [syncBusy, setSyncBusy] = useState(false);
