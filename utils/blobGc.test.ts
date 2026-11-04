@@ -39,7 +39,7 @@ async function seedStore(name: string, records: any[]): Promise<void> {
 beforeEach(async () => {
     // 每条用例都从干净的世界出发：blob 库、本组会写的引用面表、localStorage 全清，
     // 避免上一条用例的令牌 / 引用串味（GC 是全库扫描，残留会直接改变 deleted/kept 计数）
-    for (const s of ['blob_assets', 'characters', 'songs', 'daily_schedule']) {
+    for (const s of ['blob_assets', 'characters', 'songs', 'daily_schedule', 'visual_assets', 'private_visual_blobs']) {
         await clearStore(s);
     }
     localStorage.clear();
@@ -78,6 +78,24 @@ describe('GC 基础三件', () => {
         await seedStore('daily_schedule', [{ id: 'c_2026-10-01', charId: 'c', coverImage: 'blobref:img_schedule_cover' }]);
         expect(await runBlobGc({ minAgeMs: 0 })).toMatchObject({ deleted: 0, aborted: false });
         expect(await DB.getBlobAsset('img_schedule_cover')).not.toBeNull();
+    });
+
+    it('标准视觉资产的 blobref 独占引用也不会被清理', async () => {
+        await DB.putBlobAsset('img_visual_asset_ref', tinyBlob());
+        await seedStore('visual_assets', [{
+            id: 'visual_asset_1',
+            charId: 'character_1',
+            privacyScope: 'standard',
+            storage: { kind: 'blobref', ref: 'blobref:img_visual_asset_ref' },
+        }]);
+
+        expect(REF_SOURCE_STORES).toContain('visual_assets');
+        expect(await runBlobGc({ minAgeMs: 0 })).toMatchObject({ deleted: 0, aborted: false });
+        expect(await DB.getBlobAsset('img_visual_asset_ref')).not.toBeNull();
+    });
+
+    it('私密视觉二进制存储不进入普通 Blob GC 引用面', async () => {
+        expect(REF_SOURCE_STORES).not.toContain('private_visual_blobs');
     });
     it('老孤儿删：img_ 前缀、无任何引用 → 被回收', async () => {
         await DB.putBlobAsset('img_orphan_dead', tinyBlob());
