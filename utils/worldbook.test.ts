@@ -279,4 +279,43 @@ describe('mounted worldbook synchronization', () => {
         expect(retried.filter(entry => entry.category === '学院')).toHaveLength(2);
         expect(resolveWorldbookEntries(retried, [{ content: '我们去钟楼看看' }]).map(entry => entry.book.id)).toEqual(['generated-1', 'generated-2', 'existing']);
     });
+
+    it('imports Tavern character card V2/V3 character_book entries with keys aliases', () => {
+        const imported = parseStandardWorldbook(JSON.stringify({
+            spec: 'chara_card_v2',
+            data: {
+                name: '测试角色',
+                character_book: {
+                    name: '角色内置世界书',
+                    entries: [{
+                        id: 42,
+                        keys: ['月港', '潮汐'],
+                        secondary_keys: ['午夜'],
+                        comment: '月港规则',
+                        content: '午夜潮汐上涨时，月港的灯塔会亮起。',
+                        enabled: true,
+                        selective: true,
+                        insertion_order: 25,
+                        position: 1,
+                        constant: false,
+                    }],
+                },
+            },
+        }), '酒馆角色卡导入', 999);
+
+        expect(imported).toHaveLength(1);
+        expect(imported[0]).toMatchObject({
+            title: '月港规则',
+            content: '午夜潮汐上涨时，月港的灯塔会亮起。',
+            key: ['月港', '潮汐'],
+            keysecondary: ['午夜'],
+            selective: true,
+            order: 25,
+            position: 1,
+            disable: false,
+            constant: false,
+            sourceUid: 42,
+        });
+    });
+
 });
