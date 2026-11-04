@@ -1,4 +1,5 @@
 import { resolveDialogueApi, dialogueMaxTokens } from '../utils/characterApi';
+import { buildApiRequestHeaders } from '../utils/apiConfigNormalize';
 import { createReplyRun, withReplyCancellation } from '../utils/chatReplyCancellation';
 
 import { useState, useRef, useEffect, useSyncExternalStore, MutableRefObject } from 'react';
@@ -368,7 +369,7 @@ export async function evaluateEmotionBackground(
     userProfile: UserProfile,
     mainSystemPrompt: string,
     apiMessages: Array<{ role: string; content: any }>,
-    api: { baseUrl: string; apiKey: string; model: string; stream?: boolean },
+    api: { baseUrl: string; apiKey: string; model: string; stream?: boolean; customHeaders?: Record<string, string> },
     signal?: AbortSignal,
     secretOrigin?: SecretNoteOriginPromise,
 ): Promise<string | null> {
@@ -393,10 +394,7 @@ export async function evaluateEmotionBackground(
             (friendFeedTask?.prompt || '') + (secretTask?.prompt || ''));
 
         const baseUrl = api.baseUrl.replace(/\/+$/, '');
-        const headers = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${api.apiKey || 'sk-none'}`
-        };
+        const headers = buildApiRequestHeaders(api.apiKey || 'sk-none', api.customHeaders);
 
         const evalBody = {
             model: api.model,
@@ -740,7 +738,7 @@ export const useChatAI = ({
             await replyStep(async () => KeepAlive.start());
             const keepAliveMs = Math.round(performance.now() - perfSendT0);
             const baseUrl = effectiveApi.baseUrl.replace(/\/+$/, '');
-            const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${effectiveApi.apiKey || 'sk-none'}` };
+            const headers = buildApiRequestHeaders(effectiveApi.apiKey || 'sk-none', effectiveApi.customHeaders);
 
             // ── 分段计时（从用户发送到 API 发出）──
             const perfStages: Record<string, number> = { keepAlive: keepAliveMs };
@@ -835,7 +833,8 @@ export const useChatAI = ({
                     : instantChatReadiness.workerBundleCurrent === undefined ? 'sar-module-worker-unverified'
                         : null;
             const instantChatVeto: string | null = sarWorkerVeto
-                ?? (luckinChatOn ? 'luckin-chat'
+                ?? (Object.keys(effectiveApi.customHeaders || {}).length > 0 ? 'custom-headers-local-only'
+                : luckinChatOn ? 'luckin-chat'
                 : mcdMiniOpen ? 'mcd'
                     : luckinMiniOpen ? 'luckin'
                         : mcpWorkerUnreachable ? 'mcp-worker-unreachable' : null);
@@ -995,7 +994,7 @@ export const useChatAI = ({
             const emotionApi = emotionEvalEnabled
                 ? ((char.emotionConfig!.api?.baseUrl)
                     ? { ...char.emotionConfig!.api!, stream: (char.emotionConfig!.api as any).stream ?? evalStream }
-                    : { baseUrl: apiConfig.baseUrl, apiKey: apiConfig.apiKey, model: apiConfig.model, stream: evalStream })
+                    : { baseUrl: apiConfig.baseUrl, apiKey: apiConfig.apiKey, model: apiConfig.model, stream: evalStream, customHeaders: apiConfig.customHeaders })
                 : null;
             // 本地路径的情绪评估：主 fetch 发出后立即发射（见下方调用点）。
             // 历史备注：曾为串行中转做过 1.5s 错峰（评估抢跑会把主回复压后一个评估时长），
