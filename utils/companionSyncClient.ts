@@ -1,6 +1,7 @@
 import {
     getCompanionSyncConnection,
     getSyncPreference,
+    getSyncPreference,
     getSyncCursorState,
     listPendingSyncEvents,
     listPendingInboxEvents,
@@ -240,6 +241,8 @@ export async function syncCompanionOnce(): Promise<{
     conflicts: number;
     blocked: number;
 }> {
+    const preference = await getSyncPreference('room_note');
+    if (!preference.enabled || preference.mode !== 'text') throw new Error('LOCAL_SYNC_CONSENT_REQUIRED');
     const connection = await getCompanionSyncConnection();
     if (!connection) throw new Error('COMPANION_NOT_PAIRED');
     const token = await secureStorageGet(TOKEN_KEY);
