@@ -250,7 +250,7 @@ describe('image generation clients', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const suggestions = await suggestNaiTags(
-      { apiKey: 'pst-test', model: 'nai-diffusion-5-full' },
+      { apiKey: 'pst-test', model: 'nai-diffusion-5-full', customHeaders: '{"x-tag-test":"enabled"}' },
       'blue',
     );
 
@@ -259,7 +259,8 @@ describe('image generation clients', () => {
     expect(String(url)).toContain('/ai/generate-image/suggest-tags?');
     expect(String(url)).toContain('model=nai-diffusion-5-full');
     expect(String(url)).toContain('prompt=blue');
-    expect(request.headers.Authorization).toBe('Bearer pst-test');
+    expect(request.headers.get('Authorization')).toBe('Bearer pst-test');
+    expect(request.headers.get('x-tag-test')).toBe('enabled');
   });
 
   it('rejects NovelAI tag suggestions without a persistent token', async () => {
