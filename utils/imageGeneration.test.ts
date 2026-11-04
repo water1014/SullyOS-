@@ -71,13 +71,14 @@ describe('image generation clients', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(archive, { status: 200 })));
 
     const blob = await generateNaiImage(
-      { apiKey: 'pst-test', model: 'nai-diffusion-5-full' },
+      { apiKey: 'thirdparty-token', model: 'nai-diffusion-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
       '1girl, blue hair',
       'blurry',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
     );
 
     expect(await blob.text()).toBe('nai-png');
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith('https://nai-proxy.example/ai/generate-image', expect.any(Object));
   });
 
   it('surfaces provider errors instead of silently returning an empty image', async () => {
