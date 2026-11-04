@@ -1,5 +1,6 @@
 package com.aetheros.simulator;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
@@ -11,14 +12,22 @@ import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.ByteArrayOutputStream;
 
-@CapacitorPlugin(name = "ScreenAwareness")
+@CapacitorPlugin(
+    name = "ScreenAwareness",
+    permissions = {
+        @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS })
+    }
+)
 public class ScreenAwarenessPlugin extends Plugin {
     @PluginMethod
     public void startSession(PluginCall call) {
@@ -33,13 +42,31 @@ public class ScreenAwarenessPlugin extends Plugin {
             call.resolve(result);
             return;
         }
+        if (Build.VERSION.SDK_INT >= 33
+            && getPermissionState("notifications") != PermissionState.GRANTED) {
+            requestPermissionForAlias("notifications", call, "handleNotificationPermission");
+            return;
+        }
+        launchProjectionConsent(call);
+    }
+
+    @PermissionCallback
+    private void handleNotificationPermission(PluginCall call) {
+        if (call == null) return;
+        if (getPermissionState("notifications") != PermissionState.GRANTED) {
+            call.reject("需要允许糯米机显示持续通知，才能安全开启屏幕感知");
+            return;
+        }
+        launchProjectionConsent(call);
+    }
+
+    private void launchProjectionConsent(PluginCall call) {
         MediaProjectionManager manager =
             (MediaProjectionManager) getContext().getSystemService(android.content.Context.MEDIA_PROJECTION_SERVICE);
         if (manager == null) {
             call.reject("当前设备不支持系统屏幕捕获");
             return;
         }
-        saveCall(call);
         startActivityForResult(call, manager.createScreenCaptureIntent(), "handleProjectionPermission");
     }
 
