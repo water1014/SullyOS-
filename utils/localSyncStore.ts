@@ -267,7 +267,7 @@ export async function resetLocalSyncTransportStateAfterRestore(): Promise<void> 
     tx.objectStore(CONFLICTS).clear();
     const state = tx.objectStore(SYNC_STATE);
     const records = await requestResult(state.getAll()) as Array<{ id?: string }>;
-    records.filter(record => record.id !== LOCAL_DEVICE_IDENTITY_KEY)
+    records.filter(record => !isPreservedSyncStateRecord(record))
         .forEach(record => { if (record.id) state.delete(record.id); });
     await done;
 }
