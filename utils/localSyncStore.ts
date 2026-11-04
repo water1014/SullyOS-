@@ -62,8 +62,9 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
 export async function getSyncPreference(entityType: SyncEntityType): Promise<SyncPreference> {
     const db = await openDB();
     const tx = db.transaction(PREFERENCES, 'readonly');
+    const done = transactionDone(tx);
     const record = await requestResult(tx.objectStore(PREFERENCES).get(entityType)) as SyncPreference | undefined;
-    await transactionDone(tx);
+    await done;
     return record ?? { entityType, mode: 'local_only', enabled: false, updatedAt: 0 };
 }
 
@@ -81,8 +82,9 @@ export async function setSyncPreference(
     };
     const db = await openDB();
     const tx = db.transaction(PREFERENCES, 'readwrite');
+    const done = transactionDone(tx);
     tx.objectStore(PREFERENCES).put(preference);
-    await transactionDone(tx);
+    await done;
     return preference;
 }
 
@@ -140,9 +142,10 @@ export async function enqueueRoomNoteSyncEvent(
 export async function listPendingSyncEvents(limit = 50): Promise<LocalSyncEvent[]> {
     const db = await openDB();
     const tx = db.transaction(OUTBOX, 'readonly');
+    const done = transactionDone(tx);
     const index = tx.objectStore(OUTBOX).index('state');
     const events = await requestResult(index.getAll('pending')) as LocalSyncEvent[];
-    await transactionDone(tx);
+    await done;
     return events.sort((a, b) => a.createdAt - b.createdAt).slice(0, Math.max(1, limit));
 }
 
@@ -153,6 +156,7 @@ export async function updateSyncEventState(
 ): Promise<void> {
     const db = await openDB();
     const tx = db.transaction(OUTBOX, 'readwrite');
+    const done = transactionDone(tx);
     const store = tx.objectStore(OUTBOX);
     const current = await requestResult(store.get(eventId)) as LocalSyncEvent | undefined;
     if (!current) {
@@ -166,25 +170,27 @@ export async function updateSyncEventState(
         retryAt: state === 'pending' ? Date.now() : current.retryAt,
         lastErrorCode: errorCode ? errorCode.slice(0, 80) : undefined,
     });
-    await transactionDone(tx);
+    await done;
 }
 
 export async function removeSyncEvent(eventId: string): Promise<void> {
     const db = await openDB();
     const tx = db.transaction(OUTBOX, 'readwrite');
+    const done = transactionDone(tx);
     tx.objectStore(OUTBOX).delete(eventId);
-    await transactionDone(tx);
+    await done;
 }
 
 export async function getSyncQueueSummary(): Promise<SyncQueueSummary> {
     const db = await openDB();
     const tx = db.transaction(OUTBOX, 'readonly');
+    const done = transactionDone(tx);
     const store = tx.objectStore(OUTBOX);
     const [pending, inFlight, blocked] = await Promise.all([
         requestResult(store.index('state').count('pending')),
         requestResult(store.index('state').count('in_flight')),
         requestResult(store.index('state').count('blocked')),
     ]);
-    await transactionDone(tx);
+    await done;
     return { pending, inFlight, blocked };
 }
