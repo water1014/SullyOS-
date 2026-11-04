@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
-import { editGptImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint, normalizeNaiGenerateEndpoint, buildImageRequestHeaders, suggestNaiTags, getNaiQualityTags } from './imageGeneration';
+import { editGptImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint, normalizeNaiGenerateEndpoint, buildImageRequestHeaders, suggestNaiTags, getNaiQualityTags, testGptImageConnection, testNaiImageConnection } from './imageGeneration';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -11,6 +11,52 @@ describe('image generation clients', () => {
     expect(headers.get('authorization')).toBe('Bearer override');
     expect(() => buildImageRequestHeaders({}, 'not-json')).toThrow('合法 JSON 对象');
     expect(() => buildImageRequestHeaders({}, '[]')).toThrow('JSON 对象');
+  });
+
+  it('tests OpenAI-compatible credentials through the non-billable models endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [] }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await testGptImageConnection({
+      baseUrl: 'https://api.example/v1/',
+      apiKey: 'test-key',
+      model: 'image-model',
+      customHeaders: '{"x-provider":"studio"}',
+    });
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith('https://api.example/v1/models', expect.objectContaining({
+      method: 'GET',
+      headers: expect.any(Headers),
+    }));
+    expect(fetchMock.mock.calls[0][1].headers.get('x-provider')).toBe('studio');
+  });
+
+  it('reports GPT authentication failures with their HTTP status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{"error":{"message":"invalid token"}}', { status: 401 })));
+    const result = await testGptImageConnection({ baseUrl: 'https://api.example/v1', apiKey: 'bad', model: 'image-model' });
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(401);
+    expect(result.message).toContain('invalid token');
+  });
+
+  it('validates NovelAI official tokens without starting image generation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"tier":"opus"}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await testNaiImageConnection({ provider: 'official', apiKey: 'pst-test', model: 'nai-diffusion-5-full' });
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith('https://api.novelai.net/user/subscription', expect.objectContaining({ method: 'GET' }));
+  });
+
+  it('checks third-party NovelAI endpoint reachability without sending a generation request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await testNaiImageConnection({
+      provider: 'thirdparty', baseUrl: 'https://nai-proxy.example', apiKey: 'proxy-token', model: 'nai-model',
+    });
+    expect(result.ok).toBe(true);
+    expect(result.message).toContain('实际生图确认');
+    expect(fetchMock).toHaveBeenCalledWith('https://nai-proxy.example/ai/generate-image', expect.objectContaining({ method: 'OPTIONS' }));
   });
 
   it('normalizes NovelAI official and third-party generation endpoints', () => {
