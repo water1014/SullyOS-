@@ -84,6 +84,18 @@ async function readByCharacter<T>(storeName: VisualStoreName, charId: string): P
     return (await requestResult<T[]>(tx.objectStore(storeName).index('charId').getAll(IDBKeyRange.only(charId)))) || [];
 }
 
+async function addOne<T extends { id: string }>(storeName: VisualStoreName, record: T): Promise<void> {
+    assertRecordId(record.id, storeName);
+    const db = await openDB();
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).add(record);
+    await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error('IndexedDB 新增失败'));
+        tx.onabort = () => reject(tx.error || new Error('IndexedDB 新增已中止'));
+    });
+}
+
 async function writeOne<T extends { id: string }>(storeName: VisualStoreName, record: T): Promise<void> {
     assertRecordId(record.id, storeName);
     const db = await openDB();
@@ -165,6 +177,7 @@ export const visualCompanionRepository = {
     getTask: (id: string) => readOne<VisualTask>(STORE.tasks, id),
     listTasks: (charId: string) => readByCharacter<VisualTask>(STORE.tasks, charId),
     saveTask: (record: VisualTask) => writeOne(STORE.tasks, record),
+    createTaskOnce: (record: VisualTask) => addOne(STORE.tasks, record),
     transitionTask: (
         id: string,
         nextStatus: VisualTaskStatus,
