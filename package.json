@@ -16,7 +16,8 @@
     "test:run": "vitest run",
     "wardrobe:check": "node art/chibi/check-wardrobe.mjs",
     "build:chat-preview": "node scripts/build-chat-preview-css.mjs",
-    "check:android-installer": "node scripts/check-android-apk-installer.mjs"
+    "check:android-installer": "node scripts/check-android-apk-installer.mjs",
+    "start:companion-sync": "node server/companion-sync/server.mjs"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "^6.0.1",
