@@ -63,10 +63,19 @@ describe('视觉人格本地仓库', () => {
     it('拒绝跨越非法任务状态，允许有效推进', async () => {
         await visualCompanionRepository.saveTask(task());
         await expect(visualCompanionRepository.transitionTask('task_1', 'delivered')).rejects.toThrow('不允许的视觉任务状态转换');
-        const planned = await visualCompanionRepository.transitionTask('task_1', 'planning');
+        const planned = await visualCompanionRepository.transitionTask('task_1', 'planning', {
+            prompt: 'new prompt',
+        });
         expect(planned.status).toBe('planning');
-        const generating = await visualCompanionRepository.transitionTask('task_1', 'generating');
+        const generating = await visualCompanionRepository.transitionTask('task_1', 'generating', {
+            deliveryId: 'changed_delivery',
+            privacyScope: 'private',
+            charId: 'changed_character',
+        } as any);
         expect(generating.status).toBe('generating');
+        expect(generating.deliveryId).toBe('delivery_1');
+        expect(generating.privacyScope).toBe('standard');
+        expect(generating.charId).toBe('char_1');
         expect(TASK_TRANSITIONS.delivered).toEqual([]);
     });
 
@@ -125,5 +134,8 @@ describe('视觉人格本地仓库', () => {
             ...privateAsset,
             storage: { kind: 'blobref', ref: 'blobref:b_private' },
         } as any)).toThrow('私密视觉资产必须使用独立私密存储');
+        await expect(visualCompanionRepository.deleteAsset('asset_private')).rejects.toThrow('私密资产必须先通过私密保险库');
+        await visualCompanionRepository.deleteAsset('asset_1');
+        expect(await visualCompanionRepository.getAsset('asset_1')).toBeNull();
     });
 });
