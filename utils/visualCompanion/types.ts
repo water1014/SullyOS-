@@ -121,18 +121,14 @@ export interface VisualTask {
     completedAt?: number;
 }
 
-export interface VisualAssetRecord {
+export interface VisualAssetRecordBase {
     id: string;
     charId: string;
-    privacyScope: VisualPrivacyScope;
     status: VisualAssetStatus;
     mimeType: string;
     byteSize: number;
     width?: number;
     height?: number;
-    /** 标准资产可用 blobref；私密资产必须使用独立加密存储引用。 */
-    storageRef: string;
-    encryptionKeyVersion?: number;
     checksum?: string;
     taskId?: string;
     projectId?: string;
@@ -141,6 +137,23 @@ export interface VisualAssetRecord {
     createdAt: number;
     deletedAt?: number;
 }
+
+/**
+ * 用判别联合在编译期阻止私密资产误接入普通 blobref/GC。
+ * 私密资产必须带密钥版本，且只能指向独立私密存储。
+ */
+export type VisualAssetRecord = VisualAssetRecordBase & (
+    | {
+        privacyScope: 'standard';
+        storage: { kind: 'blobref'; ref: string };
+        encryptionKeyVersion?: never;
+    }
+    | {
+        privacyScope: 'private';
+        storage: { kind: 'private_local' | 'private_remote'; ref: string };
+        encryptionKeyVersion: number;
+    }
+);
 
 export interface PhotoProjectShot {
     id: string;
