@@ -88,12 +88,15 @@ export async function testNaiImageConnection(config: NaiImageConfig): Promise<Im
   // OPTIONS checks reachability only; it deliberately does not send a generation payload or spend credits.
   const response = await fetch(endpoint, { method: 'OPTIONS', headers: { Accept: 'application/json' } });
   const durationMs = Date.now() - startedAt;
+  if (response.status === 404) {
+    return { ok: false, status: response.status, durationMs, message: '服务器已响应，但生图路径返回 404。请检查第三方 Base URL 是否正确，以及服务商是否提供 NovelAI 原生协议。' };
+  }
   if (response.status < 500) {
     return {
       ok: true,
       status: response.status,
       durationMs,
-      message: '服务地址可达（OPTIONS 检查通过）。第三方没有统一的鉴权测试协议，Token 和模型仍需通过实际生图确认。',
+      message: '服务地址已响应。第三方没有统一的鉴权测试协议，此检查不验证 Token 和模型，仍需通过实际生图确认。',
     };
   }
   return { ok: false, status: response.status, durationMs, message: `第三方服务返回服务器错误（HTTP ${response.status}）` };
