@@ -28,7 +28,10 @@ const ScreenAwarenessSettingsPanel: React.FC = () => {
 
     useEffect(() => {
         void refreshStatus();
-    }, [refreshStatus]);
+        if (!available) return;
+        const timer = window.setInterval(() => { void refreshStatus(); }, 3000);
+        return () => window.clearInterval(timer);
+    }, [available, refreshStatus]);
 
     const handleStart = async () => {
         setBusy(true);
