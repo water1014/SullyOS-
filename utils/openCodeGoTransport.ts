@@ -1,17 +1,29 @@
-import { Capacitor, CapacitorHttp } from '@capacitor/core';
-import { isOpenCodeGoEndpoint } from './apiConfigNormalize';
-
 type NativeHttpRequest = (options: Record<string, unknown>) => Promise<{
   status: number;
   data: unknown;
   headers?: Record<string, string>;
 }>;
 
+const fallbackFetch: typeof fetch = globalThis.fetch.bind(globalThis);
+let activeTransport: typeof fetch = fallbackFetch;
+
 /**
- * OpenCode Go does not expose browser CORS access consistently. In the Android/iOS
- * Capacitor app, route only Go inference calls through Capacitor's native HTTP stack.
- * Ordinary browser/PWA requests keep using fetch. This is deliberately not a global
- * fetch patch, so streaming and unrelated app networking are left untouched.
+ * OpenCode Go does not expose browser CORS access consistently. The native app
+ * injects Capacitor's HTTP bridge from index.tsx; worker bundles keep this module
+ * dependency-free and continue using ordinary fetch.
+ */
+export function configureOpenCodeGoNativeTransport(
+  isNative: boolean,
+  nativeRequest?: NativeHttpRequest,
+): void {
+  activeTransport = isNative && nativeRequest
+    ? createOpenCodeGoTransport(true, nativeRequest, fallbackFetch)
+    : fallbackFetch;
+}
+
+/**
+ * Route only OpenCode Go inference calls through the injected native HTTP stack.
+ * Ordinary browser/PWA requests and unrelated app networking remain on fetch.
  */
 export function createOpenCodeGoTransport(
   isNative: boolean,
@@ -24,7 +36,7 @@ export function createOpenCodeGoTransport(
       ? resource
       : resource instanceof URL ? resource.href : resource.url;
 
-    if (!isNative || !isOpenCodeGoEndpoint(url)) return fallback(resource, init);
+    if (!isNative || !/opencode\\.ai\\/inference\\/go\\//i.test(url)) return fallback(resource, init);
 
     const method = (init?.method || request?.method || 'GET').toUpperCase();
     const headers = new Headers(init?.headers || request?.headers);
@@ -63,8 +75,4 @@ export function createOpenCodeGoTransport(
   };
 }
 
-export const fetchOpenCodeGo: typeof fetch = createOpenCodeGoTransport(
-  Capacitor.isNativePlatform(),
-  options => CapacitorHttp.request(options as any),
-  globalThis.fetch.bind(globalThis),
-);
+export const fetchOpenCodeGo: typeof fetch = (resource, init) => activeTransport(resource, init);
