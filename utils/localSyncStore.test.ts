@@ -20,6 +20,7 @@ import {
     setSyncPreference,
     updateSyncEventState,
     recoverStaleInFlightSyncEvents,
+    getOrCreateLocalSyncDeviceIdentity,
 } from './localSyncStore';
 
 const note = {
@@ -267,6 +268,24 @@ describe('local-first sync outbox', () => {
         expect(await listPendingInboxEvents()).toHaveLength(0);
     });
 
+    it('creates one stable local device identity even when requested concurrently', async () => {
+        const identities = await Promise.all(Array.from({ length: 20 }, () => getOrCreateLocalSyncDeviceIdentity()));
+        expect(new Set(identities.map(identity => identity.deviceId)).size).toBe(1);
+        expect(identities[0]).toMatchObject({
+            id: 'local_device_identity',
+            schemaVersion: 1,
+        });
+        expect(identities[0].deviceId.length).toBeGreaterThanOrEqual(8);
+        expect(identities[0].createdAt).toBeGreaterThan(0);
+    });
+
+    it('uses collision-safe keys for account and device cursor pairs', async () => {
+        await updateSyncCursorState('account:one', 'device', { lastPulledSequence: 11 });
+        await updateSyncCursorState('account', 'one:device', { lastPulledSequence: 22 });
+        expect((await getSyncCursorState('account:one', 'device')).lastPulledSequence).toBe(11);
+        expect((await getSyncCursorState('account', 'one:device')).lastPulledSequence).toBe(22);
+    });
+
     it('keeps cursors monotonic and records resolvable conflicts', async () => {
         const first = await updateSyncCursorState('account-1', 'device-1', { lastPulledSequence: 10, lastAckedSequence: 8 });
         const stale = await updateSyncCursorState('account-1', 'device-1', { lastPulledSequence: 4, lastAckedSequence: 3 });
@@ -298,6 +317,10 @@ describe('local-first sync outbox', () => {
         await expect(updateSyncCursorState('account-1', 'device-1', { lastPulledSequence: -1 }))
             .rejects.toThrow('INVALID_SYNC_CURSOR');
         await expect(updateSyncCursorState('account-1', 'device-1', { lastAckedSequence: 1.5 }))
+            .rejects.toThrow('INVALID_SYNC_CURSOR');
+        await expect(getSyncCursorState('account with space', 'device-1'))
+            .rejects.toThrow('SYNC_IDENTITY_REQUIRED');
+        await expect(updateSyncCursorState('account-1', 'device-1', { lastSuccessfulSyncAt: Number.NaN }))
             .rejects.toThrow('INVALID_SYNC_CURSOR');
     });
 
