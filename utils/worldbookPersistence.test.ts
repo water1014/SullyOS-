@@ -31,6 +31,13 @@ describe('世界书库与角色缓存事务', () => {
     expect((await DB.getAllWorldbooks()).some(w=>[a.id,b.id].includes(w.id))).toBe(false);
     expect((await DB.getCharacter('delete-char'))?.mountedWorldbooks).toEqual([toMountedWorldbook(local)]);
   });
+  it('酒馆批量导入通过单个 IndexedDB 事务完整保存', async () => {
+    const a=book('tavern-import-a','酒馆导入');
+    const b=book('tavern-import-b','酒馆导入');
+    await DB.saveWorldbooks([a,b]);
+    const saved=(await DB.getAllWorldbooks()).filter(item=>item.category==='酒馆导入');
+    expect(saved.map(item=>item.id).sort()).toEqual([a.id,b.id].sort());
+  });
   it('角色缓存写入失败时整个事务回滚，库和挂载都保持原样', async () => {
     const a=book('abort-book');await DB.saveWorldbook(a);await DB.saveCharacter(char('abort-char',[a]));
     const original=IDBObjectStore.prototype.put;
