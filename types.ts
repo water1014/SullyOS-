@@ -278,10 +278,12 @@ export interface VisionApiConfig {
 }
 
 /** A complete dialogue endpoint, separate from TTS/vision configuration. */
-export type DialogueApiConfig = Pick<APIConfig, 'baseUrl' | 'apiKey' | 'model' | 'stream' | 'temperature' | 'maxTokens' | 'apiType'>;
+export type DialogueApiConfig = Pick<APIConfig, 'baseUrl' | 'apiKey' | 'model' | 'stream' | 'temperature' | 'maxTokens' | 'apiType' | 'customHeaders'>;
 
 export interface APIConfig {
   apiType?: 'openai' | 'anthropic';
+  /** 用户自定义 HTTP 请求头；只随对应 API 请求发送，不写入诊断日志。 */
+  customHeaders?: Record<string, string>;
   /** 私聊单次生成上限；未设置沿用 8000，不改变历史范围。 */
   maxTokens?: number;
   baseUrl: string;
