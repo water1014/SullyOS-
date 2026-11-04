@@ -20,7 +20,6 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
-import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.view.Display;
 
@@ -178,12 +177,17 @@ public final class ScreenAwarenessService extends Service {
         Intent captureIntent = new Intent(this, ScreenAwarenessService.class);
         captureIntent.setAction(frozen ? ACTION_RESUME : ACTION_FREEZE);
         PendingIntent capturePending = PendingIntent.getService(this, 7316, captureIntent, pendingFlags);
+        String title = frozen ? "糯米机已截取并暂停屏幕" : "糯米机屏幕感知已开启";
+        String content = frozen
+            ? "画面已冻结在本机，可返回聊天选择分享"
+            : freezeRequested ? "正在保存此刻画面…" : "仅在本机缓存画面，可随时截取此刻并暂停";
+        String captureLabel = frozen ? "继续感知" : freezeRequested ? "正在截取…" : "截取此刻";
         builder.setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle(frozen ? "糯米机已截取并暂停屏幕" : "糯米机屏幕感知已开启")
-            .setContentText(frozen ? "画面已冻结在本机，可返回聊天选择分享" : "仅在本机缓存画面，可随时截取此刻并暂停")
+            .setContentTitle(title)
+            .setContentText(content)
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
-            .addAction(android.R.drawable.ic_menu_camera, frozen ? "继续感知" : "截取此刻", capturePending)
+            .addAction(android.R.drawable.ic_menu_camera, captureLabel, capturePending)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "停止感知", stopPending);
         return builder.build();
     }
