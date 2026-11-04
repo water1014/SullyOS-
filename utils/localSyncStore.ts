@@ -778,7 +778,7 @@ export async function applyPendingRoomNoteInboxEvent(eventId: string): Promise<I
         && local.timestamp === remote.timestamp && local.content === remote.content
         && local.type === remote.type);
     const staleAlreadyApplied = localServerVersion >= event.entityVersion;
-    const followsKnownBase = localServerVersion === event.entityVersion - 1;
+    const followsKnownBase = localServerVersion > 0 && localServerVersion === event.entityVersion - 1;
 
     if (!local || sameContent || staleAlreadyApplied || followsKnownBase) {
         if (!staleAlreadyApplied) {
