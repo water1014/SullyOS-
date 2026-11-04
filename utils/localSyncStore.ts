@@ -81,7 +81,7 @@ export async function setSyncPreference(
         updatedAt: Date.now(),
     };
     const db = await openDB();
-    const stores = enabled ? [PREFERENCES] : [PREFERENCES, OUTBOX, INBOX];
+    const stores = enabled ? [PREFERENCES] : [PREFERENCES, OUTBOX, INBOX, CONFLICTS];
     const tx = db.transaction(stores, 'readwrite');
     const done = transactionDone(tx);
     tx.objectStore(PREFERENCES).put(preference);
@@ -94,6 +94,12 @@ export async function setSyncPreference(
         incoming
             .filter(event => event.entityType === entityType && event.applyState !== 'applied')
             .forEach(event => inbox.delete(event.eventId));
+        // Conflict snapshots can contain copies of both devices' note text.
+        // Opting out must remove those replicas too, not just pending queue rows.
+        const conflicts = tx.objectStore(CONFLICTS);
+        const snapshots = await requestResult(conflicts.getAll()) as LocalSyncConflict[];
+        snapshots.filter(conflict => conflict.entityType === entityType)
+            .forEach(conflict => conflicts.delete(conflict.conflictId));
     }
     await done;
     return preference;
