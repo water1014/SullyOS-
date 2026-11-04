@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 
 export interface ScreenAwarenessStatus {
   active: boolean;
+  frozen: boolean;
   latestFrameAt: number;
 }
 
@@ -15,6 +16,7 @@ export interface ScreenAwarenessFrame {
 interface ScreenAwarenessNative {
   startSession(): Promise<{ active: boolean; alreadyRunning?: boolean; requiresVisibleNotification?: boolean; localOnly?: boolean }>;
   stopSession(): Promise<{ active: boolean }>;
+  resumeSession(): Promise<{ active: boolean; frozen: boolean }>;
   getStatus(): Promise<ScreenAwarenessStatus>;
   getLatestFrame(): Promise<ScreenAwarenessFrame>;
   clearLatestFrame(): Promise<{ cleared: boolean }>;
@@ -40,6 +42,11 @@ export async function startScreenAwareness(): Promise<void> {
 export async function stopScreenAwareness(): Promise<void> {
   assertAvailable();
   await NativeScreenAwareness.stopSession();
+}
+
+export async function resumeScreenAwareness(): Promise<void> {
+  assertAvailable();
+  await NativeScreenAwareness.resumeSession();
 }
 
 export async function getScreenAwarenessStatus(): Promise<ScreenAwarenessStatus> {
