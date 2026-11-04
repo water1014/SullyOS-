@@ -29,6 +29,43 @@ beforeEach(async () => {
 });
 
 describe('宋祁视觉人格系统 · P1 数据层', () => {
+    it('从 v74 升级到 v75 时保留旧聊天、画廊和 Blob 数据', async () => {
+        const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open('AetherOS_Data', 74);
+            request.onupgradeneeded = () => {
+                const db = request.result;
+                db.createObjectStore('messages', { keyPath: 'id' });
+                db.createObjectStore('blob_assets', { keyPath: 'id' });
+                db.createObjectStore('gallery', { keyPath: 'id' });
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        await new Promise<void>((resolve, reject) => {
+            const tx = legacy.transaction(['messages', 'blob_assets', 'gallery'], 'readwrite');
+            tx.objectStore('messages').put({ id: 41, charId: 'c1', content: '旧聊天仍在' });
+            tx.objectStore('blob_assets').put({ id: 'studio_legacy', blob: new Blob(['old image']) });
+            tx.objectStore('gallery').put({ id: 'gallery_legacy', imageId: 'studio_legacy' });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+        legacy.close();
+
+        const upgraded = await openDB();
+        expect(upgraded.version).toBe(75);
+        expect(Array.from(upgraded.objectStoreNames)).toContain('visual_profiles');
+
+        const read = (storeName: string) => new Promise<any[]>((resolve, reject) => {
+            const tx = upgraded.transaction(storeName, 'readonly');
+            const request = tx.objectStore(storeName).getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        expect((await read('messages'))[0].content).toBe('旧聊天仍在');
+        expect((await read('blob_assets'))[0].id).toBe('studio_legacy');
+        expect((await read('gallery'))[0].id).toBe('gallery_legacy');
+    });
+
     it('v75 增量创建视觉 Store，同时保留原聊天与生图室 Store', async () => {
         const db = await openDB();
         expect(db.version).toBe(75);
