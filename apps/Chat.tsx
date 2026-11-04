@@ -135,7 +135,7 @@ import {
     validateInstallableArtifact,
 } from '../features/collaboration/makers';
 import { upsertMountedWorldbooks } from '../utils/worldbook';
-import { getLatestScreenFrame, getScreenAwarenessStatus, isScreenAwarenessAvailable } from '../utils/androidScreenAwareness';
+import { clearLatestScreenFrame, getLatestScreenFrame, getScreenAwarenessStatus, isScreenAwarenessAvailable } from '../utils/androidScreenAwareness';
 
 const CollaborationWindow = React.lazy(() => import('../features/collaboration/CollaborationWindow'));
 
@@ -1817,6 +1817,19 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
         }
     };
 
+    const discardScreenSharePreview = async () => {
+        setScreenSharePreview(null);
+        // The preview is already in memory; remove the native temporary file as soon
+        // as the user declines it so a later session cannot accidentally reuse it.
+        if (isScreenAwarenessAvailable()) {
+            try {
+                await clearLatestScreenFrame();
+            } catch {
+                addToast('预览已关闭，但本机临时截图未能清理，请到屏幕感知设置中手动清除', 'warning');
+            }
+        }
+    };
+
     const handleConfirmScreenShare = async () => {
         if (!screenSharePreview || !char || screenShareSending) return;
         setScreenShareSending(true);
@@ -1827,6 +1840,15 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
                 userConfirmed: true,
             });
             setScreenSharePreview(null);
+            // Sending is explicit and complete. The chat message now owns its image
+            // copy, so the temporary screen-capture cache can be safely removed.
+            if (isScreenAwarenessAvailable()) {
+                try {
+                    await clearLatestScreenFrame();
+                } catch {
+                    addToast('图片已发送，但本机临时截图未能清理，请到屏幕感知设置中手动清除', 'warning');
+                }
+            }
             addToast(`已把这张屏幕画面发送给 ${char.name}`, 'success');
         } catch (error) {
             addToast(error instanceof Error ? error.message : '屏幕画面发送失败', 'error');
@@ -4750,12 +4772,12 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
             <Modal
                 isOpen={screenSharePreview !== null}
                 title="确认分享屏幕画面"
-                onClose={() => { if (!screenShareSending) setScreenSharePreview(null); }}
+                onClose={() => { if (!screenShareSending) void discardScreenSharePreview(); }}
                 footer={
                     <>
                         <button
                             type="button"
-                            onClick={() => setScreenSharePreview(null)}
+                            onClick={() => void discardScreenSharePreview()}
                             disabled={screenShareSending}
                             className="flex-1 rounded-2xl bg-slate-100 py-3 text-xs font-bold text-slate-600 disabled:opacity-50"
                         >
