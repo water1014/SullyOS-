@@ -35,13 +35,18 @@ describe('local-first sync outbox', () => {
         const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
             const request = indexedDB.open('AetherOS_Data', 75);
             request.onupgradeneeded = () => {
-                const notes = request.result.createObjectStore('room_notes', { keyPath: 'id' });
+                const db = request.result;
+                const notes = db.createObjectStore('room_notes', { keyPath: 'id' });
                 notes.createIndex('charId', 'charId', { unique: false });
+                db.createObjectStore('characters', { keyPath: 'id' });
+                db.createObjectStore('messages', { keyPath: 'id', autoIncrement: true });
+                db.createObjectStore('blob_assets', { keyPath: 'id' });
+                db.createObjectStore('private_visual_blobs', { keyPath: 'id' });
             };
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
-        const seed = legacy.transaction('room_notes', 'readwrite');
+        const seed = legacy.transaction(['room_notes', 'characters', 'messages', 'blob_assets', 'private_visual_blobs'], 'readwrite');
         seed.objectStore('room_notes').put({
             id: 'legacy-note',
             charId: 'char-legacy',
@@ -49,6 +54,10 @@ describe('local-first sync outbox', () => {
             content: '保留这条旧便签',
             type: 'thought',
         });
+        seed.objectStore('characters').put({ id: 'char-legacy', name: '旧角色' });
+        seed.objectStore('messages').put({ charId: 'char-legacy', role: 'assistant', content: '旧聊天记录' });
+        seed.objectStore('blob_assets').put({ id: 'asset-legacy', blob: new Blob(['image-bytes']) });
+        seed.objectStore('private_visual_blobs').put({ id: 'private-legacy', charId: 'char-legacy', blob: new Blob(['private-bytes']) });
         await new Promise<void>((resolve, reject) => {
             seed.oncomplete = () => resolve();
             seed.onerror = () => reject(seed.error);
@@ -68,6 +77,24 @@ describe('local-first sync outbox', () => {
             request.onerror = () => reject(request.error);
         });
         expect(preserved).toMatchObject({ id: 'legacy-note', content: '保留这条旧便签' });
+        const preservedStores = upgraded.transaction(
+            ['characters', 'messages', 'blob_assets', 'private_visual_blobs'], 'readonly'
+        );
+        const readOne = (store: string, key: IDBValidKey) => new Promise<any>((resolve, reject) => {
+            const request = preservedStores.objectStore(store).get(key);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        const [character, message, imageAsset, privateAsset] = await Promise.all([
+            readOne('characters', 'char-legacy'),
+            readOne('messages', 1),
+            readOne('blob_assets', 'asset-legacy'),
+            readOne('private_visual_blobs', 'private-legacy'),
+        ]);
+        expect(character).toMatchObject({ id: 'char-legacy', name: '旧角色' });
+        expect(message).toMatchObject({ id: 1, content: '旧聊天记录' });
+        expect(await imageAsset.blob.text()).toBe('image-bytes');
+        expect(await privateAsset.blob.text()).toBe('private-bytes');
     });
 
 
