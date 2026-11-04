@@ -19,6 +19,7 @@ import {
     serializeRoomNoteForSync,
     setSyncPreference,
     updateSyncEventState,
+    recoverStaleInFlightSyncEvents,
 } from './localSyncStore';
 
 const note = {
@@ -342,6 +343,34 @@ describe('local-first sync outbox', () => {
         expect(pending.eventId).toBe(event!.eventId);
         expect(pending.attemptCount).toBe(1);
         expect(pending.lastErrorCode).toBe('NETWORK_UNAVAILABLE');
+    });
+
+    it('recovers interrupted in-flight events but leaves fresh leases untouched', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        const stale = await enqueueRoomNoteSyncEvent({ ...note, id: 'stale-event' }, 'create');
+        const fresh = await enqueueRoomNoteSyncEvent({ ...note, id: 'fresh-event' }, 'create');
+        await updateSyncEventState(stale!.eventId, 'in_flight');
+        await updateSyncEventState(fresh!.eventId, 'in_flight');
+
+        const db = await openDB();
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction('sync_outbox', 'readwrite');
+            const store = tx.objectStore('sync_outbox');
+            const request = store.get(stale!.eventId);
+            request.onsuccess = () => {
+                store.put({ ...request.result, inFlightAt: Date.now() - 10_000 });
+            };
+            request.onerror = () => reject(request.error);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+
+        expect(await recoverStaleInFlightSyncEvents(1_000)).toBe(1);
+        const summary = await getSyncQueueSummary();
+        expect(summary).toEqual({ pending: 1, inFlight: 1, blocked: 0 });
+        const pending = await listPendingSyncEvents();
+        expect(pending[0]).toMatchObject({ eventId: stale!.eventId, lastErrorCode: 'INTERRUPTED_REQUEST' });
+        await expect(recoverStaleInFlightSyncEvents(500)).rejects.toThrow('INVALID_SYNC_LEASE_AGE');
     });
 
     it('purges all transport copies on opt-out while preserving the original local note', async () => {
