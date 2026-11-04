@@ -344,10 +344,22 @@ describe('local-first sync outbox', () => {
         expect(pending.lastErrorCode).toBe('NETWORK_UNAVAILABLE');
     });
 
-    it('purges queued note content when the user disables sync', async () => {
+    it('purges queued note content and conflict snapshots when the user disables sync', async () => {
         await setSyncPreference('room_note', true, 'text');
         await enqueueRoomNoteSyncEvent(note, 'create');
+        await persistInboxEvents([{
+            eventId: 'opt-out-conflict-event', serverSequence: 21, entityType: 'room_note',
+            entityId: note.id, operation: 'update', entityVersion: 2,
+            payload: { ...note, content: '另一台设备的副本' },
+        }]);
+        await recordSyncConflict({
+            conflictId: 'opt-out-conflict', entityType: 'room_note', entityId: note.id,
+            localVersion: 1, remoteVersion: 2,
+            localSnapshot: { ...note },
+            remoteSnapshot: { ...note, content: '另一台设备的副本' },
+        });
         expect(await listPendingSyncEvents()).toHaveLength(1);
+        expect(await listUnresolvedSyncConflicts()).toHaveLength(1);
 
         await setSyncPreference('room_note', false);
         expect(await getSyncPreference('room_note')).toMatchObject({
@@ -355,6 +367,8 @@ describe('local-first sync outbox', () => {
             mode: 'local_only',
         });
         expect(await listPendingSyncEvents()).toHaveLength(0);
+        expect(await listPendingInboxEvents()).toHaveLength(0);
+        expect(await listUnresolvedSyncConflicts()).toHaveLength(0);
     });
 
     it('uses an empty payload for delete events', async () => {
