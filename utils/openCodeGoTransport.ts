@@ -36,7 +36,7 @@ export function createOpenCodeGoTransport(
       ? resource
       : resource instanceof URL ? resource.href : resource.url;
 
-    if (!isNative || !/opencode\\.ai\\/inference\\/go\\//i.test(url)) return fallback(resource, init);
+    if (!isNative || !url.toLowerCase().includes('opencode.ai/inference/go/')) return fallback(resource, init);
 
     const method = (init?.method || request?.method || 'GET').toUpperCase();
     const headers = new Headers(init?.headers || request?.headers);
