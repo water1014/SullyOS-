@@ -344,7 +344,14 @@ describe('local-first sync outbox', () => {
         expect(pending.lastErrorCode).toBe('NETWORK_UNAVAILABLE');
     });
 
-    it('purges queued note content and conflict snapshots when the user disables sync', async () => {
+    it('purges all transport copies on opt-out while preserving the original local note', async () => {
+        const db = await openDB();
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction('room_notes', 'readwrite');
+            tx.objectStore('room_notes').put(note);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
         await setSyncPreference('room_note', true, 'text');
         await enqueueRoomNoteSyncEvent(note, 'create');
         await persistInboxEvents([
@@ -377,6 +384,23 @@ describe('local-first sync outbox', () => {
         expect(await listPendingSyncEvents()).toHaveLength(0);
         expect(await listPendingInboxEvents()).toHaveLength(0);
         expect(await listUnresolvedSyncConflicts()).toHaveLength(0);
+        const checkDb = await openDB();
+        const [inboxRows, localNotes] = await Promise.all([
+            new Promise<any[]>((resolve, reject) => {
+                const tx = checkDb.transaction('sync_inbox', 'readonly');
+                const request = tx.objectStore('sync_inbox').getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }),
+            new Promise<any[]>((resolve, reject) => {
+                const tx = checkDb.transaction('room_notes', 'readonly');
+                const request = tx.objectStore('room_notes').getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }),
+        ]);
+        expect(inboxRows).toHaveLength(0);
+        expect(localNotes).toEqual([note]);
     });
 
     it('uses an empty payload for delete events', async () => {
