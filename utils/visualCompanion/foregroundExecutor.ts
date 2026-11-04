@@ -177,13 +177,22 @@ async function runVisualTaskInForeground(taskId: string, signal: AbortSignal): P
         const latest = await visualCompanionRepository.getTask(task.id);
         const message = error instanceof Error ? error.message : String(error);
         if (latest && latest.status === 'cancelled') return latest;
-        if (latest && ['generating', 'persisting', 'delivery_pending'].includes(latest.status)) {
+        if (latest?.status === 'generating') {
+            // A network/provider error does not prove the provider rejected the
+            // request. It may already have accepted and billed the generation.
+            // Never automatically repeat a potentially paid generation.
+            await visualCompanionRepository.transitionTask(task.id, 'failed', {
+                attempt: latest.attempt + 1,
+                errorCode: 'generation_outcome_unknown',
+                errorMessage: `${message}。服务商可能已接收本次请求，为避免重复扣费，系统未自动重新生成。请先检查服务商记录。`.slice(0, 300),
+            });
+        } else if (latest && ['persisting', 'delivery_pending'].includes(latest.status)) {
             const retryStage = latest.status;
             const attempt = latest.attempt + 1;
             if (attempt < latest.maxAttempts) {
                 await visualCompanionRepository.transitionTask(task.id, 'retry_wait', {
                     attempt,
-                    retryStage: retryStage as 'generating' | 'persisting' | 'delivery_pending',
+                    retryStage: retryStage as 'persisting' | 'delivery_pending',
                     nextAttemptAt: Date.now() + 30_000,
                     errorCode: 'foreground_execution_failed',
                     errorMessage: message.slice(0, 300),
