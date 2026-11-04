@@ -974,7 +974,7 @@ const Launcher: React.FC<{ staticPreview?: boolean }> = ({ staticPreview = false
       <style>{`
         .launcher-pages { min-height: 0; }
         .launcher-page {
-          padding-top: max(3rem, calc(var(--chrome-top, 24px) + 12px));
+          padding-top: max(1rem, calc(var(--chrome-top, 24px) + 8px));
           padding-left: max(1.5rem, env(safe-area-inset-left));
           padding-right: max(1.5rem, env(safe-area-inset-right));
         }
