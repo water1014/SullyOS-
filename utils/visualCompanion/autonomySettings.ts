@@ -7,6 +7,7 @@ export function createDefaultVisualAutonomySettings(now = Date.now()): VisualAut
     return {
         enabled: false,
         frequency: 'natural',
+        providerPreference: 'auto',
         allowSpontaneousShare: false,
         allowPrivateCreation: false,
         requireApprovalForNewIdentity: true,
@@ -23,10 +24,13 @@ function normalizeSettings(value: unknown, now: number): VisualAutonomySettings 
     const defaults = createDefaultVisualAutonomySettings(now);
     if (!isRecord(value)) return defaults;
     const frequency = value.frequency;
+    const providerPreference = value.providerPreference;
     return {
         enabled: value.enabled === true,
         frequency: frequency === 'low' || frequency === 'natural' || frequency === 'high' || frequency === 'paused'
             ? frequency : defaults.frequency,
+        providerPreference: providerPreference === 'gpt' || providerPreference === 'nai_official' || providerPreference === 'nai_thirdparty' || providerPreference === 'auto'
+            ? providerPreference : defaults.providerPreference,
         allowSpontaneousShare: value.allowSpontaneousShare === true,
         allowPrivateCreation: value.allowPrivateCreation === true,
         requireApprovalForNewIdentity: value.requireApprovalForNewIdentity !== false,
