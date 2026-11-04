@@ -235,7 +235,26 @@ export function executeVisualTaskInForeground(taskId: string): Promise<VisualTas
 
     const controller = new AbortController();
     visualTaskControllers.set(taskId, controller);
-    const execution = runVisualTaskInForeground(taskId, controller.signal).finally(() => {
+    const run = async (): Promise<VisualTask | null> => {
+        // Web Locks coordinates tabs sharing the same origin. The lock is held
+        // for the entire provider request, persistence, and chat delivery path.
+        // If another tab owns it, return the latest checkpoint without starting
+        // a second paid generation request.
+        const lockManager = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+        if (lockManager) {
+            return lockManager.request(
+                `sully-visual-task:${taskId}`,
+                { mode: 'exclusive', ifAvailable: true },
+                lock => lock
+                    ? runVisualTaskInForeground(taskId, controller.signal)
+                    : visualCompanionRepository.getTask(taskId),
+            );
+        }
+        // Older browsers retain same-page deduplication; cross-tab execution
+        // coordination requires Web Locks support and is not claimed here.
+        return runVisualTaskInForeground(taskId, controller.signal);
+    };
+    const execution = run().finally(() => {
         if (inFlightVisualTasks.get(taskId) === execution) inFlightVisualTasks.delete(taskId);
         if (visualTaskControllers.get(taskId) === controller) visualTaskControllers.delete(taskId);
     });
