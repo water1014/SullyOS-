@@ -6,7 +6,7 @@ import CharacterApiPanel from '../components/character/CharacterApiPanel';
 import type { CharacterProfile } from '../types';
 
 const os = vi.hoisted(() => ({
-  apiConfig: { baseUrl: 'https://global.test/v1', apiKey: 'global', model: 'global-model' },
+  apiConfig: { baseUrl: 'https://global.test/v1', apiKey: 'global', model: 'global-model' } as any,
   apiPresets: [
     { id: 'a', name: '日常预设', group: '日常', config: { baseUrl: 'https://a.test/v1', apiKey: 'a', model: 'model-a' } },
     { id: 'b', name: '写作预设', group: '写作', config: { baseUrl: 'https://b.test/v1', apiKey: 'b', model: 'model-b' } },
@@ -28,6 +28,7 @@ const click = async (text: string) => {
   await act(async () => button!.click());
 };
 beforeEach(async () => {
+  os.apiConfig = { baseUrl: 'https://global.test/v1', apiKey: 'global', model: 'global-model' };
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
   onChange.mockClear(); await render();
 });
@@ -48,6 +49,44 @@ describe('character API draft transaction', () => {
     await click('确定');
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({baseUrl:'https://global.test/v1/messages',apiType:'anthropic'}));
     expect(os.apiConfig.baseUrl).toBe('https://global.test/v1');
+  });
+  it('sends custom headers and a stable test session with OpenCode Go', async () => {
+    os.apiConfig = {
+      baseUrl: 'https://opencode.ai/inference/go/openai/v1',
+      apiKey: 'go-subscription-token',
+      model: 'opencode/gpt-5',
+      customHeaders: { 'X-Workspace': 'private-workspace' },
+    };
+    await render();
+    const network = vi.fn(async () => Response.json({ choices: [{ message: { content: 'ok' } }] }));
+    vi.stubGlobal('fetch', network);
+    await click('为角色使用独立 API');
+    await click('测试连接');
+    expect(host.textContent).toContain('连接成功');
+    const [url, options] = network.mock.calls[0] as any;
+    const headers = new Headers(options.headers);
+    expect(url).toBe('https://opencode.ai/inference/go/openai/v1/chat/completions');
+    expect(headers.get('authorization')).toBe('Bearer go-subscription-token');
+    expect(headers.get('x-workspace')).toBe('private-workspace');
+    expect(headers.get('x-opencode-session')).toBe('character-api-test-a');
+  });
+  it('loads the shared OpenCode Go model catalogue with custom headers', async () => {
+    os.apiConfig = {
+      baseUrl: 'https://opencode.ai/inference/go/anthropic/v1/messages',
+      apiKey: 'go-subscription-token',
+      model: '',
+      apiType: 'anthropic',
+      customHeaders: { 'X-Workspace': 'private-workspace' },
+    };
+    await render();
+    const network = vi.fn(async () => Response.json({ data: [{ id: 'claude-sonnet-4-5' }] }));
+    vi.stubGlobal('fetch', network);
+    await click('为角色使用独立 API');
+    await click('刷新模型列表');
+    const [url, options] = network.mock.calls[0] as any;
+    expect(url).toBe('https://opencode.ai/inference/go/v1/models');
+    expect(new Headers(options.headers).get('x-workspace')).toBe('private-workspace');
+    expect(host.textContent).toContain('claude-sonnet-4-5');
   });
   it('loads grouped presets as drafts; cancellation never mutates the role or global config', async () => {
     expect(host.textContent).toContain('目前跟随设置中的 API：global.test · global-model');
