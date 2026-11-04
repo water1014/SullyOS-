@@ -26,39 +26,36 @@ type ProviderSelection = {
     model: string;
 };
 
-function readProviderSelection(): ProviderSelection | null {
+function readProviderSelection(preference: VisualAutonomySettings['providerPreference']): ProviderSelection | null {
     try {
         const saved = JSON.parse(localStorage.getItem(IMAGE_CONFIG_KEY) || '{}');
         const gpt = saved?.gpt || {};
-        if (typeof gpt.apiKey === 'string' && gpt.apiKey.trim()) {
-            return {
-                provider: 'openai_compatible',
-                providerConfigId: 'image-studio:gpt',
-                model: typeof gpt.model === 'string' && gpt.model.trim() ? gpt.model : 'gpt-image-2.5-flare',
-            };
-        }
-
         const legacyNai = saved?.nai || {};
         const official = saved?.naiOfficial || (legacyNai.provider !== 'thirdparty' ? legacyNai : {});
         const thirdParty = saved?.naiThirdParty || (legacyNai.provider === 'thirdparty' ? legacyNai : {});
-        if (typeof official.apiKey === 'string' && official.apiKey.trim()) {
-            return {
+
+        const selections: Record<Exclude<VisualAutonomySettings['providerPreference'], 'auto'>, ProviderSelection | null> = {
+            gpt: typeof gpt.apiKey === 'string' && gpt.apiKey.trim() ? {
+                provider: 'openai_compatible',
+                providerConfigId: 'image-studio:gpt',
+                model: typeof gpt.model === 'string' && gpt.model.trim() ? gpt.model : 'gpt-image-2.5-flare',
+            } : null,
+            nai_official: typeof official.apiKey === 'string' && official.apiKey.trim() ? {
                 provider: 'novelai_official',
                 providerConfigId: 'image-studio:nai-official',
                 model: typeof official.model === 'string' && official.model.trim() ? official.model : 'nai-diffusion-5-full',
-            };
-        }
-        if (typeof thirdParty.apiKey === 'string' && thirdParty.apiKey.trim()) {
-            return {
+            } : null,
+            nai_thirdparty: typeof thirdParty.apiKey === 'string' && thirdParty.apiKey.trim() ? {
                 provider: 'novelai_compatible',
                 providerConfigId: 'image-studio:nai-third-party',
                 model: typeof thirdParty.model === 'string' && thirdParty.model.trim() ? thirdParty.model : 'nai-diffusion-5-full',
-            };
-        }
+            } : null,
+        };
+        if (preference !== 'auto') return selections[preference];
+        return selections.gpt || selections.nai_official || selections.nai_thirdparty;
     } catch {
         return null;
     }
-    return null;
 }
 
 function resolveContextKind(message: ActiveMsg2InboxMessage): VisualShareContextKind {
@@ -93,7 +90,7 @@ export async function maybeQueueVisualShareForActiveMessage(
         .sort((a, b) => b.version - a.version)[0];
     if (!profile || !profile.anchorPrompt.trim()) return 'not_ready';
 
-    const provider = readProviderSelection();
+    const provider = readProviderSelection(settings.providerPreference);
     if (!provider) return 'not_ready';
 
     const now = Date.now();
