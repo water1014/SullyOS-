@@ -25,6 +25,7 @@ const checks = [
   ['wrapper integration checks package identity and provider authority', integration.includes('package\\s+com\\.aetheros\\.simulator') && integration.includes('android:authorities="${applicationId}.fileprovider"')],
   ['web update flow requires native verification and exact manifest size', update.includes('!verified.valid') && update.includes('Number(fileInfo.size) === manifest.sizeBytes') && update.includes('verified.versionCode <= installed.versionCode')],
   ['APK compilation is opt-in and skipped by default', syncScript.includes('[switch]$BuildDebugApk') && syncScript.includes('if (-not $BuildDebugApk)') && syncScript.includes('pass -BuildDebugApk') && !syncScript.includes('[switch]$SkipAndroidBuild')],
+  ['wrapper path boundary and source assets are validated before replacement', syncScript.includes('$wrapperPrefix = $wrapperRoot.TrimEnd') && syncScript.indexOf('$sourceBridgeCount') >= 0 && syncScript.indexOf('$sourceBridgeCount') < syncScript.indexOf('Get-ChildItem -LiteralPath $targetDist -Force | Remove-Item')],
   ['fork update channel stays disabled until its own signed release exists', updateManifest.status === 'disabled' && updateManifest.versionCode === 0 && updateManifest.apkUrl === '' && updateManifest.sha256 === '' && capacitorEnv.split(String.fromCharCode(10)).some((line) => line.trim() === 'VITE_APK_UPDATE_MANIFEST_URL=')],
 ];
 
