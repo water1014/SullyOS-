@@ -3857,7 +3857,9 @@ export const DB = {
           'memory_nodes', 'memory_vectors', 'memory_links', 'topic_boxes', 'anticipations', 'event_boxes',
           'room_plates', 'digest_reports',
           'memory_batches', 'pixel_home_assets', 'pixel_home_layouts',
-          'visual_profiles', 'visual_memories', 'visual_projects', 'visual_task_mirror', 'visual_assets'
+          'visual_profiles', 'visual_memories', 'visual_projects', 'visual_task_mirror', 'visual_assets',
+          // Sync metadata is not part of user backups, but must be reachable for restore invalidation.
+          'sync_outbox', 'sync_inbox', 'sync_state', 'sync_conflicts'
       ].filter(name => db.objectStoreNames.contains(name));
 
       const hasStore = (storeName: string) => availableStores.includes(storeName);
@@ -4023,6 +4025,13 @@ export const DB = {
               store.clear();
           });
       };
+
+      // A full/text restore replaces local content. Never let pre-restore queued edits
+      // upload afterward, and reset pull cursors so the next explicit sync can reconcile
+      // against the server from a clean checkpoint. Media-only imports leave sync untouched.
+      if (!mediaOnly) {
+          await Promise.all(['sync_outbox', 'sync_inbox', 'sync_state', 'sync_conflicts'].map(clearStore));
+      }
 
       const putItems = async (
           storeName: string,
