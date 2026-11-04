@@ -31,17 +31,23 @@ if (-not (Test-Path -LiteralPath $targetDist)) {
 $sourceDist = (Resolve-Path -LiteralPath $sourceDist).Path
 $targetDist = (Resolve-Path -LiteralPath $targetDist).Path
 $expectedTarget = [IO.Path]::GetFullPath((Join-Path $wrapperRoot 'dist'))
-if ($targetDist -ne $expectedTarget -or -not $targetDist.StartsWith($wrapperRoot + '\\')) {
+$wrapperPrefix = $wrapperRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+if ($targetDist -ne $expectedTarget -or -not $targetDist.StartsWith($wrapperPrefix, [StringComparison]::OrdinalIgnoreCase)) {
   throw "Refusing to replace an unexpected directory: $targetDist"
+}
+
+$sourceBridgeCount = @(Get-ChildItem -LiteralPath (Join-Path $sourceDist 'assets') -Filter 'nativeAmsgPush-*.js').Count
+if ($sourceBridgeCount -ne 1) {
+  throw "Expected one native AMSG bridge bundle in the source build, found $sourceBridgeCount. Existing wrapper assets were not changed."
 }
 
 Write-Host '[2/4] Replacing only CHICK2/dist...'
 Get-ChildItem -LiteralPath $targetDist -Force | Remove-Item -Recurse -Force
 Get-ChildItem -LiteralPath $sourceDist -Force | Copy-Item -Destination $targetDist -Recurse -Force
 
-$nativeBridgeCount = @(Get-ChildItem -LiteralPath (Join-Path $targetDist 'assets') -Filter 'nativeAmsgPush-*.js').Count
-if ($nativeBridgeCount -ne 1) {
-  throw "Expected one native AMSG bridge bundle, found $nativeBridgeCount"
+$targetBridgeCount = @(Get-ChildItem -LiteralPath (Join-Path $targetDist 'assets') -Filter 'nativeAmsgPush-*.js').Count
+if ($targetBridgeCount -ne 1) {
+  throw "Expected one native AMSG bridge bundle after copy, found $targetBridgeCount"
 }
 
 Write-Host '[3/4] Syncing Capacitor Android plugins and assets...'
