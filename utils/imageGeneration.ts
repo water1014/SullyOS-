@@ -191,3 +191,46 @@ export async function generateNaiImage(
   const mimeType = extension === 'webp' ? 'image/webp' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : 'image/png';
   return new Blob([bytes], { type: mimeType });
 }
+
+
+export interface NaiTagSuggestion {
+  tag: string;
+  count?: number;
+  confidence?: number;
+}
+
+/** Query NovelAI's own prompt autocomplete endpoint. Suggestions are free and do not generate an image. */
+export async function suggestNaiTags(
+  config: NaiImageConfig,
+  prompt: string,
+  signal?: AbortSignal,
+): Promise<NaiTagSuggestion[]> {
+  if (!config.apiKey.trim()) throw new Error('请先填写 NovelAI Persistent API Token');
+  if (!prompt.trim()) throw new Error('先输入一个标签片段，例如 blue hair');
+  const query = new URLSearchParams({
+    model: config.model || 'nai-diffusion-5-full',
+    prompt: prompt.trim(),
+    lang: 'en',
+  });
+  const response = await fetch(`https://image.novelai.net/ai/generate-image/suggest-tags?${query.toString()}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${config.apiKey.trim()}`,
+      Accept: 'application/json',
+    },
+    signal,
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, `NAI 标签建议失败（HTTP ${response.status}）`));
+  }
+  const candidates = Array.isArray(payload) ? payload : payload?.tags;
+  if (!Array.isArray(candidates)) throw new Error('NAI 返回的标签建议格式无法识别');
+  return candidates
+    .filter((item: any) => item && typeof item.tag === 'string' && item.tag.trim())
+    .map((item: any) => ({
+      tag: item.tag.trim(),
+      ...(typeof item.count === 'number' ? { count: item.count } : {}),
+      ...(typeof item.confidence === 'number' ? { confidence: item.confidence } : {}),
+    }));
+}
