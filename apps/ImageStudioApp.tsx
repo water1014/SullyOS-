@@ -9,7 +9,7 @@ import { DB } from '../utils/db';
 import { getBlobForRef } from '../utils/blobRef';
 import { visualCompanionRepository } from '../utils/visualCompanion/repository';
 import { mergeCharacterVisualContextPrompt } from '../utils/visualCompanion/identityPrompt';
-import type { CharacterVisualProfile } from '../utils/visualCompanion/types';
+import type { CharacterVisualProfile, VisualTask } from '../utils/visualCompanion/types';
 import {
   generateGptImage, editGptImage, generateNaiImage,
   suggestNaiTags, getNaiQualityTags, testGptImageConnection, testNaiImageConnection,
@@ -123,7 +123,7 @@ const NAI_NEGATIVE_PACKS = [
 
 const ImageStudioApp: React.FC = () => {
   const { closeApp, addToast, activeCharacterId, characters } = useOS();
-  const [tab, setTab] = useState<'create' | 'gallery' | 'settings'>('create');
+  const [tab, setTab] = useState<'create' | 'gallery' | 'tasks' | 'settings'>('create');
   const [engine, setEngine] = useState<ImageEngine>('gpt');
   const [config, setConfig] = useState<StudioConfig>(readConfig);
   const [prompt, setPrompt] = useState('');
@@ -149,6 +149,8 @@ const ImageStudioApp: React.FC = () => {
   const generationAbortRef = useRef<AbortController | null>(null);
   const [error, setError] = useState('');
   const [images, setImages] = useState<DisplayImage[]>([]);
+  const [visualTasks, setVisualTasks] = useState<VisualTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
   const imagesRef = useRef<DisplayImage[]>([]);
   const [selected, setSelected] = useState<DisplayImage | null>(null);
   const [galleryCategory, setGalleryCategory] = useState('全部');
@@ -179,6 +181,17 @@ const ImageStudioApp: React.FC = () => {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    if (!activeCharacterId) { setVisualTasks([]); return; }
+    setTasksLoading(true);
+    void visualCompanionRepository.listTasks(activeCharacterId)
+      .then(tasks => { if (alive) setVisualTasks(tasks.sort((a, b) => b.updatedAt - a.updatedAt)); })
+      .catch(error => { console.warn('[ImageStudio] task history load failed', error); if (alive) setVisualTasks([]); })
+      .finally(() => { if (alive) setTasksLoading(false); });
+    return () => { alive = false; };
+  }, [activeCharacterId, tab]);
 
   useEffect(() => {
     let alive = true;
@@ -715,6 +728,7 @@ const ImageStudioApp: React.FC = () => {
         <div className="glass rounded-[18px] p-1.5 grid grid-cols-3 gap-1">
           <button className={`tab ${tab === 'create' ? 'active' : ''}`} onClick={() => setTab('create')}><MagicWand size={15}/>创作台</button>
           <button className={`tab ${tab === 'gallery' ? 'active' : ''}`} onClick={() => setTab('gallery')}><Images size={15}/>我的画廊 <span className="text-[10px] opacity-65">{images.length}</span></button>
+          <button className={`tab ${tab === 'tasks' ? 'active' : ''}`} onClick={() => setTab('tasks')}><ArrowsClockwise size={15}/>任务记录 <span className="text-[10px] opacity-65">{visualTasks.length}</span></button>
           <button className={`tab ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}><GearSix size={15}/>引擎配置</button>
         </div>
       </header>
@@ -934,6 +948,36 @@ const ImageStudioApp: React.FC = () => {
               <button onClick={() => setTab('create')} className="primary rounded-full px-5 py-2.5 mt-5 text-xs font-semibold">去创作一张</button>
             </div>
           )}
+        </main>
+      )}
+
+      {tab === 'tasks' && (
+        <main className="studio-scroll flex-1 px-4 pb-6 space-y-3">
+          <section className="glass rounded-[22px] p-4">
+            <div className="text-sm font-bold text-slate-700">视觉任务记录</div>
+            <p className="text-[10px] text-slate-500 leading-5 mt-1">记录宋祁主动分享与视觉任务的执行状态。这里仅展示本机 IndexedDB 中的任务，不会上传任务内容。</p>
+          </section>
+          {tasksLoading ? <div className="glass rounded-2xl p-6 text-center text-xs text-slate-400">正在读取任务记录…</div>
+            : visualTasks.length ? visualTasks.map(task => {
+              const statusLabels: Record<VisualTask['status'], string> = {
+                queued: '排队中', planning: '准备中', awaiting_approval: '等待确认',
+                generating: '生成中', persisting: '保存中', delivery_pending: '待投递',
+                delivered: '已完成', retry_wait: '等待重试', cancelled: '已取消', failed: '失败',
+              };
+              const safeToRetry = task.status === 'failed';
+              return <article key={task.id} className="glass rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-slate-700">{task.kind === 'spontaneous_share' ? '宋祁主动分享' : task.kind === 'chat_requested' ? '聊天生图' : task.kind === 'photo_project' ? '写真项目' : '视觉创作'}</div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] ${task.status === 'failed' ? 'bg-rose-50 text-rose-600' : task.status === 'delivered' ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'}`}>{statusLabels[task.status]}</span>
+                </div>
+                <div className="text-[10px] text-slate-400">{new Date(task.createdAt).toLocaleString()} · {task.provider === 'openai_compatible' || task.provider === 'openai' ? 'GPT' : 'NovelAI'} · {task.model}</div>
+                {task.errorMessage && <p className="rounded-xl bg-rose-50/70 p-3 text-[10px] leading-5 text-rose-700 break-words">{task.errorMessage}</p>}
+                {task.status === 'retry_wait' && <p className="text-[10px] text-amber-700">计划重试：{task.nextAttemptAt ? new Date(task.nextAttemptAt).toLocaleString() : '等待调度'}</p>}
+                {task.status === 'generating' && <p className="text-[10px] text-amber-700">如果页面曾意外关闭，系统不会自动重复发起这次生成，以免产生重复费用。</p>}
+                <div className="text-[9px] text-slate-400">任务编号：{task.id}</div>
+              </article>;
+            }) : <div className="glass rounded-2xl p-7 text-center text-xs text-slate-400">暂时没有视觉任务记录。</div>}
+          <button type="button" onClick={() => setTab('create')} className="soft w-full rounded-xl py-3 text-xs font-semibold">返回创作台</button>
         </main>
       )}
 
