@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeLlmBaseUrl, nativeRequestUrl } from './llmEndpoint';
+import { normalizeLlmBaseUrl, nativeRequestUrl, describeLlmConnectionError } from './llmEndpoint';
 
 describe('OpenCode Go URL normalization', () => {
   it('normalizes the zen/go root for OpenAI-compatible chat', () => {
@@ -45,6 +45,15 @@ describe('OpenCode Go URL normalization', () => {
       .toBe('https://opencode.ai/zen/go/v1/messages');
     expect(normalizeLlmBaseUrl('https://opencode.ai/inference/go/openai/v1/chat/completions', 'openai'))
       .toBe('https://opencode.ai/inference/go/openai/v1');
+  });
+
+
+  it('explains opaque fetch failures differently for browser and native APK', () => {
+    const error = new TypeError('Failed to fetch');
+    expect(describeLlmConnectionError(error, false)).toContain('CORS');
+    expect(describeLlmConnectionError(error, false)).toContain('Android APK');
+    expect(describeLlmConnectionError(error, true)).toContain('网络请求未完成');
+    expect(describeLlmConnectionError(new Error('timeout 60000ms'), true)).toContain('超时');
   });
 
 });
