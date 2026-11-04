@@ -2242,6 +2242,25 @@ const Settings: React.FC = () => {
             <LocalSyncSettingsPanel />
             <WebCacheControl />
 
+            <div className="mb-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3.5">
+                <div className="flex items-center gap-2">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-emerald-600">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3 19 6v5c0 4.5-2.8 7.6-7 10-4.2-2.4-7-5.5-7-10V6l7-3Z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m9 12 2 2 4-4" />
+                        </svg>
+                    </span>
+                    <span className="text-xs font-bold text-emerald-900">应用升级与数据保护</span>
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-emerald-900/80">
+                    正常 APK 覆盖更新会保留应用本地数据，前提是新版本使用相同包名和正式签名，并且安装时没有卸载旧版。
+                    聊天、角色、记忆和媒体保存在本机应用数据区，不会因为普通版本升级主动清空。
+                </p>
+                <p className="mt-2 text-[11px] font-semibold leading-relaxed text-rose-700">
+                    请不要通过“卸载应用”或“清除存储空间”来更新。它们可能删除本机数据。更新前建议先导出一份“整合导出（文字+媒体）”并保存到手机以外的位置。
+                </p>
+            </div>
+
             <label className="mb-3 flex items-start gap-2 rounded-xl border border-slate-200 bg-white p-3 cursor-pointer">
                 <input
                     type="checkbox"
