@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import JSZip from 'jszip';
 import {
   ArrowLeft, ArrowsClockwise, Check, Copy, DownloadSimple, GearSix, ImageSquare,
   Images, MagicWand, Sparkle, Trash,
@@ -102,6 +103,10 @@ const ImageStudioApp: React.FC = () => {
   const [selected, setSelected] = useState<DisplayImage | null>(null);
   const [galleryCategory, setGalleryCategory] = useState('全部');
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -295,6 +300,94 @@ const ImageStudioApp: React.FC = () => {
     (galleryCategory === '全部' || (item.category || '未分类') === galleryCategory) &&
     (!showFavoritesOnly || !!item.favorite)
   );
+
+
+  const toggleImageSelection = (id: string) => {
+    setSelectedIds(current => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const selectVisibleImages = () => {
+    setSelectedIds(current => {
+      const next = new Set(current);
+      const allSelected = visibleImages.length > 0 && visibleImages.every(item => next.has(item.id));
+      visibleImages.forEach(item => allSelected ? next.delete(item.id) : next.add(item.id));
+      return next;
+    });
+  };
+
+  const exportSelectedImages = async () => {
+    const selectedItems = images.filter(item => selectedIds.has(item.id));
+    if (!selectedItems.length || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      const zip = new JSZip();
+      const manifest: Record<string, unknown>[] = [];
+      for (let index = 0; index < selectedItems.length; index += 1) {
+        const item = selectedItems[index];
+        const blob = await DB.getBlobAsset(item.blobId);
+        if (!blob) continue;
+        const extension = item.mimeType === 'image/webp' ? 'webp' : item.mimeType === 'image/jpeg' ? 'jpg' : 'png';
+        const filename = String(index + 1).padStart(3, '0') + '-' + item.engine + '-' + item.id + '.' + extension;
+        zip.file('images/' + filename, blob);
+        manifest.push({
+          filename: 'images/' + filename, engine: item.engine, model: item.model,
+          prompt: item.prompt, negativePrompt: item.negativePrompt, note: item.note || '',
+          category: item.category || '未分类', favorite: !!item.favorite,
+          createdAt: item.createdAt, mimeType: item.mimeType,
+        });
+      }
+      if (!manifest.length) throw new Error('没有找到可导出的图片文件');
+      zip.file('作品清单.json', JSON.stringify({
+        format: 'SullyOS Image Studio Backup', version: 1,
+        exportedAt: new Date().toISOString(), items: manifest,
+      }, null, 2));
+      const archive = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 4 } });
+      const url = URL.createObjectURL(archive);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = '糯米机-生图室备份-' + new Date().toISOString().slice(0, 10) + '.zip';
+      anchor.click();
+      URL.revokeObjectURL(url);
+      addToast('已打包导出 ' + manifest.length + ' 张作品', 'success');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '备份导出失败';
+      addToast(message, 'error');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const applyBulkCategory = () => {
+    if (!bulkCategory || selectedIds.size === 0) return;
+    const next = readItems().map(item => selectedIds.has(item.id) ? { ...item, category: bulkCategory } : item);
+    persistItems(next);
+    setImages(current => current.map(item => selectedIds.has(item.id) ? { ...item, category: bulkCategory } : item));
+    setSelected(current => current && selectedIds.has(current.id) ? { ...current, category: bulkCategory } : current);
+    addToast('已为 ' + selectedIds.size + ' 张作品设置分类', 'success');
+    setBulkCategory('');
+  };
+
+  const deleteSelectedImages = async () => {
+    const targets = images.filter(item => selectedIds.has(item.id));
+    if (!targets.length || bulkBusy || !window.confirm('确定删除选中的 ' + targets.length + ' 张作品吗？此操作无法撤销。')) return;
+    setBulkBusy(true);
+    try {
+      await Promise.all(targets.map(item => DB.deleteBlobAsset(item.blobId).catch(() => undefined)));
+      const removed = new Set(targets.map(item => item.id));
+      persistItems(readItems().filter(item => !removed.has(item.id)));
+      setImages(current => current.filter(item => !removed.has(item.id)));
+      setSelected(current => current && removed.has(current.id) ? null : current);
+      targets.forEach(item => URL.revokeObjectURL(item.url));
+      setSelectedIds(new Set());
+      addToast('已删除 ' + targets.length + ' 张作品', 'success');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   const deleteImage = async (item: DisplayImage) => {
     if (!window.confirm('确定删除这张作品吗？')) return;
