@@ -30,6 +30,17 @@ export interface CompanionRemoteDevice {
 const TOKEN_KEY = 'companion.device-token';
 const REQUEST_TIMEOUT_MS = 15000;
 
+function normalizeSyncBaseUrl(value: string): string {
+    let parsed: URL;
+    try { parsed = new URL(value.trim()); } catch { throw new Error('INVALID_SYNC_BASE_URL'); }
+    const localHttp = parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
+    if ((parsed.protocol !== 'https:' && !localHttp)
+        || parsed.username || parsed.password || parsed.search || parsed.hash) {
+        throw new Error('INVALID_SYNC_BASE_URL');
+    }
+    return parsed.toString().replace(/\\/$/, '');
+}
+
 interface PairResponse {
     accountId: string;
     deviceId: string;
@@ -44,6 +55,7 @@ async function requestJson<T>(
     path: string,
     options: { method?: string; token?: string; body?: unknown } = {},
 ): Promise<T> {
+    const safeBaseUrl = normalizeSyncBaseUrl(baseUrl);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
@@ -71,13 +83,7 @@ export async function pairCompanionDevice(input: {
     label: string;
     appVersion?: string;
 }): Promise<{ accountId: string; deviceId: string; persistentTokenStorage: boolean }> {
-    const baseUrl = input.baseUrl.trim().replace(/\/$/, '');
-    let parsedBaseUrl: URL;
-    try { parsedBaseUrl = new URL(baseUrl); } catch { throw new Error('INVALID_SYNC_BASE_URL'); }
-    const localHttp = parsedBaseUrl.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsedBaseUrl.hostname);
-    if ((parsedBaseUrl.protocol !== 'https:' && !localHttp) || parsedBaseUrl.username || parsedBaseUrl.password || parsedBaseUrl.search || parsedBaseUrl.hash) {
-        throw new Error('INVALID_SYNC_BASE_URL');
-    }
+    const baseUrl = normalizeSyncBaseUrl(input.baseUrl);
     const code = input.pairingCode.trim();
     const label = input.label.trim();
     if (!code || code.length > 128) throw new Error('INVALID_PAIRING_CODE');
