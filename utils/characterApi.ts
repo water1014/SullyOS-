@@ -1,6 +1,6 @@
 import type { APIConfig, CharacterProfile, DialogueApiConfig } from '../types';
 import { normalizeLlmBaseUrl, llmApiType } from './llmEndpoint';
-import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel } from './apiConfigNormalize';
+import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel, normalizeApiHeaders } from './apiConfigNormalize';
 
 export function normalizeDialogueMaxTokens(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : undefined;
@@ -31,7 +31,7 @@ export function pickDialogueApi(api: DialogueApiConfig): DialogueApiConfig {
     ...(typeof api.stream === 'boolean' ? { stream: api.stream } : {}),
     ...(typeof api.temperature === 'number' ? { temperature: api.temperature } : {}),
     ...(normalizeDialogueMaxTokens(api.maxTokens) !== undefined ? { maxTokens: api.maxTokens } : {}),
-    ...(api.customHeaders ? { customHeaders: { ...api.customHeaders } } : {}),
+    ...(api.customHeaders ? { customHeaders: normalizeApiHeaders(api.customHeaders) } : {}),
   };
 }
 
