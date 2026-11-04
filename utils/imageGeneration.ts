@@ -316,7 +316,7 @@ export async function editNaiImage(
         sampler: options.sampler,
         steps: options.steps,
         n_samples: 1,
-        seed: options.seed && options.seed > 0 ? options.seed : Math.floor(Math.random() * 4294967295),
+        seed: options.seed !== undefined ? options.seed : Math.floor(Math.random() * 4294967295),
         negative_prompt: negativePrompt.trim(),
         noise_schedule: 'karras',
         cfg_rescale: 0,
@@ -438,10 +438,10 @@ export async function suggestNaiTags(
   });
   const response = await fetch(`https://image.novelai.net/ai/generate-image/suggest-tags?${query.toString()}`, {
     method: 'GET',
-    headers: {
+    headers: buildImageRequestHeaders({
       Authorization: `Bearer ${config.apiKey.trim()}`,
       Accept: 'application/json',
-    },
+    }, config.customHeaders),
     signal,
   });
   const payload = await response.json().catch(() => null);
