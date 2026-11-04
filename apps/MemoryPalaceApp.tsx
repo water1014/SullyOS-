@@ -35,6 +35,7 @@ import type { CharacterAccommodationPolicy, CharacterProfile, MemoryPalaceWaterl
 import { CharacterGroupFilterBar, filterCharactersByGroup, GROUP_FILTER_ALL } from '../components/character/CharacterGroupFilter';
 import TokenImg from '../components/os/TokenImg';
 import CharacterVisualProfileEditor from '../components/character/CharacterVisualProfileEditor';
+import CharacterVisualTimelineEditor from '../components/character/CharacterVisualTimelineEditor';
 import {
     CONTEXT_RANGE_POLICY_VERSION,
     DEFAULT_MANUAL_CONTEXT_LIMIT,
@@ -5802,6 +5803,7 @@ create table if not exists memory_vectors (
                 </div>
                 <CharacterHomePages activePage="appearance" onChange={setView} />
                 <CharacterVisualProfileEditor charId={char.id} charName={char.name} />
+                <CharacterVisualTimelineEditor charId={char.id} />
             </div>
         );
     }
