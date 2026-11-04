@@ -3,6 +3,8 @@ import { DB, openDB } from './db';
 import {
     enqueueRoomNoteSyncEvent,
     persistInboxEvents,
+    applyPendingRoomNoteInboxEvent,
+    resolveRoomNoteSyncConflict,
     listPendingInboxEvents,
     markInboxEventApplied,
     updateSyncCursorState,
@@ -108,6 +110,67 @@ describe('local-first sync outbox', () => {
         expect((await listPendingInboxEvents()).map(event => event.eventId)).toEqual(['remote-1', 'remote-2']);
         await markInboxEventApplied('remote-1');
         expect((await listPendingInboxEvents()).map(event => event.eventId)).toEqual(['remote-2']);
+    });
+
+
+    it('applies a remote note when no local note exists', async () => {
+        await persistInboxEvents([{
+            eventId: 'remote-create', serverSequence: 1, entityType: 'room_note',
+            entityId: 'remote-note', operation: 'create', entityVersion: 1,
+            payload: { id: 'remote-note', charId: 'char-1', timestamp: 10, content: '来自另一台设备', type: 'thought' },
+        }]);
+        expect(await applyPendingRoomNoteInboxEvent('remote-create')).toEqual({ status: 'applied' });
+        const db = await openDB();
+        const read = db.transaction(['room_notes', 'sync_inbox'], 'readonly');
+        const [saved, inbox] = await Promise.all([
+            new Promise<any>((resolve, reject) => {
+                const request = read.objectStore('room_notes').get('remote-note');
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }),
+            new Promise<any>((resolve, reject) => {
+                const request = read.objectStore('sync_inbox').get('remote-create');
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            }),
+        ]);
+        expect(saved).toMatchObject({ id: 'remote-note', content: '来自另一台设备' });
+        expect(inbox.applyState).toBe('applied');
+    });
+
+    it('does not overwrite local edits and applies remote choice only after conflict resolution', async () => {
+        const db = await openDB();
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction('room_notes', 'readwrite');
+            tx.objectStore('room_notes').put({ ...note, content: '本机修改过的版本' });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+        await persistInboxEvents([{
+            eventId: 'remote-conflict', serverSequence: 2, entityType: 'room_note',
+            entityId: note.id, operation: 'update', entityVersion: 2,
+            payload: { ...note, content: '另一台设备修改的版本' },
+        }]);
+        expect(await applyPendingRoomNoteInboxEvent('remote-conflict')).toEqual({
+            status: 'conflict', conflictId: 'remote-conflict',
+        });
+        const before = await new Promise<any>((resolve, reject) => {
+            const tx = db.transaction('room_notes', 'readonly');
+            const request = tx.objectStore('room_notes').get(note.id);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        expect(before.content).toBe('本机修改过的版本');
+
+        await resolveRoomNoteSyncConflict('remote-conflict', 'keep_remote');
+        const after = await new Promise<any>((resolve, reject) => {
+            const tx = db.transaction('room_notes', 'readonly');
+            const request = tx.objectStore('room_notes').get(note.id);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        expect(after.content).toBe('另一台设备修改的版本');
+        expect(await listPendingInboxEvents()).toHaveLength(0);
     });
 
     it('keeps cursors monotonic and records resolvable conflicts', async () => {

@@ -166,7 +166,7 @@ export async function updateSyncEventState(
     const store = tx.objectStore(OUTBOX);
     const current = await requestResult(store.get(eventId)) as LocalSyncEvent | undefined;
     if (!current) {
-        tx.abort();
+        await done;
         throw new Error('Sync event not found');
     }
     store.put({
@@ -253,16 +253,15 @@ export async function getSyncPreferences(): Promise<SyncPreference[]> {
 
 export async function persistInboxEvents(events: Omit<LocalSyncInboxEvent, 'receivedAt' | 'applyState'>[]): Promise<number> {
     if (events.length === 0) return 0;
+    if (events.some(event => !Number.isSafeInteger(event.serverSequence) || event.serverSequence < 1)) {
+        throw new Error('INVALID_SERVER_SEQUENCE');
+    }
     const db = await openDB();
     const tx = db.transaction(INBOX, 'readwrite');
     const done = transactionDone(tx);
     const store = tx.objectStore(INBOX);
     let inserted = 0;
     for (const event of events) {
-        if (!Number.isSafeInteger(event.serverSequence) || event.serverSequence < 1) {
-            tx.abort();
-            throw new Error('INVALID_SERVER_SEQUENCE');
-        }
         const existing = await requestResult(store.get(event.eventId)) as LocalSyncInboxEvent | undefined;
         if (!existing) {
             store.add({ ...event, receivedAt: Date.now(), applyState: 'pending' } satisfies LocalSyncInboxEvent);

@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
     getSyncPreference,
     getSyncQueueSummary,
+    listUnresolvedSyncConflicts,
+    resolveRoomNoteSyncConflict,
     setSyncPreference,
+    type LocalSyncConflict,
     type SyncQueueSummary,
 } from '../../utils/localSyncStore';
 
@@ -11,18 +14,22 @@ const SYNC_LABELS = [{ entityType: 'room_note' as const, label: '房间便签', 
 export default function LocalSyncSettingsPanel() {
     const [enabled, setEnabled] = useState(false);
     const [queue, setQueue] = useState<SyncQueueSummary>({ pending: 0, inFlight: 0, blocked: 0 });
+    const [conflicts, setConflicts] = useState<LocalSyncConflict[]>([]);
+    const [resolving, setResolving] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
     const refresh = useCallback(async () => {
         try {
-            const [preference, summary] = await Promise.all([
+            const [preference, summary, unresolved] = await Promise.all([
                 getSyncPreference('room_note'),
                 getSyncQueueSummary(),
+                listUnresolvedSyncConflicts(),
             ]);
             setEnabled(preference.enabled && preference.mode === 'text');
             setQueue(summary);
+            setConflicts(unresolved);
             setError('');
         } catch {
             setError('读取本地同步状态失败，请稍后重试。');
@@ -73,6 +80,38 @@ export default function LocalSyncSettingsPanel() {
                     />
                 </label>
             ))}
+
+            {conflicts.length > 0 && (
+                <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-800">需要你决定的便签冲突</span>
+                        <span className="text-[10px] text-amber-700">{conflicts.length} 条</span>
+                    </div>
+                    {conflicts.map(conflict => (
+                        <div key={conflict.conflictId} className="rounded-lg bg-white/90 p-3">
+                            <p className="text-[10px] font-semibold text-slate-500">本机版本</p>
+                            <p className="mt-1 whitespace-pre-wrap break-words text-xs text-slate-700">{String(conflict.localSnapshot?.content ?? '（本机记录已删除）')}</p>
+                            <p className="mt-2 text-[10px] font-semibold text-slate-500">另一台设备的版本</p>
+                            <p className="mt-1 whitespace-pre-wrap break-words text-xs text-slate-700">{String(conflict.remoteSnapshot?.content ?? '（另一台设备删除了这条便签）')}</p>
+                            <div className="mt-3 flex gap-2">
+                                <button type="button" disabled={resolving === conflict.conflictId} onClick={async () => {
+                                    setResolving(conflict.conflictId);
+                                    try { await resolveRoomNoteSyncConflict(conflict.conflictId, 'keep_local'); await refresh(); }
+                                    catch { setError('保留本机版本失败，请重试。'); }
+                                    finally { setResolving(null); }
+                                }} className="flex-1 rounded-lg bg-slate-100 px-2 py-2 text-[10px] font-semibold text-slate-700 disabled:opacity-50">保留本机</button>
+                                <button type="button" disabled={resolving === conflict.conflictId} onClick={async () => {
+                                    setResolving(conflict.conflictId);
+                                    try { await resolveRoomNoteSyncConflict(conflict.conflictId, 'keep_remote'); await refresh(); }
+                                    catch { setError('采用另一台设备版本失败，请重试。'); }
+                                    finally { setResolving(null); }
+                                }} className="flex-1 rounded-lg bg-sky-100 px-2 py-2 text-[10px] font-semibold text-sky-700 disabled:opacity-50">采用另一台设备</button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             <div className="grid grid-cols-3 gap-2">
                 <div className="rounded-xl bg-white p-2 text-center"><strong className="block text-base text-slate-700">{queue.pending}</strong><span className="text-[10px] text-slate-400">待处理</span></div>
                 <div className="rounded-xl bg-white p-2 text-center"><strong className="block text-base text-slate-700">{queue.inFlight}</strong><span className="text-[10px] text-slate-400">处理中</span></div>
