@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node scripts/build-chat-preview-css.mjs && vite",
     "build": "node scripts/build-chat-preview-css.mjs && pnpm run build:workers && vite build",
-    "build:capacitor": "powershell -ExecutionPolicy Bypass -File scripts/sync-tiao-capacitor.ps1",
+    "build:capacitor": "node scripts/build-capacitor-android.mjs",
     "preview": "vite preview",
     "cap:sync": "cap sync",
     "cap:android": "cap open android",
@@ -20,7 +20,8 @@
     "start:companion-sync": "node server/companion-sync/server.mjs",
     "check:companion-sync": "node --check server/companion-sync/protocol.mjs && node --check server/companion-sync/server.mjs && node --check server/companion-sync/migrate.mjs",
     "test:companion-sync-integration": "node server/companion-sync/integration.test.mjs",
-    "prepare:android": "node scripts/install-capacitor-android-plugins.mjs"
+    "prepare:android": "node scripts/install-capacitor-android-plugins.mjs",
+    "build:capacitor:apk": "node scripts/build-capacitor-android.mjs --apk"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "^6.0.1",
