@@ -25,7 +25,7 @@ export default function LocalSyncSettingsPanel() {
     const [connection, setConnection] = useState<CompanionSyncConnection | null>(null);
     const [tokenAvailable, setTokenAvailable] = useState(false);
     const [remoteDevices, setRemoteDevices] = useState<CompanionRemoteDevice[]>([]);
-    const [devicesLoading, setDevicesLoading] = useState(false);
+    const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
     const [serverUrl, setServerUrl] = useState('');
     const [pairingCode, setPairingCode] = useState('');
     const [syncBusy, setSyncBusy] = useState(false);
@@ -178,34 +178,6 @@ export default function LocalSyncSettingsPanel() {
                                 })}
                             </div>
                         )}
-                        {tokenAvailable && <div className="space-y-2 rounded-lg border border-slate-100 p-3">
-                            <div className="flex items-center justify-between gap-2">
-                                <p className="text-[11px] font-semibold text-slate-700">已登记设备</p>
-                                <button type="button" disabled={devicesLoading || syncBusy} onClick={async () => {
-                                    setDevicesLoading(true);
-                                    try { setRemoteDevices(await listCompanionDevices()); }
-                                    catch { setError('读取设备列表失败，请检查服务器连接。'); }
-                                    finally { setDevicesLoading(false); }
-                                }} className="text-[10px] font-semibold text-sky-700">{devicesLoading ? '刷新中…' : '刷新列表'}</button>
-                            </div>
-                            {remoteDevices.length === 0 ? <p className="text-[10px] text-slate-400">暂时没有读取到设备记录。</p> : remoteDevices.map(device => (
-                                <div key={device.id} className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
-                                    <div className="min-w-0">
-                                        <p className="truncate text-[11px] font-medium text-slate-700">{device.label}{device.id === connection.serverDeviceId ? ' · 当前设备' : ''}</p>
-                                        <p className="text-[10px] text-slate-400">{device.platform} · {device.revokedAt ? '已撤销' : '有效'}</p>
-                                    </div>
-                                    {device.id !== connection.serverDeviceId && !device.revokedAt && <button type="button" disabled={syncBusy} onClick={async () => {
-                                        setSyncBusy(true);
-                                        try {
-                                            await revokeCompanionDevice(device.id);
-                                            setRemoteDevices(await listCompanionDevices());
-                                            setSyncStatus(`已撤销设备：${device.label}`);
-                                        } catch { setError(`撤销设备“${device.label}”失败，请重试。`); }
-                                        finally { setSyncBusy(false); }
-                                    }} className="shrink-0 rounded-md bg-rose-50 px-2 py-1.5 text-[10px] font-semibold text-rose-600">撤销</button>}
-                                </div>
-                            ))}
-                        </div>}
                         <div className="flex gap-2">
                             <button type="button" disabled={!enabled || syncBusy || !tokenAvailable} onClick={async () => {
                                 setSyncBusy(true);
