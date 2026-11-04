@@ -355,8 +355,16 @@ const ImageStudioApp: React.FC = () => {
       ...(engine === 'nai' ? { naiSettings: { size: naiSize, steps: naiSteps, scale: naiScale, sampler: naiSampler, ...(generatedSeed !== undefined ? { seed: generatedSeed } : {}) } } : {}),
       createdAt: Date.now(), mimeType: blob.type || 'image/png',
     };
-    const next = [item, ...readItems()];
-    persistItems(next);
+    try {
+      // Keep the metadata index and binary asset consistent. If browser storage
+      // is full or unavailable, remove the just-written blob instead of leaving
+      // an invisible orphan that looks like a successful generation.
+      const next = [item, ...readItems()];
+      persistItems(next);
+    } catch (error) {
+      await DB.deleteBlobAsset(blobId).catch(() => undefined);
+      throw new Error('图片文件已生成，但画廊索引保存失败。请检查浏览器本地存储空间后重试。', { cause: error });
+    }
     const display = { ...item, url: URL.createObjectURL(blob) };
     setImages(current => [display, ...current]);
     setSelected(display);
