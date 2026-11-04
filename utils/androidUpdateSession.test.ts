@@ -14,7 +14,7 @@ const deferred = <T>() => {
   const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
-const setup = () => {
+const setup = (storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>) => {
   const deps = {
     getInstalled: vi.fn().mockResolvedValue({ versionCode: 30503 }),
     fetchManifest: vi.fn().mockResolvedValue(manifest),
@@ -22,6 +22,7 @@ const setup = () => {
     install: vi.fn().mockResolvedValue({ status: 'installer_opened' }),
     openInstallPermissionSettings: vi.fn().mockResolvedValue(undefined),
     track: vi.fn(),
+    storage,
   };
   return { deps, session: createAndroidUpdateSession(deps) };
 };
@@ -70,8 +71,7 @@ describe('Android update session survives page lifetimes', () => {
       setItem: (key: string, value: string) => { values.set(key, value); },
       removeItem: (key: string) => { values.delete(key); },
     };
-    const first = setup();
-    first.deps.storage = storage;
+    const first = setup(storage);
     await first.session.check();
     await first.session.download();
     expect(first.session.getSnapshot().phase).toBe('ready');
@@ -79,8 +79,7 @@ describe('Android update session survives page lifetimes', () => {
       versionCode: manifest.versionCode, versionName: manifest.versionName,
     });
 
-    const restarted = setup();
-    restarted.deps.storage = storage;
+    const restarted = setup(storage);
     expect(restarted.session.getSnapshot()).toMatchObject({
       phase: 'ready', downloadedPath: '', message: expect.stringContaining(manifest.versionName),
     });
