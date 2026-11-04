@@ -11,6 +11,7 @@ import {
     updateSyncCursorState,
     updateSyncEventState,
     saveCompanionSyncConnection,
+    removeCompanionSyncConnection,
     type LocalSyncEvent,
 } from './localSyncStore';
 import { secureStorageGet, secureStoragePut, secureStorageRemove, isPersistentSecureStorageAvailable } from './androidSecureStorage';
@@ -103,7 +104,6 @@ export async function disconnectCompanionDevice(revokeOnServer = true): Promise<
         await requestJson(connection.baseUrl, '/v1/devices/current/revoke', { method: 'POST', token });
     }
     await secureStorageRemove(TOKEN_KEY);
-    const { removeCompanionSyncConnection } = await import('./localSyncStore');
     await removeCompanionSyncConnection();
 }
 
@@ -215,6 +215,16 @@ async function pullAndApply(
         });
     }
     return { received: result.events.length, applied, conflicts, blocked };
+}
+
+export async function setCompanionRemoteSyncPolicy(enabled: boolean): Promise<void> {
+    const connection = await getCompanionSyncConnection();
+    if (!connection) return;
+    const token = await secureStorageGet(TOKEN_KEY);
+    if (!token) throw new Error('DEVICE_TOKEN_UNAVAILABLE_REPAIR_REQUIRED');
+    await requestJson(connection.baseUrl, '/v1/sync/policy', {
+        method: 'POST', token, body: { entityType: 'room_note', enabled },
+    });
 }
 
 export async function syncCompanionOnce(): Promise<{
