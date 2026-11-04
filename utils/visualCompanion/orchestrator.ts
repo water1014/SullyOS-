@@ -109,7 +109,7 @@ export async function markVisualAssetsPersisted(taskId: string): Promise<VisualT
     if (!task) throw new Error('视觉任务不存在：' + taskId);
     if (!task.resultAssetIds.length) throw new Error('没有可持久化的视觉资产');
     const assets = await Promise.all(task.resultAssetIds.map(id => visualCompanionRepository.getAsset(id)));
-    const missing = assets.findIndex(asset => !asset || asset.status !== 'ready' || asset.privacyScope !== task.privacyScope);
+    const missing = assets.findIndex(asset => !asset || asset.status !== 'ready' || asset.privacyScope !== task.privacyScope || asset.charId !== task.charId || (asset.taskId !== undefined && asset.taskId !== task.id));
     if (missing !== -1) {
         throw new Error('视觉资产尚未完成安全保存或隐私级别不匹配：' + task.resultAssetIds[missing]);
     }
