@@ -27,7 +27,7 @@ export default function CharacterVisualProfileEditor({ charId, charName }: { cha
         .filter(item => item.confirmed && item.value.trim())
         .map(item => item.value.trim())
         .join(', ');
-      setDescription(current?.anchorPrompt?.trim() || legacyDescription);
+      setDescription([current?.anchorPrompt?.trim(), legacyDescription].filter(Boolean).join(', '));
       setEnabled(current?.status === 'active');
     }).catch(cause => {
       if (alive) setError(cause instanceof Error ? cause.message : '读取人物外貌失败');
