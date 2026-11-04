@@ -40,7 +40,7 @@ The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 The installer integrates its `verified-updates/` cache path into the existing Capacitor FileProvider XML resource instead of adding a duplicate provider. It also declares the MediaProjection foreground-service permissions and service. The preparation script is safe to run repeatedly.
 
-Screen awareness is local-only in this phase. It does not upload frames, sync them to the server, or attach them to chat. See `docs/android-screen-awareness.md` for the consent flow and remaining device tests.
+Screen awareness captures and freezes frames locally. A frame is attached to chat only after the user previews it and confirms sending; there is no automatic cloud upload or sync. See `docs/android-screen-awareness.md` for the consent flow and remaining device tests.
 
 ## Release safeguards
 
