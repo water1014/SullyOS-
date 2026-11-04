@@ -96,13 +96,26 @@ The response contains a one-time pairing code. Save it privately; it expires aft
 
 ### 7. Backups and restore
 
-Create encrypted off-host backups regularly. A simple database dump (encrypt it before moving it off the VPS):
+Create encrypted off-host backups regularly. Install GnuPG on the VPS, restrict local file permissions, and encrypt the dump before it touches disk:
 
 ```sh
-docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > companion-sync-$(date +%F).sql.gz
+umask 077
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' \
+  | gzip \
+  | gpg --symmetric --cipher-algo AES256 --output "companion-sync-$(date +%F).sql.gz.gpg"
 ```
 
-Test restoring a backup into a separate disposable database before relying on it. A backup that has never been restored is only a hopeful file. Protect backup encryption keys separately from the VPS.
+GnuPG prompts for a backup passphrase. Keep that passphrase outside the VPS and separate from the database secrets. Copy only the encrypted file to off-host storage.
+
+To test a restore, create a separate disposable database and decrypt directly into it:
+
+```sh
+docker compose exec -T db sh -c 'createdb -U "$POSTGRES_USER" companion_sync_restore_test'
+gpg --decrypt companion-sync-YYYY-MM-DD.sql.gz.gpg | gunzip | \
+  docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" companion_sync_restore_test'
+```
+
+Test restoring a backup before relying on it. A backup that has never been restored is only a hopeful file. Never store the only backup or its passphrase on the same VPS.
 
 ## Local development
 
