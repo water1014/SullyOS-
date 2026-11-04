@@ -17,6 +17,7 @@ interface Dependencies {
   fetchManifest: typeof fetchAndroidUpdateManifest;
   download: typeof downloadAndVerifyAndroidUpdate;
   install: typeof installVerifiedAndroidUpdate;
+  openInstallPermissionSettings: () => Promise<void>;
   track: typeof trackEvent;
 }
 
@@ -82,6 +83,15 @@ export const createAndroidUpdateSession = (deps: Dependencies) => {
       deps.track('Android 下载更新', { result: 'failed', versionCode: manifest.versionCode });
     }
   };
+  const openInstallPermissionSettings = async () => {
+    if (state.phase !== 'permission') return;
+    try {
+      await deps.openInstallPermissionSettings();
+      update({ message: '已打开系统授权页面。允许安装后返回这里，再点“我已允许，继续安装”' });
+    } catch (error) {
+      update({ message: errorMessage(error) });
+    }
+  };
   const continueInstall = async () => {
     if (busy() || !state.manifest || !state.downloadedPath) return;
     try {
@@ -97,11 +107,16 @@ export const createAndroidUpdateSession = (deps: Dependencies) => {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
     },
-    check, download, continueInstall,
+    check, download, continueInstall, openInstallPermissionSettings,
   };
 };
 
 export const androidUpdateSession = createAndroidUpdateSession({
   getInstalled: getInstalledAndroidAppInfo, fetchManifest: fetchAndroidUpdateManifest,
-  download: downloadAndVerifyAndroidUpdate, install: installVerifiedAndroidUpdate, track: trackEvent,
+  download: downloadAndVerifyAndroidUpdate, install: installVerifiedAndroidUpdate,
+  openInstallPermissionSettings: async () => {
+    const { openInstallPermissionSettings } = await import('./androidAppUpdate');
+    await openInstallPermissionSettings();
+  },
+  track: trackEvent,
 });
