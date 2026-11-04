@@ -615,8 +615,18 @@ const ImageStudioApp: React.FC = () => {
 
       if (imported.length) {
         const nextItems = [...imported.map(({ url: _url, ...item }) => item), ...existing];
-        persistItems(nextItems);
-        setImages(current => [...imported, ...current]);
+        try {
+          persistItems(nextItems);
+          setImages(current => [...imported, ...current]);
+        } catch (error) {
+          // Roll back every binary written during this import if the metadata index
+          // cannot be committed. Never leave an apparently successful invisible import.
+          await Promise.all(imported.map(async item => {
+            URL.revokeObjectURL(item.url);
+            await DB.deleteBlobAsset(item.blobId).catch(() => undefined);
+          }));
+          throw new Error('备份图片已读取，但画廊索引保存失败。已回滚本次导入，请检查本地存储空间。', { cause: error });
+        }
       }
       setSelected(null);
       setSelectionMode(false);
