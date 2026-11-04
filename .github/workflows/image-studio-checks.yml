@@ -16,6 +16,20 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: companion_test
+          POSTGRES_PASSWORD: companion_test_password
+          POSTGRES_DB: companion_sync_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U companion_test -d companion_sync_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,6 +48,11 @@ jobs:
         run: pnpm check:android-installer
       - name: Check companion sync backend syntax
         run: pnpm check:companion-sync
+      - name: Run companion sync PostgreSQL integration test
+        env:
+          DATABASE_URL: postgresql://companion_test:companion_test_password@127.0.0.1:5432/companion_sync_test
+          PGSSLMODE: disable
+        run: pnpm test:companion-sync-integration
       - name: Parse Android PowerShell integration scripts
         shell: pwsh
         run: |
