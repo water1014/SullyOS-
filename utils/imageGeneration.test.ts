@@ -31,8 +31,8 @@ describe('image generation clients', () => {
 
   it('extracts the first image from NovelAI ZIP output', async () => {
     const zip = new JSZip();
-    zip.file('image_0.png', new Blob(['nai-png'], { type: 'image/png' }));
-    const archive = await zip.generateAsync({ type: 'blob' });
+    zip.file('image_0.png', 'nai-png');
+    const archive = await zip.generateAsync({ type: 'uint8array' });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(archive, { status: 200 })));
 
     const blob = await generateNaiImage(
