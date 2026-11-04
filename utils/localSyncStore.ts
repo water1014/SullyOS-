@@ -284,6 +284,7 @@ export interface LocalSyncDeviceIdentity {
     createdAt: number;
     updatedAt: number;
     schemaVersion: 1;
+    label: string;
 }
 
 const LOCAL_DEVICE_IDENTITY_KEY = 'local_device_identity';
@@ -316,10 +317,31 @@ export async function getOrCreateLocalSyncDeviceIdentity(): Promise<LocalSyncDev
         createdAt: now,
         updatedAt: now,
         schemaVersion: 1,
+        label: '这台手机',
     };
     store.put(identity);
     await done;
     return identity;
+}
+
+export async function updateLocalSyncDeviceLabel(label: string): Promise<LocalSyncDeviceIdentity> {
+    const normalized = label.trim();
+    if (!normalized || normalized.length > 24 || /[\\u0000-\\u001f]/.test(normalized)) {
+        throw new Error('INVALID_DEVICE_LABEL');
+    }
+    const db = await openDB();
+    const tx = db.transaction(SYNC_STATE, 'readwrite');
+    const done = transactionDone(tx);
+    const store = tx.objectStore(SYNC_STATE);
+    const current = await requestResult(store.get(LOCAL_DEVICE_IDENTITY_KEY)) as LocalSyncDeviceIdentity | undefined;
+    if (!current) {
+        await done;
+        throw new Error('LOCAL_DEVICE_IDENTITY_NOT_FOUND');
+    }
+    const updated: LocalSyncDeviceIdentity = { ...current, label: normalized, updatedAt: Date.now() };
+    store.put(updated);
+    await done;
+    return updated;
 }
 
 function getSyncCursorKey(accountId: string, deviceId: string): string {
