@@ -116,6 +116,7 @@ async function adminSetup() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('companion-sync-owner-setup'))");
     const existing = await client.query('SELECT id FROM companion_accounts LIMIT 1');
     if (existing.rowCount) {
       await client.query('ROLLBACK');
@@ -221,6 +222,10 @@ async function pushEvents(device, events) {
         outcomes.push({ eventId: event.eventId, status: 'duplicate', serverSequence: Number(existing.rows[0].server_sequence), entityVersion: Number(existing.rows[0].entity_version) });
         continue;
       }
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        [`${device.account_id}:${event.entityType}:${event.entityId}`],
+      );
       const head = await client.query(
         `SELECT current_version, deleted_at FROM companion_sync_entity_heads
           WHERE account_id = $1 AND entity_type = $2 AND entity_id = $3 FOR UPDATE`,
@@ -360,7 +365,8 @@ async function handle(req, res) {
       return json(res, result.status, result.body);
     }
     if (url.pathname === '/v1/devices/pair' && req.method === 'POST') {
-      return json(res, ...(Object.values(await pairDevice(await readJson(req)))));
+      const result = await pairDevice(await readJson(req));
+      return json(res, result.status, result.body);
     }
 
     const device = await authenticate(req);
@@ -386,13 +392,30 @@ async function handle(req, res) {
     if (url.pathname === '/v1/sync/policy' && req.method === 'POST') {
       const body = await readJson(req);
       if (body.entityType !== 'room_note' || typeof body.enabled !== 'boolean') return json(res, 400, { error: 'INVALID_SYNC_POLICY' });
-      await pool.query(
-        `INSERT INTO companion_sync_policies (account_id, entity_type, enabled, mode)
-         VALUES ($1,'room_note',$2,CASE WHEN $2 THEN 'text' ELSE 'local_only' END)
-         ON CONFLICT (account_id, entity_type) DO UPDATE SET
-           enabled = EXCLUDED.enabled, mode = EXCLUDED.mode, updated_at = now()`,
-        [device.account_id, body.enabled],
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `INSERT INTO companion_sync_policies (account_id, entity_type, enabled, mode)
+           VALUES ($1,'room_note',$2,CASE WHEN $2 THEN 'text' ELSE 'local_only' END)
+           ON CONFLICT (account_id, entity_type) DO UPDATE SET
+             enabled = EXCLUDED.enabled, mode = EXCLUDED.mode, updated_at = now()`,
+          [device.account_id, body.enabled],
+        );
+        if (!body.enabled) {
+          // Explicit opt-out also removes server-side text replicas and transport metadata.
+          await client.query("DELETE FROM companion_sync_events WHERE account_id = $1 AND entity_type = 'room_note'", [device.account_id]);
+          await client.query("DELETE FROM companion_sync_entity_heads WHERE account_id = $1 AND entity_type = 'room_note'", [device.account_id]);
+          await client.query('DELETE FROM companion_device_cursors WHERE account_id = $1', [device.account_id]);
+          await client.query('DELETE FROM companion_device_deliveries WHERE account_id = $1', [device.account_id]);
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
       return json(res, 200, { entityType: 'room_note', enabled: body.enabled, mode: body.enabled ? 'text' : 'local_only' });
     }
     if (url.pathname === '/v1/sync/push' && req.method === 'POST') {
