@@ -10,6 +10,7 @@ import { putImageBlob } from '../blobRef';
 import {
     markVisualAssetsPersisted,
     recordGeneratedVisualAssets,
+    resumeVisualTaskRetry,
     startVisualGeneration,
 } from './orchestrator';
 import { visualCompanionRepository } from './repository';
@@ -61,44 +62,72 @@ async function generateForTask(task: VisualTask): Promise<Blob> {
 }
 
 /**
- * Execute a single queued task in the foreground.
- * Repeated calls are harmless: only a task that can be claimed from queued is started.
+ * Execute or resume a single visual task in the foreground.
+ * Repeated calls are harmless: state transitions and chat delivery are idempotent.
  */
 export async function executeVisualTaskInForeground(taskId: string): Promise<VisualTask | null> {
-    const initial = await visualCompanionRepository.getTask(taskId);
-    if (!initial || initial.status !== 'queued') return initial;
-
-    let task: VisualTask;
-    try {
-        task = await visualCompanionRepository.transitionTask(taskId, 'planning');
-    } catch {
-        return visualCompanionRepository.getTask(taskId);
-    }
+    let task = await visualCompanionRepository.getTask(taskId);
+    if (!task) return null;
 
     try {
-        await startVisualGeneration(task.id);
-        const image = await generateForTask(task);
-        const blobRef = await putImageBlob(image);
-        const assetId = `visual_asset_${encodeURIComponent(task.id)}`;
-        const asset = {
-            id: assetId,
-            charId: task.charId,
-            status: 'ready' as const,
-            privacyScope: 'standard' as const,
-            storage: { kind: 'blobref' as const, ref: blobRef },
-            mimeType: image.type || 'image/png',
-            byteSize: image.size,
-            taskId: task.id,
-            createdAt: Date.now(),
-        };
-        await visualCompanionRepository.saveAsset(asset);
-        await recordGeneratedVisualAssets(task.id, [assetId]);
-        await markVisualAssetsPersisted(task.id);
-        const delivered = await deliverVisualTaskToChat(task.id, blobRef);
-        window.dispatchEvent(new CustomEvent('active-msg-progress', {
-            detail: { charId: task.charId },
-        }));
-        return delivered.task;
+        if (task.status === 'queued') {
+            try {
+                task = await visualCompanionRepository.transitionTask(taskId, 'planning');
+            } catch {
+                return visualCompanionRepository.getTask(taskId);
+            }
+        } else if (task.status === 'retry_wait') {
+            if (task.nextAttemptAt && task.nextAttemptAt > Date.now()) return task;
+            task = await resumeVisualTaskRetry(taskId);
+        } else if (!['planning', 'generating', 'persisting', 'delivery_pending'].includes(task.status)) {
+            return task;
+        }
+
+        if (task.status === 'planning') {
+            task = await startVisualGeneration(task.id);
+        }
+
+        if (task.status === 'generating') {
+            const image = await generateForTask(task);
+            const blobRef = await putImageBlob(image);
+            const assetId = `visual_asset_${encodeURIComponent(task.id)}`;
+            await visualCompanionRepository.saveAsset({
+                id: assetId,
+                charId: task.charId,
+                status: 'ready',
+                privacyScope: 'standard',
+                storage: { kind: 'blobref', ref: blobRef },
+                mimeType: image.type || 'image/png',
+                byteSize: image.size,
+                taskId: task.id,
+                createdAt: Date.now(),
+            });
+            task = await recordGeneratedVisualAssets(task.id, [assetId]);
+        }
+
+        if (task.status === 'persisting') {
+            const assetId = task.resultAssetIds[0];
+            const asset = assetId ? await visualCompanionRepository.getAsset(assetId) : null;
+            if (!asset || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
+                throw new Error('生成图片的本地资产记录缺失，无法安全投递');
+            }
+            task = await markVisualAssetsPersisted(task.id);
+        }
+
+        if (task.status === 'delivery_pending') {
+            const assetId = task.resultAssetIds[0];
+            const asset = assetId ? await visualCompanionRepository.getAsset(assetId) : null;
+            if (!asset || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
+                throw new Error('待投递图片资产不存在或不是标准资产');
+            }
+            const delivered = await deliverVisualTaskToChat(task.id, asset.storage.ref);
+            window.dispatchEvent(new CustomEvent('active-msg-progress', {
+                detail: { charId: task.charId },
+            }));
+            return delivered.task;
+        }
+
+        return task;
     } catch (error) {
         const latest = await visualCompanionRepository.getTask(task.id);
         const message = error instanceof Error ? error.message : String(error);
