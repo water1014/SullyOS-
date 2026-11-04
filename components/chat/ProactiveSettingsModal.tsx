@@ -135,7 +135,26 @@ const ProactiveSettingsModal: React.FC<ProactiveSettingsModalProps> = ({
         };
 
         void recoverAndLoadTasks();
-        return () => { cancelled = true; };
+
+        // Keep the visible history in sync while a provider is still generating.
+        const pollId = window.setInterval(() => {
+            void visualCompanionRepository.listTasks(char.id)
+                .then(latest => {
+                    if (!cancelled) {
+                        setVisualTasks(latest.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 8));
+                    }
+                })
+                .catch(error => {
+                    if (!cancelled) {
+                        setVisualTaskError(error instanceof Error ? error.message : '刷新图片任务状态失败');
+                    }
+                });
+        }, 2500);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(pollId);
+        };
     }, [isOpen, char.id]);
 
     const updateVisual = (patch: Partial<VisualAutonomySettings>) => {
