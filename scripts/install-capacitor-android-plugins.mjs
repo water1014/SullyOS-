@@ -35,9 +35,9 @@ function addImport(source, importLine) {
 function registerPlugin(source, className) {
   const statement = `registerPlugin(${className}.class);`;
   if (source.includes(statement)) return source;
-  const onCreate = /public\\s+void\\s+onCreate\\s*\\(\\s*Bundle\\s+savedInstanceState\\s*\\)\\s*\\{/;
-  if (onCreate.test(source)) {
-    return source.replace(onCreate, match => match + `\n        ${statement}`);
+  const onCreate = 'public void onCreate(Bundle savedInstanceState) {';
+  if (source.includes(onCreate)) {
+    return source.replace(onCreate, onCreate + `\n        ${statement}`);
   }
   const classClose = source.lastIndexOf('}');
   if (classClose < 0) throw new Error('MainActivity.java has no class closing brace');
@@ -98,12 +98,14 @@ async function main() {
     if (applicationClose < 0) throw new Error('AndroidManifest.xml has no application closing tag');
     manifest = manifest.slice(0, applicationClose) + provider + '\n' + manifest.slice(applicationClose);
   } else {
-    const provider = manifest.match(/<provider\\b(?=[^>]*android:name="androidx\\.core\\.content\\.FileProvider")[^>]*>[\\s\\S]*?<\\/provider>/);
-    if (!provider
-      || !provider[0].includes('android:exported="false"')
-      || !provider[0].includes('android:grantUriPermissions="true"')
-      || !provider[0].includes('android:authorities="${applicationId}.fileprovider"')
-      || !provider[0].includes('android:resource="@xml/apk_installer_paths"')) {
+    const providerStart = manifest.indexOf('<provider');
+    const providerEnd = providerStart < 0 ? -1 : manifest.indexOf('</provider>', providerStart);
+    const provider = providerEnd < 0 ? '' : manifest.slice(providerStart, providerEnd + '</provider>'.length);
+    if (!provider.includes('android:name="androidx.core.content.FileProvider"')
+      || !provider.includes('android:exported="false"')
+      || !provider.includes('android:grantUriPermissions="true"')
+      || !provider.includes('android:authorities="${applicationId}.fileprovider"')
+      || !provider.includes('android:resource="@xml/apk_installer_paths"')) {
       throw new Error('Existing FileProvider configuration conflicts with the APK installer requirements');
     }
   }
