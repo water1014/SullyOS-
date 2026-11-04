@@ -27,6 +27,7 @@ export enum AppID {
   XhsStock = 'xhs_stock', // XHS image stock for publishing
   SpecialMoments = 'special_moments', // Valentine's Day & future events
   XhsFreeRoam = 'xhs_free_roam', // Character autonomous XHS activity
+  ImageStudio = 'image_studio', // GPT + NovelAI image generation studio
   Songwriting = 'songwriting', // Songwriting / Lyric creation app
   Call = 'call', // 语音电话测试（MiniMax TTS）
   VoiceDesigner = 'voice_designer', // 捏声音 — MiniMax 音色设计器
