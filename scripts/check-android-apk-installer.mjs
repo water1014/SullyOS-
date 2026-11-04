@@ -17,14 +17,14 @@ const checks = [
   ['APK digest is checked natively', java.includes('MessageDigest.getInstance("SHA-256")') && java.includes('actualSha.equals(expectedSha)')],
   ['package, signer and monotonic version are checked natively', java.includes('candidate.packageName') && java.includes('archiveSignerFingerprint(candidate).equals(installedSignerFingerprint(installed))') && java.includes('packageVersionCode(candidate) <= packageVersionCode(installed)')],
   ['system installer receives read-only content URI grant', java.includes('FileProvider.getUriForFile') && java.includes('Intent.FLAG_GRANT_READ_URI_PERMISSION')],
-  ['FileProvider exposes only verified update cache', /<cache-path\\s+name="verified_updates"\\s+path="verified-updates\/"\\s*\/>/.test(pathsXml) && !pathsXml.includes('<root-path') && !pathsXml.includes('<external-path')],
+  ['FileProvider exposes only verified update cache', pathsXml.includes('<cache-path name="verified_updates" path="verified-updates/" />') && !pathsXml.includes('<root-path') && !pathsXml.includes('<external-path')],
   ['wrapper integration declares install permission', integration.includes('android.permission.REQUEST_INSTALL_PACKAGES')],
-  ['wrapper integration checks package identity and provider authority', integration.includes('package\\s+com\\.aetheros\\.simulator') && integration.includes('\\$\\{applicationId\\}\\.fileprovider')],
+  ['wrapper integration checks package identity and provider authority', integration.includes('package\\s+com\\.aetheros\\.simulator') && integration.includes('android:authorities="${applicationId}.fileprovider"')],
   ['web update flow requires native verification and exact manifest size', update.includes('!verified.valid') && update.includes('Number(fileInfo.size) === manifest.sizeBytes') && update.includes('verified.versionCode <= installed.versionCode')],
 ];
 
 for (const [label, passed] of checks) {
   assert.equal(passed, true, 'Android APK installer contract failed: ' + label);
-  process.stdout.write('✓ ' + label + '\\n');
+  process.stdout.write('✓ ' + label + '\n');
 }
-process.stdout.write('\\n' + checks.length + ' Android APK installer contract checks passed.\\n');
+process.stdout.write('\n' + checks.length + ' Android APK installer contract checks passed.\n');
