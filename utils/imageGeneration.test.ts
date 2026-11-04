@@ -131,7 +131,8 @@ describe('image generation clients', () => {
     expect(JSON.parse(String(request.body))).toMatchObject({ model: 'gpt-image-2', n: 1, prompt: 'a little blue house' });
   });
 
-  it('downloads image URLs returned by OpenAI-compatible providers', async () => {
+  it('downloads image URLs returned by OpenAI-compatible providers with the task cancellation signal', async () => {
+    const controller = new AbortController();
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ url: 'https://images.example/result.png' }] }), {
         status: 200, headers: { 'Content-Type': 'application/json' },
@@ -142,12 +143,12 @@ describe('image generation clients', () => {
     const blob = await generateGptImage(
       { baseUrl: 'https://api.example/v1', apiKey: 'test-key', model: 'compatible-image-model' },
       'a moonlit garden',
-      { size: '1024x1024', quality: 'high' },
+      { size: '1024x1024', quality: 'high', signal: controller.signal },
     );
 
     expect(blob.type).toBe('image/png');
     expect(await blob.text()).toBe('url-image');
-    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://images.example/result.png');
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://images.example/result.png', { signal: controller.signal });
   });
 
   it('accepts direct binary image responses from compatible providers', async () => {
