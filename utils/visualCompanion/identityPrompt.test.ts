@@ -42,7 +42,7 @@ describe('character appearance prompt', () => {
     it('deduplicates repeated appearance details from legacy and canonical fields', () => {
         const prompt = buildCharacterAppearancePrompt({
             ...profile,
-            anchorPrompt: '黑色长发，灰蓝色眼睛',
+            anchorPrompt: '黑色长发',
             identity: [
                 { key: 'hair', value: '黑色长发', confirmed: true, source: 'user', updatedAt: 1 },
                 { key: 'eyes', value: '灰蓝色眼睛', confirmed: true, source: 'user', updatedAt: 1 },
