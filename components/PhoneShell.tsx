@@ -473,7 +473,7 @@ const PhoneShell: React.FC = () => {
   // 恢复上次关闭页面时留下的安全视觉任务。只恢复 queued、到期的持久化/投递重试；
   // generating 阶段可能已被 Provider 受理并计费，因此绝不在启动时自动重跑。
   useEffect(() => {
-    if (!isDataLoaded || isLocked || visualRecoveryStarted.current) return;
+    if (!isDataLoaded || isLocked || characters.length === 0 || visualRecoveryStarted.current) return;
     visualRecoveryStarted.current = true;
     let cancelled = false;
     void import('../utils/visualCompanion/foregroundExecutor').then(({ recoverSafeVisualTasksForCharacter }) => {
