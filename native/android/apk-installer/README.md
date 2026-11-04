@@ -25,7 +25,9 @@
    }
    ```
 
-4. 确认 `AndroidManifest.xml` 在 `<application>` 外声明 `android.permission.REQUEST_INSTALL_PACKAGES`。接入脚本会自动补上该权限声明。\n\n5. 在 `AndroidManifest.xml` 的 `<application>` 内注册 FileProvider：
+4. 确认 `AndroidManifest.xml` 在 `<application>` 外声明 `android.permission.REQUEST_INSTALL_PACKAGES`。接入脚本会自动补上该权限声明。
+
+5. 在 `AndroidManifest.xml` 的 `<application>` 内注册 FileProvider：
 
    ```xml
    <provider
