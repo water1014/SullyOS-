@@ -644,7 +644,7 @@ const WorldbookApp: React.FC = () => {
                             <button
                                 onClick={() => { setShowImportConfirm(true); trackEvent('打开导入世界书弹窗'); }}
                                 className="w-9 h-9 bg-white/80 text-indigo-500 border border-white rounded-full shadow-sm flex items-center justify-center active:scale-90 transition-transform"
-                                title="导入标准世界书"
+                                title="导入标准世界书或酒馆 JSON"
                             >
                                 <UploadSimple size={18} weight="bold" />
                             </button>
@@ -846,9 +846,11 @@ const WorldbookApp: React.FC = () => {
                     <div className="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center text-amber-500 ring-8 ring-amber-50/50">
                         <WarningCircle size={28} weight="fill" />
                     </div>
-                    <p className="text-center leading-6">
-                        请注意，如果导入的不是您的作品，请确定该世界书的作者允许该世界书用于免费小手机。
-                    </p>
+                    <div className="text-center leading-6 space-y-2">
+                        <p>支持糯米机标准世界书 JSON，以及酒馆（SillyTavern）导出的 JSON 文件。</p>
+                        <p className="text-xs text-slate-500">会尽量保留条目正文、关键词、常驻/禁用状态、触发逻辑、概率、插入位置、深度和角色等基础规则。酒馆的递归扫描、预算、分组等高级规则暂不保证完整兼容，导入后建议检查条目设置。</p>
+                        <p className="text-xs text-slate-500">如果导入的不是您自己的作品，请确认作者允许您使用和导入。</p>
+                    </div>
                 </div>
             </Modal>
 
