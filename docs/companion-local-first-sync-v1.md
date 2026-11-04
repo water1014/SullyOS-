@@ -182,6 +182,14 @@ POST /internal/tasks/claim、POST /internal/tasks/{id}/complete。只允许服�
 - Worker 重启不重复发送同一主动消息。
 - 任何阶段不覆盖 master，不部署，不生成 APK。
 
+### 备份恢复与同步队列边界
+
+- 用户数据备份不包含 sync_outbox、sync_inbox、sync_state、sync_conflicts 或设备凭据。
+- 导入完整/纯文字备份会清空旧 outbox、inbox、冲突记录和同步游标，避免旧队列把恢复前的数据重新上传，或跳过恢复期间的服务端事件。
+- 恢复后保留本机的类别同步偏好；游标归零，下一次用户主动同步时重新拉取并按冲突规则核对。
+- 仅媒体补充导入不改变同步队列和游标，因为它不替换聊天、日记、便签等文字主数据。
+- sync_preferences 不随备份跨设备迁移；新设备默认 local-only，必须在新设备上重新明确授权。
+
 ## 12. 本阶段明确不做
 
 不上传整个 IndexedDB；不上传私密媒体或屏幕原始帧；不把 API 密钥放入普通同步；不让云端直接控制 Android；不创建阿里云资源；不部署；不打 APK。
