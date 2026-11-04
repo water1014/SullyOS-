@@ -1309,9 +1309,7 @@ const Settings: React.FC = () => {
     setVisionTestResult(null);
     try {
       const isOpenCodeGo = isOpenCodeGoEndpoint(baseUrl);
-      const modelsUrl = isOpenCodeGo
-        ? (baseUrl.includes('/zen/go') ? 'https://opencode.ai/zen/go/v1/models' : 'https://opencode.ai/inference/go/v1/models')
-        : `${baseUrl}/models`;
+      const modelsUrl = `${baseUrl}/models`;
       const response = await (isOpenCodeGo ? fetchOpenCodeGo : fetchLlm)(modelsUrl, {
         method: 'GET',
         headers: buildApiRequestHeaders(apiKey, localVisionCustomHeaders, { baseUrl, sessionId: 'sullyos-vision-model-list' }),
