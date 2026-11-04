@@ -2,12 +2,16 @@ const DOMESTIC_BASE = 'https://api.minimaxi.com';
 const OVERSEAS_BASE = 'https://api.minimax.io';
 const T2A_PATH = '/v1/t2a_v2';
 
+const runtimeEnv = (globalThis as unknown as {
+  process?: { env?: Record<string, string | undefined> };
+}).process?.env || {};
+
 const resolveTargetUrl = (req: any): string => {
   const header = typeof req?.headers?.['x-minimax-region'] === 'string'
     ? req.headers['x-minimax-region'].trim().toLowerCase()
     : '';
-  const envRegion = typeof process.env.MINIMAX_REGION === 'string'
-    ? process.env.MINIMAX_REGION.trim().toLowerCase()
+  const envRegion = typeof runtimeEnv.MINIMAX_REGION === 'string'
+    ? runtimeEnv.MINIMAX_REGION.trim().toLowerCase()
     : '';
   const region = header || envRegion;
   const base = region === 'overseas' ? OVERSEAS_BASE : DOMESTIC_BASE;
@@ -17,7 +21,7 @@ const resolveTargetUrl = (req: any): string => {
 const resolveGroupId = (req: any): string => {
   const bodyGroupId = typeof req?.body?.group_id === 'string' ? req.body.group_id : '';
   const headerGroupId = typeof req?.headers?.['x-minimax-group-id'] === 'string' ? req.headers['x-minimax-group-id'] : '';
-  const envGroupId = typeof process.env.MINIMAX_GROUP_ID === 'string' ? process.env.MINIMAX_GROUP_ID : '';
+  const envGroupId = typeof runtimeEnv.MINIMAX_GROUP_ID === 'string' ? runtimeEnv.MINIMAX_GROUP_ID : '';
   return [bodyGroupId, headerGroupId, envGroupId].map(v => String(v || '').trim()).find(Boolean) || '';
 };
 
@@ -48,7 +52,7 @@ export default async function handler(req: any, res: any) {
   try {
     const incomingAuthRaw = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
     const customApiKeyRaw = typeof req.headers['x-minimax-api-key'] === 'string' ? req.headers['x-minimax-api-key'] : '';
-    const envApiKeyRaw = typeof process.env.MINIMAX_API_KEY === 'string' ? process.env.MINIMAX_API_KEY : '';
+    const envApiKeyRaw = typeof runtimeEnv.MINIMAX_API_KEY === 'string' ? runtimeEnv.MINIMAX_API_KEY : '';
 
     const incomingApiKey = normalizeApiKey(incomingAuthRaw);
     const customApiKey = normalizeApiKey(customApiKeyRaw);
