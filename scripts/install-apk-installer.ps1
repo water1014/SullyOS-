@@ -73,6 +73,12 @@ Set-Content -LiteralPath $mainActivity.FullName -Value $activityContent -Encodin
 $manifestPath = Join-Path $appRoot 'src\main\AndroidManifest.xml'
 if (-not (Test-Path -LiteralPath $manifestPath)) { throw "AndroidManifest.xml not found: $manifestPath" }
 $manifest = Get-Content -LiteralPath $manifestPath -Raw
+if ($manifest -notmatch 'android\.permission\.REQUEST_INSTALL_PACKAGES') {
+  if ($manifest -notmatch '</manifest>') { throw 'AndroidManifest.xml has no manifest closing tag.' }
+  $permission = '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />' + [Environment]::NewLine
+  $manifest = $manifest.Replace('</manifest>', $permission + '</manifest>')
+  Set-Content -LiteralPath $manifestPath -Value $manifest -Encoding UTF8
+}
 if ($manifest -notmatch 'androidx\.core\.content\.FileProvider') {
   $provider = @'
         <provider
