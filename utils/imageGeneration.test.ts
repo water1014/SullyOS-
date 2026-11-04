@@ -15,6 +15,7 @@ describe('image generation clients', () => {
 
   it('normalizes NovelAI official and third-party generation endpoints', () => {
     expect(normalizeNaiGenerateEndpoint('https://image.novelai.net')).toBe('https://image.novelai.net/ai/generate-image');
+    expect(normalizeNaiGenerateEndpoint('https://proxy.example///', 'thirdparty')).toBe('https://proxy.example/ai/generate-image');
     expect(normalizeNaiGenerateEndpoint('https://proxy.example/api', 'thirdparty')).toBe('https://proxy.example/api/ai/generate-image');
     expect(normalizeNaiGenerateEndpoint('https://proxy.example/ai/generate-image', 'thirdparty')).toBe('https://proxy.example/ai/generate-image');
     expect(() => normalizeNaiGenerateEndpoint('', 'thirdparty')).toThrow('请填写 NAI 第三方 API Base URL');
