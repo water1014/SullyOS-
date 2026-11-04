@@ -120,6 +120,7 @@ import { StatusBar as CapStatusBar, Style as StatusBarStyle } from '@capacitor/s
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { isIOSStandaloneWebApp, resolveStatusBarMode } from '../utils/iosStandalone';
+import { refreshAndroidSafeArea } from '../utils/androidSafeArea';
 import AppErrorBoundary from './os/AppErrorBoundary';
 import GlobalMiniPlayer from './os/GlobalMiniPlayer';
 import NavigationBall from './os/NavigationBall';
@@ -770,6 +771,36 @@ const PhoneShell: React.FC = () => {
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, [activeApp, handleBack, deploymentNotice.blocked]);
+
+  // Android 挖孔屏适配：冷启动、从后台返回和窗口尺寸变化时重新读取原生安全区。
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return;
+    let disposed = false;
+    let appStateHandle: { remove: () => Promise<void> } | undefined;
+    const refresh = () => {
+      if (!disposed) void refreshAndroidSafeArea();
+    };
+    refresh();
+    const visibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        window.requestAnimationFrame(refresh);
+      }
+    };
+    document.addEventListener('visibilitychange', visibilityChange);
+    window.addEventListener('resize', refresh);
+    void CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) window.requestAnimationFrame(refresh);
+    }).then(handle => {
+      appStateHandle = handle;
+      if (disposed) void handle.remove();
+    }).catch(() => {});
+    return () => {
+      disposed = true;
+      document.removeEventListener('visibilitychange', visibilityChange);
+      window.removeEventListener('resize', refresh);
+      if (appStateHandle) void appStateHandle.remove();
+    };
+  }, []);
 
   // Capacitor Native Handling
   useEffect(() => {
