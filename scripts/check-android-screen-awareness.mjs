@@ -21,6 +21,7 @@ const checks = [
   ['native bridge exposes frozen state and resume control', plugin.includes('void resumeSession(PluginCall call)') && plugin.includes('result.put("frozen", ScreenAwarenessService.isFrozen())') && bridge.includes('resumeSession()')],
   ['chat requires a frozen frame and explicit preview confirmation before sending', chat.includes("case 'screen-share'") && chat.includes('status.frozen') && chat.includes('handleConfirmScreenShare') && chat.includes('userConfirmed: true') && chat.includes('确认发送给角色')],
   ['chat plus menu exposes the screen sharing action', chatInput.includes("key=\"screen-share\"") && chatInput.includes("onPanelAction('screen-share')")],
+  ['temporary screenshot cache is cleared after send or dismissal', chat.includes('clearLatestScreenFrame') && chat.includes('discardScreenSharePreview') && chat.includes('await clearLatestScreenFrame()')],
   ['Android 14 media projection permission is added', installer.includes('android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION') && installer.includes('android.permission.FOREGROUND_SERVICE')],
   ['native installer registers plugin and service source', installer.includes('ScreenAwarenessPlugin') && installer.includes('ScreenAwarenessService.java')],
   ['only one latest JPEG frame is retained in app cache', service.includes('new File(directory, "latest.jpg")') && service.includes('new File(directory, "latest.tmp")') && service.includes('FRAME_INTERVAL_MS')],
