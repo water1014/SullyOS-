@@ -11,7 +11,7 @@ function Write-Utf8NoBom {
     [Parameter(Mandatory = $true)][string]$Path,
     [Parameter(Mandatory = $true)][string]$Value
   )
-  $encoding = New-Object System.Text.UTF8Encoding($false)
+  $encoding = [System.Text.UTF8Encoding]::new($false)
   [System.IO.File]::WriteAllText($Path, $Value, $encoding)
 }
 $androidRoot = Join-Path $WrapperRoot 'android'
