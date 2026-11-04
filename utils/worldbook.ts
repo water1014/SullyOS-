@@ -352,6 +352,9 @@ export const parseStandardWorldbook = (
         : candidates.map(item => item?.entries ?? item?.entry)
             .find(value => Array.isArray(value) || (value && typeof value === 'object'));
     if (!Array.isArray(container) && (!container || typeof container !== 'object')) {
+        if (Array.isArray(parsed?.prompts)) {
+            throw new Error('检测到这是酒馆「提示词预设」而不是世界书。请到提示词预设导入入口导入，避免把系统提示词误当成世界书条目。');
+        }
         throw new Error('不是受支持的世界书 JSON：未找到条目列表。请使用酒馆世界书导出 JSON，或角色卡 V2/V3（character_book）JSON');
     }
 
