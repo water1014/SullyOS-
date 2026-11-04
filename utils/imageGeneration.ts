@@ -253,6 +253,9 @@ export async function generateNaiImage(
 ): Promise<Blob> {
   if (!config.apiKey.trim()) throw new Error('请先填写 NovelAI Persistent API Token');
   if (!prompt.trim()) throw new Error('先写下你想生成的画面吧');
+  if (options.seed !== undefined && (!Number.isSafeInteger(options.seed) || options.seed < 0 || options.seed > 4294967295)) {
+    throw new Error('NAI Seed 必须是 0 到 4294967295 之间的整数');
+  }
 
   const isV5 = config.model.startsWith('nai-diffusion-5');
   const caption = (text: string) => ({
