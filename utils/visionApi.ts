@@ -1,8 +1,10 @@
 import type { ApiPreset, Message, VisionApiConfig } from '../types';
 import { DB } from './db';
 import { extractContent, safeFetchJson } from './safeApi';
-import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel } from './apiConfigNormalize';
+import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel, normalizeApiHeaders, buildApiRequestHeaders } from './apiConfigNormalize';
+import { normalizeLlmBaseUrl } from './llmEndpoint';
 import { isBlobRef } from './blobRef';
+import { fetchOpenCodeGo } from './openCodeGoTransport';
 
 export const VISION_DESCRIPTION_METADATA_KEY = 'visionDescription';
 
@@ -32,6 +34,7 @@ export const visionApiConfigFromPreset = (preset: ApiPreset, enabled = true): Vi
   baseUrl: normalizeApiBaseUrl(preset.config.baseUrl),
   apiKey: normalizeApiCredential(preset.config.apiKey),
   model: normalizeApiModel(preset.config.model),
+  customHeaders: normalizeApiHeaders(preset.config.customHeaders),
 });
 
 export const isVisionApiReady = (config?: VisionApiConfig | null): config is VisionApiConfig =>
@@ -68,13 +71,10 @@ export async function describeImageWithVisionApi(
   if (existing) return existing;
 
   const request = (async () => {
-    const baseUrl = config.baseUrl.trim().replace(/\/+$/, '');
+    const baseUrl = normalizeLlmBaseUrl(config.baseUrl, 'openai');
     const data = await safeFetchJson(`${baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.apiKey.trim()}`,
-      },
+      headers: buildApiRequestHeaders(config.apiKey.trim(), config.customHeaders, { baseUrl, sessionId: 'sullyos-vision' }),
       body: JSON.stringify({
         model: config.model.trim(),
         messages: [{
