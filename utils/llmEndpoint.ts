@@ -31,7 +31,7 @@ export function normalizeLlmBaseUrl(value: string, type?: LlmApiType): string {
             if (!path || path === '/') path = '/v1';
             path += '/messages';
         } else {
-            path = path.replace(/\/messages(?:\/(?:chat\/completions|models))?\/?$/, '');
+            path = path.replace(/\/messages(?:\/(?:chat\/completions|models))?\/?$/, '').replace(/\/chat\/completions\/?$/i, '').replace(/\/models\/?$/i, '');
         }
         url.pathname = path || '/';
         return url.href.replace(/\/$/, '');
