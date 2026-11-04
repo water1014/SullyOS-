@@ -53,6 +53,7 @@ services:
     restart: unless-stopped
     environment:
       COMPANION_DOMAIN: ${COMPANION_DOMAIN:?Set COMPANION_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env}
     ports:
       - "80:80"
       - "443:443"
