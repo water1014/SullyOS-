@@ -23,6 +23,11 @@ import {
     getOrCreateLocalSyncDeviceIdentity,
     updateLocalSyncDeviceLabel,
     resetLocalSyncTransportStateAfterRestore,
+    getCompanionSyncConnection,
+    saveCompanionSyncConnection,
+    removeCompanionSyncConnection,
+    getLocalRoomNoteServerVersion,
+    setLocalRoomNoteServerVersion,
 } from './localSyncStore';
 
 const note = {
@@ -308,6 +313,37 @@ describe('local-first sync outbox', () => {
         });
         expect((await getOrCreateLocalSyncDeviceIdentity()).deviceId).toBe(identity.deviceId);
         expect(await getSyncPreference('room_note')).toMatchObject({ enabled: true, mode: 'text' });
+    });
+
+    it('stores a validated companion connection without placing its token in IndexedDB', async () => {
+        const connection = await saveCompanionSyncConnection({
+            baseUrl: 'https://sync.example.com/',
+            accountId: 'account-uuid',
+            serverDeviceId: 'server-device-uuid',
+            label: '主手机',
+        });
+        expect(connection.baseUrl).toBe('https://sync.example.com');
+        expect(await getCompanionSyncConnection()).toMatchObject({
+            accountId: 'account-uuid',
+            serverDeviceId: 'server-device-uuid',
+            label: '主手机',
+        });
+        await expect(saveCompanionSyncConnection({
+            baseUrl: 'http://public.example.com',
+            accountId: 'account-uuid',
+            serverDeviceId: 'server-device-uuid',
+            label: '主手机',
+        })).rejects.toThrow('INVALID_SYNC_BASE_URL');
+        await removeCompanionSyncConnection();
+        expect(await getCompanionSyncConnection()).toBeNull();
+    });
+
+    it('uses the acknowledged server entity version for subsequent delete events', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        await setLocalRoomNoteServerVersion(note.id, 7);
+        expect(await getLocalRoomNoteServerVersion(note.id)).toBe(7);
+        const event = await enqueueRoomNoteSyncEvent(note, 'delete');
+        expect(event).toMatchObject({ baseVersion: 7, clientVersion: 8, operation: 'delete', payload: {} });
     });
 
     it('creates one stable local device identity even when requested concurrently', async () => {
