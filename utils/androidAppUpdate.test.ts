@@ -218,8 +218,8 @@ describe('downloadAndVerifyAndroidUpdate', () => {
 
   it('rejects an unverified or wrong-version APK', async () => {
     installerMocks.verifyApk.mockResolvedValueOnce({ valid: false, versionCode: manifest.versionCode });
-    await expect(downloadAndVerifyAndroidUpdate(manifest)).rejects.toThrow('与更新清单版本不一致');
+    await expect(downloadAndVerifyAndroidUpdate(manifest)).rejects.toThrow('安装包身份、签名或版本校验失败');
     installerMocks.verifyApk.mockResolvedValueOnce({ valid: true, versionCode: manifest.versionCode + 1 });
-    await expect(downloadAndVerifyAndroidUpdate(manifest)).rejects.toThrow('与更新清单版本不一致');
+    await expect(downloadAndVerifyAndroidUpdate(manifest)).rejects.toThrow('安装包身份、签名或版本校验失败');
   });
 });

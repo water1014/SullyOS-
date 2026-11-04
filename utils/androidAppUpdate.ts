@@ -192,7 +192,7 @@ const performDownload = async (
     ApkInstaller.verifyApk({ path: uri, sha256: manifest.sha256 }),
     Filesystem.stat({ path: UPDATE_PATH, directory: Directory.Cache }),
   ]);
-  const fingerprint = (value: string) => value.replace(/[^a-f0-9]/gi, '').toLowerCase();
+  const fingerprint = (value: unknown) => typeof value === 'string' ? value.replace(/[^a-f0-9]/gi, '').toLowerCase() : '';
   const installedFingerprint = fingerprint(installed.certificateSha256);
   const candidateFingerprint = fingerprint(verified.certificateSha256);
   const sameSigner = /^[a-f0-9]{64}$/.test(installedFingerprint)
