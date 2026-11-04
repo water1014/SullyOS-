@@ -98,6 +98,14 @@ async function main() {
   });
   assertStatus(replayPair, 401, 'pairing code is one-time');
 
+  const invalidLabelCode = await request('/v1/admin/pairing-codes', { method: 'POST', admin: true });
+  assertStatus(invalidLabelCode, 201, 'issue invalid-label test code');
+  const invalidLabel = await request('/v1/devices/pair', {
+    method: 'POST',
+    body: { code: invalidLabelCode.body.pairingCode, label: '', platform: 'android' },
+  });
+  assertStatus(invalidLabel, 400, 'reject invalid device label');
+
   const nextCode = await request('/v1/admin/pairing-codes', { method: 'POST', admin: true });
   assertStatus(nextCode, 201, 'issue second pairing code');
   const secondPair = await request('/v1/devices/pair', {
@@ -145,6 +153,9 @@ async function main() {
   assertStatus(collision, 200, 'event id collision response');
   assert.equal(collision.body.outcomes[0].status, 'rejected');
   assert.equal(collision.body.outcomes[0].error, 'EVENT_ID_COLLISION');
+
+  const invalidCursor = await request('/v1/sync/pull?cursor=not-a-number', { token: deviceTwo });
+  assertStatus(invalidCursor, 400, 'reject malformed pull cursor');
 
   const pulled = await request('/v1/sync/pull?cursor=0&limit=50', { token: deviceTwo });
   assertStatus(pulled, 200, 'pull from second device');
@@ -212,6 +223,8 @@ async function main() {
   const watermarkPull = await request(`/v1/sync/pull?cursor=${sequenceTwo}&limit=50`, { token: deviceOne });
   assertStatus(watermarkPull, 200, 'account watermark survives opt-out');
   assert.equal(watermarkPull.body.events.length, 0);
+  const cursorAhead = await request(`/v1/sync/pull?cursor=${sequenceTwo + 1}&limit=50`, { token: deviceOne });
+  assertStatus(cursorAhead, 409, 'reject cursor beyond account watermark');
 
   const selfRevoke = await request(`/v1/devices/${firstPair.body.deviceId}`, { method: 'DELETE', token: deviceOne });
   assertStatus(selfRevoke, 409, 'cannot revoke current device');
