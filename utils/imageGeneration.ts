@@ -239,9 +239,76 @@ export async function generateGptImage(
 }
 
 export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'official' | 'thirdparty' = 'official'): string {
-  const clean = (baseUrl.trim() || (provider === 'official' ? 'https://image.novelai.net' : '')).replace(/\/+$/, '');
-  if (!clean) throw new Error('请填写 NAI 第三方 API Base URL');
-  return clean.endsWith('/ai/generate-image') ? clean : `${clean}/ai/generate-image`;
+  const raw = baseUrl.trim() || (provider === 'official' ? 'https://image.novelai.net' : '');
+  if (!raw) throw new Error('请填写 NAI 第三方 API Base URL');
+  let parsed: URL;
+  try { parsed = new URL(raw); }
+  catch { throw new Error('NAI API Base URL 必须是完整的 http:// 或 https:// 地址'); }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('NAI API Base URL 只支持 HTTP 或 HTTPS 地址');
+  }
+  parsed.pathname = parsed.pathname.replace(/\\/+$/, '');
+  if (!parsed.pathname.endsWith('/ai/generate-image')) {
+    parsed.pathname = `${parsed.pathname}/ai/generate-image`.replace(/^\\/\\//, '/');
+  }
+  return parsed.toString().replace(/\\/$/, '');
+}
+
+async function readNaiImageResponse(response: Response): Promise<Blob> {
+  const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
+  if (contentType.startsWith('image/')) {
+    const image = await response.blob();
+    if (!image.size) throw new Error('NAI 服务返回了空图片');
+    return image;
+  }
+
+  const buffer = await response.arrayBuffer();
+  if (!buffer.byteLength) throw new Error('NAI 服务返回了空内容');
+
+  if (contentType.includes('json') || contentType.startsWith('text/')) {
+    const raw = new TextDecoder().decode(buffer);
+    let payload: any;
+    try { payload = JSON.parse(raw); }
+    catch { throw new Error(`NAI 服务返回了无法识别的文本：${raw.slice(0, 180)}`); }
+    const encoded = payload?.image || payload?.image_base64 || payload?.data?.[0]?.b64_json;
+    if (typeof encoded === 'string' && encoded) {
+      const normalized = encoded.replace(/^data:image\\/[^;]+;base64,/i, '');
+      try {
+        const binary = atob(normalized);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+        return new Blob([bytes], { type: payload?.mime_type || 'image/png' });
+      } catch {
+        throw new Error('NAI 服务返回了图片字段，但 Base64 内容无法解码');
+      }
+    }
+    throw new Error(String(errorMessage(payload, 'NAI 服务返回 JSON，但没有可识别的图片数据')).slice(0, 240));
+  }
+
+  try {
+    const archive = await JSZip.loadAsync(buffer);
+    const imageFile = Object.values(archive.files).find(file =>
+      !file.dir && /\\.(png|webp|jpe?g)$/i.test(file.name),
+    );
+    if (!imageFile) throw new Error('NAI 返回成功，但压缩包中没有找到图片文件');
+    const bytes = await imageFile.async('uint8array');
+    const extension = imageFile.name.toLowerCase().split('.').pop();
+    const mimeType = extension === 'webp' ? 'image/webp' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : 'image/png';
+    if (!bytes.length) throw new Error('NAI 压缩包中的图片文件为空');
+    return new Blob([bytes], { type: mimeType });
+  } catch (error) {
+    if (error instanceof Error && /没有找到图片文件|图片文件为空/.test(error.message)) throw error;
+    const raw = new TextDecoder().decode(buffer).trim();
+    if (raw.startsWith('{') || raw.startsWith('[')) {
+      try {
+        const payload = JSON.parse(raw);
+        throw new Error(String(errorMessage(payload, 'NAI 第三方接口返回了无法识别的 JSON')).slice(0, 240));
+      } catch (jsonError) {
+        if (jsonError instanceof Error && !jsonError.message.includes('JSON')) throw jsonError;
+      }
+    }
+    throw new Error('NAI 服务已返回内容，但既不是图片文件，也不是有效的 ZIP 图片包。请检查第三方接口的响应格式。');
+  }
 }
 
 export async function generateNaiImage(
@@ -303,15 +370,7 @@ export async function generateNaiImage(
     throw new Error(`NAI 生图失败（HTTP ${response.status}）：${message.slice(0, 240)}`);
   }
 
-  const archive = await JSZip.loadAsync(await response.arrayBuffer());
-  const imageFile = Object.values(archive.files).find(file =>
-    !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
-  );
-  if (!imageFile) throw new Error('NAI 返回成功，但压缩包中没有找到图片文件');
-  const bytes = await imageFile.async('uint8array');
-  const extension = imageFile.name.toLowerCase().split('.').pop();
-  const mimeType = extension === 'webp' ? 'image/webp' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : 'image/png';
-  return new Blob([bytes], { type: mimeType });
+  return readNaiImageResponse(response);
 }
 
 
