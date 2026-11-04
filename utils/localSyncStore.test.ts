@@ -347,11 +347,19 @@ describe('local-first sync outbox', () => {
     it('purges queued note content and conflict snapshots when the user disables sync', async () => {
         await setSyncPreference('room_note', true, 'text');
         await enqueueRoomNoteSyncEvent(note, 'create');
-        await persistInboxEvents([{
-            eventId: 'opt-out-conflict-event', serverSequence: 21, entityType: 'room_note',
-            entityId: note.id, operation: 'update', entityVersion: 2,
-            payload: { ...note, content: '另一台设备的副本' },
-        }]);
+        await persistInboxEvents([
+            {
+                eventId: 'opt-out-conflict-event', serverSequence: 21, entityType: 'room_note',
+                entityId: note.id, operation: 'update', entityVersion: 2,
+                payload: { ...note, content: '另一台设备的副本' },
+            },
+            {
+                eventId: 'opt-out-applied-event', serverSequence: 22, entityType: 'room_note',
+                entityId: note.id, operation: 'update', entityVersion: 3,
+                payload: { ...note, content: '已经应用过的远端副本' },
+            },
+        ]);
+        await markInboxEventApplied('opt-out-applied-event');
         await recordSyncConflict({
             conflictId: 'opt-out-conflict', entityType: 'room_note', entityId: note.id,
             localVersion: 1, remoteVersion: 2,
