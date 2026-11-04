@@ -1445,7 +1445,7 @@ const Settings: React.FC = () => {
     setStatusMsg('正在连接...');
     try {
         const isOpenCodeGo = isOpenCodeGoEndpoint(baseUrl);
-        const modelsUrl = isOpenCodeGo ? 'https://opencode.ai/inference/go/v1/models' : `${baseUrl}/models`;
+        const modelsUrl = `${baseUrl}/models`;
         const requestOptions = { method: 'GET', headers: buildApiRequestHeaders(apiKey, localCustomHeaders, { baseUrl, sessionId: 'sullyos-model-list' }) };
         const response = isOpenCodeGo ? await fetchOpenCodeGo(modelsUrl, requestOptions) : await fetchLlm(modelsUrl, requestOptions);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
