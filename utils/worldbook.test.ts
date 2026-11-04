@@ -104,6 +104,72 @@ describe('standard worldbook import', () => {
         });
     });
 
+    it('imports SillyTavern world_info wrappers and keeps the entry activation settings', () => {
+        const imported = parseStandardWorldbook(JSON.stringify({
+            name: '酒馆世界书',
+            world_info: {
+                entries: [
+                    {
+                        uid: 12,
+                        comment: '夜间规则',
+                        content: '夜晚十点后街道关闭。',
+                        key: ['夜晚', '十点'],
+                        keysecondary: ['街道'],
+                        constant: false,
+                        selective: true,
+                        selectiveLogic: 3,
+                        order: 35,
+                        position: 4,
+                        depth: 2,
+                        role: 2,
+                        disable: false,
+                        probability: 65,
+                        useProbability: true,
+                        scanDepth: 8,
+                        caseSensitive: true,
+                        matchWholeWords: true,
+                    },
+                ],
+            },
+        }), '酒馆导入', 4321);
+
+        expect(imported).toHaveLength(1);
+        expect(imported[0]).toMatchObject({
+            title: '夜间规则',
+            content: '夜晚十点后街道关闭。',
+            category: '酒馆导入',
+            key: ['夜晚', '十点'],
+            keysecondary: ['街道'],
+            constant: false,
+            selective: true,
+            selectiveLogic: 3,
+            order: 35,
+            position: 4,
+            depth: 2,
+            role: 2,
+            probability: 65,
+            useProbability: true,
+            scanDepth: 8,
+            caseSensitive: true,
+            matchWholeWords: true,
+            sourceUid: 12,
+        });
+    });
+
+    it('accepts a plain entry array and does not turn a missing UID into zero', () => {
+        const imported = parseStandardWorldbook(JSON.stringify([
+            { comment: '无 UID 条目', content: '内容', key: ['测试'], keysecondary: ['辅助'] },
+        ]), '数组导入', 987);
+
+        expect(imported).toHaveLength(1);
+        expect(imported[0]).toMatchObject({
+            title: '无 UID 条目',
+            sourceUid: 0,
+            selective: true,
+            constant: false,
+        });
+    });
+
     it('exports a whole group as a standard worldbook that can be imported again', () => {
         const source = [{
             ...book({
