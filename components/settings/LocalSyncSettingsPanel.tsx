@@ -13,7 +13,7 @@ import {
     type LocalSyncConflict,
     type SyncQueueSummary,
 } from '../../utils/localSyncStore';
-import { pairCompanionDevice, syncCompanionOnce, disconnectCompanionDevice, setCompanionRemoteSyncPolicy } from '../../utils/companionSyncClient';
+import { pairCompanionDevice, syncCompanionOnce, disconnectCompanionDevice, setCompanionRemoteSyncPolicy, hasCompanionDeviceToken } from '../../utils/companionSyncClient';
 import { isPersistentSecureStorageAvailable } from '../../utils/androidSecureStorage';
 
 const SYNC_LABELS = [{ entityType: 'room_note' as const, label: '房间便签', detail: '只允许同步便签文字，不包含关联聊天或附件。' }];
@@ -23,6 +23,7 @@ export default function LocalSyncSettingsPanel() {
     const [localDeviceId, setLocalDeviceId] = useState('');
     const [deviceLabel, setDeviceLabel] = useState('这台手机');
     const [connection, setConnection] = useState<CompanionSyncConnection | null>(null);
+    const [tokenAvailable, setTokenAvailable] = useState(false);
     const [serverUrl, setServerUrl] = useState('');
     const [pairingCode, setPairingCode] = useState('');
     const [syncBusy, setSyncBusy] = useState(false);
@@ -38,17 +39,19 @@ export default function LocalSyncSettingsPanel() {
     const refresh = useCallback(async () => {
         try {
             await recoverStaleInFlightSyncEvents();
-            const [preference, summary, unresolved, identity, savedConnection] = await Promise.all([
+            const [preference, summary, unresolved, identity, savedConnection, hasToken] = await Promise.all([
                 getSyncPreference('room_note'),
                 getSyncQueueSummary(),
                 listUnresolvedSyncConflicts(),
                 getOrCreateLocalSyncDeviceIdentity(),
                 getCompanionSyncConnection(),
+                hasCompanionDeviceToken(),
             ]);
             setEnabled(preference.enabled && preference.mode === 'text');
             setLocalDeviceId(identity.deviceId);
             setDeviceLabel(identity.label || '这台手机');
             setConnection(savedConnection);
+            setTokenAvailable(hasToken);
 
             setQueue(summary);
             setConflicts(unresolved);
@@ -114,8 +117,21 @@ export default function LocalSyncSettingsPanel() {
                             <p className="mt-1 text-[10px] text-slate-400">设备：{connection.label} · {connection.serverDeviceId.slice(0, 8)}</p>
                         </div>
                         {!isPersistentSecureStorageAvailable() && <p className="text-[10px] leading-relaxed text-amber-700">当前是浏览器预览环境，令牌只保存在当前页面内存，刷新后需要重新配对。正式 APK 会使用 Android Keystore。</p>}
+                        {connection && !tokenAvailable && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                            <p className="text-[11px] font-semibold text-amber-800">设备凭据不可用，需要重新配对</p>
+                            <p className="mt-1 text-[10px] leading-relaxed text-amber-700">可能是浏览器预览刷新、重装或系统恢复导致。原始便签不会受影响。</p>
+                            <button type="button" disabled={syncBusy} onClick={async () => {
+                                setSyncBusy(true);
+                                try {
+                                    await disconnectCompanionDevice(false);
+                                    setSyncStatus('已清除失效的本地配对信息，可以重新输入配对码。');
+                                    await refresh();
+                                } catch { setError('清除本地配对信息失败。'); }
+                                finally { setSyncBusy(false); }
+                            }} className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-[10px] font-semibold text-amber-800">清除失效配对</button>
+                        </div>}
                         <div className="flex gap-2">
-                            <button type="button" disabled={!enabled || syncBusy} onClick={async () => {
+                            <button type="button" disabled={!enabled || syncBusy || !tokenAvailable} onClick={async () => {
                                 setSyncBusy(true);
                                 setError('');
                                 setSyncStatus('正在上传并接收便签…');
