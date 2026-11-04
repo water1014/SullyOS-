@@ -1,14 +1,24 @@
 {
-  "buildCommand": "vite build",
+  "buildCommand": "pnpm build",
   "outputDirectory": "dist",
   "headers": [
     {
       "source": "/recover.html",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
     },
     {
       "source": "/startup-recovery.js",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
     },
     {
       "source": "/(.*)",
