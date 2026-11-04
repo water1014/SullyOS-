@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
   [string]$WrapperRoot = 'D:\CHICK\CHICK2',
-  [switch]$SkipAndroidBuild
+  [switch]$BuildDebugApk
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,7 +31,7 @@ if (-not (Test-Path -LiteralPath $targetDist)) {
 $sourceDist = (Resolve-Path -LiteralPath $sourceDist).Path
 $targetDist = (Resolve-Path -LiteralPath $targetDist).Path
 $expectedTarget = [IO.Path]::GetFullPath((Join-Path $wrapperRoot 'dist'))
-if ($targetDist -ne $expectedTarget -or -not $targetDist.StartsWith($wrapperRoot + '\')) {
+if ($targetDist -ne $expectedTarget -or -not $targetDist.StartsWith($wrapperRoot + '\\')) {
   throw "Refusing to replace an unexpected directory: $targetDist"
 }
 
@@ -58,8 +58,9 @@ try {
   Pop-Location
 }
 
-if ($SkipAndroidBuild) {
-  Write-Host 'Capacitor sync complete (Android build skipped).'
+if (-not $BuildDebugApk) {
+  Write-Host 'Capacitor sync complete. APK compilation was intentionally skipped.'
+  Write-Host 'Only during the final packaging phase, pass -BuildDebugApk to compile a debug APK.'
   exit 0
 }
 
