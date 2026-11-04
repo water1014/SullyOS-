@@ -327,6 +327,9 @@ const ProactiveSettingsModal: React.FC<ProactiveSettingsModalProps> = ({
                                         </button>
                                     ))}
                                 </div>
+                                <p className="text-[10px] leading-relaxed text-slate-400">
+                                    GPT 会优先使用已确认的基础形象图作为参考；NAI 当前使用形象文字锚点，参考图适配仍待补齐。
+                                </p>
                             </div>
 
                             <div className="flex items-center justify-between gap-4">
