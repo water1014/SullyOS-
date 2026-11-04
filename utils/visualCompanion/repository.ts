@@ -184,12 +184,28 @@ export const visualCompanionRepository = {
         return writeOne(STORE.assets, record);
     },
     deleteAsset: async (id: string) => {
-        const current = await readOne<VisualAssetRecord>(STORE.assets, id);
-        if (!current) return;
-        if (current.privacyScope === 'private') {
-            throw new Error('私密资产必须先通过私密保险库完成加密销毁，不能直接删除元数据');
-        }
-        await removeOne(STORE.assets, id);
+        assertRecordId(id, STORE.assets);
+        const db = await openDB();
+        const tx = db.transaction(STORE.assets, 'readwrite');
+        const store = tx.objectStore(STORE.assets);
+        const request = store.get(id);
+        const privateDeleteError = '私密资产必须先通过私密保险库完成加密销毁，不能直接删除元数据';
+        const result = await new Promise<void>((resolve, reject) => {
+            request.onsuccess = () => {
+                const current = request.result as VisualAssetRecord | undefined;
+                if (current?.privacyScope === 'private') {
+                    try { tx.abort(); } catch { /* transaction may already be aborting */ }
+                    reject(new Error(privateDeleteError));
+                    return;
+                }
+                if (current) store.delete(id);
+            };
+            request.onerror = () => reject(request.error || new Error('读取视觉资产失败'));
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error || new Error('删除视觉资产失败'));
+            tx.onabort = () => reject(tx.error?.message === privateDeleteError ? tx.error : new Error('删除视觉资产已中止'));
+        });
+        return result;
     },
 };
 
