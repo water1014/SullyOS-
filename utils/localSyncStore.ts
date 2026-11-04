@@ -200,3 +200,161 @@ export async function getSyncQueueSummary(): Promise<SyncQueueSummary> {
     await done;
     return { pending, inFlight, blocked };
 }
+
+
+export interface LocalSyncInboxEvent {
+    eventId: string;
+    serverSequence: number;
+    entityType: SyncEntityType;
+    entityId: string;
+    operation: SyncOperation;
+    entityVersion: number;
+    payload: Record<string, unknown>;
+    receivedAt: number;
+    appliedAt?: number;
+    applyState: 'pending' | 'applied' | 'blocked';
+}
+
+export interface SyncCursorState {
+    id: string;
+    accountId: string;
+    deviceId: string;
+    lastPulledSequence: number;
+    lastAckedSequence: number;
+    lastSuccessfulSyncAt: number | null;
+    lastErrorCode?: string;
+    updatedAt: number;
+}
+
+export interface LocalSyncConflict {
+    conflictId: string;
+    entityType: SyncEntityType;
+    entityId: string;
+    localVersion: number;
+    remoteVersion: number;
+    localSnapshotRef?: string;
+    remoteSnapshotRef?: string;
+    detectedAt: number;
+    resolutionState: 'unresolved' | 'keep_local' | 'keep_remote' | 'merged';
+}
+
+const INBOX = 'sync_inbox';
+const SYNC_STATE = 'sync_state';
+const CONFLICTS = 'sync_conflicts';
+
+export async function getSyncPreferences(): Promise<SyncPreference[]> {
+    const db = await openDB();
+    const tx = db.transaction(PREFERENCES, 'readonly');
+    const done = transactionDone(tx);
+    const records = await requestResult(tx.objectStore(PREFERENCES).getAll()) as SyncPreference[];
+    await done;
+    return records;
+}
+
+export async function persistInboxEvents(events: Omit<LocalSyncInboxEvent, 'receivedAt' | 'applyState'>[]): Promise<number> {
+    if (events.length === 0) return 0;
+    const db = await openDB();
+    const tx = db.transaction(INBOX, 'readwrite');
+    const done = transactionDone(tx);
+    const store = tx.objectStore(INBOX);
+    let inserted = 0;
+    for (const event of events) {
+        if (!Number.isSafeInteger(event.serverSequence) || event.serverSequence < 1) {
+            tx.abort();
+            throw new Error('INVALID_SERVER_SEQUENCE');
+        }
+        const existing = await requestResult(store.get(event.eventId)) as LocalSyncInboxEvent | undefined;
+        if (!existing) {
+            store.add({ ...event, receivedAt: Date.now(), applyState: 'pending' } satisfies LocalSyncInboxEvent);
+            inserted += 1;
+        }
+    }
+    await done;
+    return inserted;
+}
+
+export async function listPendingInboxEvents(limit = 50): Promise<LocalSyncInboxEvent[]> {
+    const db = await openDB();
+    const tx = db.transaction(INBOX, 'readonly');
+    const done = transactionDone(tx);
+    const events = await requestResult(tx.objectStore(INBOX).index('applyState').getAll('pending')) as LocalSyncInboxEvent[];
+    await done;
+    return events.sort((a, b) => a.serverSequence - b.serverSequence).slice(0, Math.max(1, limit));
+}
+
+export async function markInboxEventApplied(eventId: string): Promise<void> {
+    const db = await openDB();
+    const tx = db.transaction(INBOX, 'readwrite');
+    const done = transactionDone(tx);
+    const store = tx.objectStore(INBOX);
+    const current = await requestResult(store.get(eventId)) as LocalSyncInboxEvent | undefined;
+    if (!current) throw new Error('INBOX_EVENT_NOT_FOUND');
+    store.put({ ...current, applyState: 'applied', appliedAt: Date.now() });
+    await done;
+}
+
+export async function getSyncCursorState(accountId: string, deviceId: string): Promise<SyncCursorState> {
+    const id = `${accountId}:${deviceId}`;
+    const db = await openDB();
+    const tx = db.transaction(SYNC_STATE, 'readonly');
+    const done = transactionDone(tx);
+    const stored = await requestResult(tx.objectStore(SYNC_STATE).get(id)) as SyncCursorState | undefined;
+    await done;
+    return stored ?? { id, accountId, deviceId, lastPulledSequence: 0, lastAckedSequence: 0, lastSuccessfulSyncAt: null, updatedAt: 0 };
+}
+
+export async function updateSyncCursorState(
+    accountId: string,
+    deviceId: string,
+    patch: Partial<Pick<SyncCursorState, 'lastPulledSequence' | 'lastAckedSequence' | 'lastSuccessfulSyncAt' | 'lastErrorCode'>>
+): Promise<SyncCursorState> {
+    const current = await getSyncCursorState(accountId, deviceId);
+    const next: SyncCursorState = {
+        ...current, ...patch,
+        lastPulledSequence: Math.max(current.lastPulledSequence, patch.lastPulledSequence ?? 0),
+        lastAckedSequence: Math.max(current.lastAckedSequence, patch.lastAckedSequence ?? 0),
+        lastErrorCode: patch.lastErrorCode?.slice(0, 80),
+        updatedAt: Date.now(),
+    };
+    const db = await openDB();
+    const tx = db.transaction(SYNC_STATE, 'readwrite');
+    const done = transactionDone(tx);
+    tx.objectStore(SYNC_STATE).put(next);
+    await done;
+    return next;
+}
+
+export async function recordSyncConflict(
+    conflict: Omit<LocalSyncConflict, 'detectedAt' | 'resolutionState'> & { detectedAt?: number }
+): Promise<LocalSyncConflict> {
+    const record: LocalSyncConflict = { ...conflict, detectedAt: conflict.detectedAt ?? Date.now(), resolutionState: 'unresolved' };
+    const db = await openDB();
+    const tx = db.transaction(CONFLICTS, 'readwrite');
+    const done = transactionDone(tx);
+    tx.objectStore(CONFLICTS).put(record);
+    await done;
+    return record;
+}
+
+export async function listUnresolvedSyncConflicts(): Promise<LocalSyncConflict[]> {
+    const db = await openDB();
+    const tx = db.transaction(CONFLICTS, 'readonly');
+    const done = transactionDone(tx);
+    const records = await requestResult(tx.objectStore(CONFLICTS).index('resolutionState').getAll('unresolved')) as LocalSyncConflict[];
+    await done;
+    return records.sort((a, b) => a.detectedAt - b.detectedAt);
+}
+
+export async function resolveSyncConflict(
+    conflictId: string,
+    resolutionState: Exclude<LocalSyncConflict['resolutionState'], 'unresolved'>
+): Promise<void> {
+    const db = await openDB();
+    const tx = db.transaction(CONFLICTS, 'readwrite');
+    const done = transactionDone(tx);
+    const store = tx.objectStore(CONFLICTS);
+    const current = await requestResult(store.get(conflictId)) as LocalSyncConflict | undefined;
+    if (!current) throw new Error('SYNC_CONFLICT_NOT_FOUND');
+    store.put({ ...current, resolutionState });
+    await done;
+}

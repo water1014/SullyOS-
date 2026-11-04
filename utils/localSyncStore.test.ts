@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { DB, openDB } from './db';
 import {
     enqueueRoomNoteSyncEvent,
+    persistInboxEvents,
+    listPendingInboxEvents,
+    markInboxEventApplied,
+    updateSyncCursorState,
+    recordSyncConflict,
+    listUnresolvedSyncConflicts,
+    resolveSyncConflict,
     getSyncPreference,
     getSyncQueueSummary,
     listPendingSyncEvents,
@@ -61,6 +68,31 @@ describe('local-first sync outbox', () => {
             request.onerror = () => reject(request.error);
         });
         expect(preserved).toMatchObject({ id: 'legacy-note', content: '保留这条旧便签' });
+    });
+
+
+    it('persists inbox events idempotently and orders them by server sequence', async () => {
+        const incoming = [
+            { eventId: 'remote-2', serverSequence: 2, entityType: 'room_note' as const, entityId: 'n2', operation: 'create' as const, entityVersion: 1, payload: { content: 'second' } },
+            { eventId: 'remote-1', serverSequence: 1, entityType: 'room_note' as const, entityId: 'n1', operation: 'create' as const, entityVersion: 1, payload: { content: 'first' } },
+        ];
+        expect(await persistInboxEvents(incoming)).toBe(2);
+        expect(await persistInboxEvents(incoming)).toBe(0);
+        expect((await listPendingInboxEvents()).map(event => event.eventId)).toEqual(['remote-1', 'remote-2']);
+        await markInboxEventApplied('remote-1');
+        expect((await listPendingInboxEvents()).map(event => event.eventId)).toEqual(['remote-2']);
+    });
+
+    it('keeps cursors monotonic and records resolvable conflicts', async () => {
+        const first = await updateSyncCursorState('account-1', 'device-1', { lastPulledSequence: 10, lastAckedSequence: 8 });
+        const stale = await updateSyncCursorState('account-1', 'device-1', { lastPulledSequence: 4, lastAckedSequence: 3 });
+        expect(first.lastPulledSequence).toBe(10);
+        expect(stale.lastPulledSequence).toBe(10);
+        expect(stale.lastAckedSequence).toBe(8);
+        await recordSyncConflict({ conflictId: 'conflict-1', entityType: 'room_note', entityId: 'note-1', localVersion: 2, remoteVersion: 3 });
+        expect(await listUnresolvedSyncConflicts()).toHaveLength(1);
+        await resolveSyncConflict('conflict-1', 'keep_local');
+        expect(await listUnresolvedSyncConflicts()).toHaveLength(0);
     });
 
     it('defaults to local-only and does not queue without explicit opt-in', async () => {
