@@ -7,7 +7,7 @@
 - 分支：`feature/image-studio`；正式分支：`master`。
 - `utils/db.ts` 当前声明 `DB_VERSION = 75`，数据库名为 `AetherOS_Data`。v75 新增 6 个视觉相关 Store，不改写聊天、旧画廊或原 Blob 数据。
 - 已有 `blob_assets`，通用 BlobRef 令牌为 `blobref:<id>`，新生成 ID 使用 `b_` 前缀。
-- `utils/blobGc.ts` 当前的引用白名单是 18 个 Object Store（不是数据库总 Store 数），并扫描 localStorage 全量值。
+- `utils/blobGc.ts` 当前的引用白名单是 19 个 Object Store（不是数据库总 Store 数），并扫描 localStorage 全量值。
 - `utils/backupBlobs.ts` 已有 v3 Blob 旁路备份：JSON 保留令牌，二进制写入 `blobs/<id>`，索引为 `blobs/index.json`。
 - 旧生图室仍独立使用 `image-studio:studio_*` 资产 ID、`blob_assets` 二进制及 localStorage 画廊索引；不能把旧 ID 当成 `blobref:` 令牌。
 - `DB.saveMessageOnce(deliveryId, message)` 已存在，可作为主动图片消息投递的幂等入口。
@@ -36,6 +36,7 @@
 | `visual_projects` | `id` | `charId`, `charId_status` | 写真企划和分镜 |
 | `visual_task_mirror` | `id` | `charId`, `status`, `updatedAt` | 云端任务的本地镜像/恢复游标 |
 | `visual_assets` | `id` | `charId`, `privacyScope`, `taskId`, `projectId` | 资产元数据，不存二进制 |
+| `private_visual_blobs` | `id` | `charId`, `createdAt` | 私密加密二进制容器，独立于普通 Blob GC/备份 |
 
 私密二进制不复用普通 `blob_assets` 的 GC 生命周期，v75 已预留独立 `private_visual_blobs` Store；实际写入前仍须实现加密容器，并单独定义访问、备份、清理和恢复流程。若选择云端 R2 私密桶，必须使用服务端授权短时访问，不生成永久公开 URL。
 
