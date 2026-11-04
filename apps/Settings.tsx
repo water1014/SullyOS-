@@ -68,6 +68,8 @@ import {
     type AvatarModelBackupProgress,
 } from '../utils/avatarModelBackup';
 import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel, normalizeApiHeaders, buildApiRequestHeaders, isOpenCodeGoEndpoint } from '../utils/apiConfigNormalize';
+import { normalizeLlmBaseUrl } from '../utils/llmEndpoint';
+import { fetchOpenCodeGo } from '../utils/openCodeGoTransport';
 import { configFromPreset, findActivePresetId, presetDiffersFromConfig, type PresetSwitchPatch } from '../utils/apiPresetSwitch';
 import type { APIConfig, TtsProvider, SttProvider } from '../types';
 import {
