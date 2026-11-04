@@ -1,11 +1,11 @@
 # 宋祁视觉人格系统 · P1 数据层规格
 
-> 状态：第一阶段规格落档。本文和领域类型先进入 `feature/image-studio`；此提交不创建数据库、不迁移用户数据、不触碰 Worker 生产环境。
+> 状态：P1 本地数据层第一批已实现。`feature/image-studio` 已加入 v75 IndexedDB 增量建表、标准视觉数据备份/恢复隔离和 GC 引用保护；尚未进行真实浏览器迁移验收，不触碰 Worker 生产环境。
 
 ## 1. 本次源码核验基线
 
 - 分支：`feature/image-studio`；正式分支：`master`。
-- `utils/db.ts` 当前声明 `DB_VERSION = 74`，数据库名为 `AetherOS_Data`。
+- `utils/db.ts` 当前声明 `DB_VERSION = 75`，数据库名为 `AetherOS_Data`。v75 新增 6 个视觉相关 Store，不改写聊天、旧画廊或原 Blob 数据。
 - 已有 `blob_assets`，通用 BlobRef 令牌为 `blobref:<id>`，新生成 ID 使用 `b_` 前缀。
 - `utils/blobGc.ts` 当前的引用白名单是 18 个 Object Store（不是数据库总 Store 数），并扫描 localStorage 全量值。
 - `utils/backupBlobs.ts` 已有 v3 Blob 旁路备份：JSON 保留令牌，二进制写入 `blobs/<id>`，索引为 `blobs/index.json`。
@@ -25,9 +25,9 @@
 
 **隐私隔离必须是存储边界，不只是 UI 标签。** 私密资产不进入普通画廊、标准 Blob GC、标准导出包、普通消息预览缓存或公共 URL。私密图片的密钥版本和加密元数据与资产记录绑定；任何密钥缺失/解密失败都应 fail closed，不回退到明文。
 
-## 3. 本地 IndexedDB Store 候选
+## 3. 本地 IndexedDB Store（v75 已建表）
 
-当前 DB 版本为 74，后续若确认迁移仍从 74 开始，可把 v75 作为候选版本；开发前必须重新读取分支头和 `DB_VERSION`，不能硬编码假设。
+本次 v75 迁移只在 `onupgradeneeded` 中按 Store/索引存在性增量创建；没有 clear/delete 既有 Store，也没有改写现有记录。实际用户浏览器升级仍须经过回归验收。
 
 | Store | KeyPath | 关键索引 | 用途 |
 |---|---|---|---|
@@ -37,7 +37,7 @@
 | `visual_task_mirror` | `id` | `charId`, `status`, `updatedAt` | 云端任务的本地镜像/恢复游标 |
 | `visual_assets` | `id` | `charId`, `privacyScope`, `taskId`, `projectId` | 资产元数据，不存二进制 |
 
-私密二进制不复用普通 `blob_assets` 的 GC 生命周期。应采用独立的 `private_visual_blobs` 存储或等效加密容器，并单独定义访问、备份、清理和恢复流程。若选择云端 R2 私密桶，必须使用服务端授权短时访问，不生成永久公开 URL。
+私密二进制不复用普通 `blob_assets` 的 GC 生命周期，v75 已预留独立 `private_visual_blobs` Store；实际写入前仍须实现加密容器，并单独定义访问、备份、清理和恢复流程。若选择云端 R2 私密桶，必须使用服务端授权短时访问，不生成永久公开 URL。
 
 ## 4. 云端 D1 任务表候选
 
@@ -91,7 +91,7 @@
 
 新增任何可能存放 `blobref:` 的字段或 Store，必须同时更新并测试：
 
-- `utils/blobGc.ts` 的 `REF_SOURCE_STORES` 与 `iterateRefSources()`。
+- `utils/blobGc.ts` 的 `REF_SOURCE_STORES` 与 `iterateRefSources()`。已把 `visual_assets` 纳入普通引用扫描，防止标准资产的 `blobref:` 被误判为孤儿；`private_visual_blobs` 不进入普通 GC。
 - `utils/blobDedupe.ts` 的引用改写/不可合并引用检查。
 - `utils/backupBlobs.ts` 所依赖的序列化收集路径。
 - 全量备份导出和恢复流程（`utils/db.ts`）。
@@ -121,4 +121,4 @@
 
 ## 10. 本阶段不做
 
-不改 Worker 生产部署、不创建 R2 桶、不新增实际 D1 表、不执行 v75 迁移、不搬运/删除旧图片、不把私密图片接入普通画廊。以上需要任务层与安全层规格完成后，再逐项开发和测试。
+不改 Worker 生产部署、不创建 R2 桶、不新增实际 D1 表、不搬运/删除旧图片、不把私密图片接入普通画廊。v75 代码迁移已加入分支，但在真实浏览器、旧库和备份恢复测试通过前，不应视为已完成用户侧升级验收。
