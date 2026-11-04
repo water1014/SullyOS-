@@ -61,6 +61,9 @@ const AndroidUpdateControl: React.FC = () => {
           {message}
         </p>
       )}
+      <p className="max-w-[280px] text-center text-[10px] leading-relaxed text-amber-600">
+        更新通常会保留应用数据，但不能替代备份。重要更新前，请先导出完整备份并另存到手机以外。
+      </p>
       {phase === 'available' && manifest?.releaseNotes.length ? (
         <ul className="max-w-[300px] list-disc space-y-0.5 pl-5 text-left text-[9px] leading-relaxed text-slate-400">
           {manifest.releaseNotes.map((note, index) => <li key={`${index}-${note}`}>{note}</li>)}
