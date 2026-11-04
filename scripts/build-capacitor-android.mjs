@@ -28,7 +28,8 @@ async function main() {
 
   run(pnpmCommand, ['run', 'build:chat-preview']);
   run(pnpmCommand, ['run', 'build:workers']);
-  // Personal Android APK: hide the branch badge and its floating developer wrench.\n  run(pnpmCommand, ['exec', 'vite', 'build', '--mode', 'capacitor'], root, { VITE_HIDE_BUILD_BADGE: '1' });
+  // Personal Android APK: hide the branch badge and its floating developer wrench.
+  run(pnpmCommand, ['exec', 'vite', 'build', '--mode', 'capacitor'], root, { VITE_HIDE_BUILD_BADGE: '1' });
 
   if (!existsSync(androidApp)) {
     if (existsSync(androidRoot)) {
