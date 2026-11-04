@@ -2872,7 +2872,7 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
 
                 const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                     method: 'POST',
-                    headers: buildApiRequestHeaders(apiConfig.apiKey, apiConfig.customHeaders),
+                    headers: buildApiRequestHeaders(apiConfig.apiKey, apiConfig.customHeaders, { baseUrl: apiConfig.baseUrl, sessionId: char.id }),
                     body: JSON.stringify({
                         model: apiConfig.model,
                         messages: [{ role: "user", content: prompt }],
