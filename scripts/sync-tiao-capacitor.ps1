@@ -57,13 +57,37 @@ if ($sourceBridgeCount -ne 1) {
   throw "Expected one native AMSG bridge bundle in the source build, found $sourceBridgeCount. Existing wrapper assets were not changed."
 }
 
-Write-Host '[2/4] Replacing only CHICK2/dist...'
-Get-ChildItem -LiteralPath $targetDist -Force | Remove-Item -Recurse -Force
-Get-ChildItem -LiteralPath $sourceDist -Force | Copy-Item -Destination $targetDist -Recurse -Force
+Write-Host '[2/4] Staging a verified replacement for CHICK2/dist...'
+$stagingDist = Join-Path $wrapperRoot 'dist.sullyos-staging'
+$backupDist = Join-Path $wrapperRoot 'dist.sullyos-previous'
+foreach ($candidatePath in @($stagingDist, $backupDist)) {
+  if (Test-Path -LiteralPath $candidatePath) {
+    Remove-Item -LiteralPath $candidatePath -Recurse -Force
+  }
+}
+New-Item -ItemType Directory -Path $stagingDist | Out-Null
+try {
+  Get-ChildItem -LiteralPath $sourceDist -Force | Copy-Item -Destination $stagingDist -Recurse -Force
+  $stagedBridgeCount = @(Get-ChildItem -LiteralPath (Join-Path $stagingDist 'assets') -Filter 'nativeAmsgPush-*.js').Count
+  if ($stagedBridgeCount -ne 1) {
+    throw "Expected one native AMSG bridge bundle in staged output, found $stagedBridgeCount"
+  }
 
-$targetBridgeCount = @(Get-ChildItem -LiteralPath (Join-Path $targetDist 'assets') -Filter 'nativeAmsgPush-*.js').Count
-if ($targetBridgeCount -ne 1) {
-  throw "Expected one native AMSG bridge bundle after copy, found $targetBridgeCount"
+  Move-Item -LiteralPath $targetDist -Destination $backupDist
+  try {
+    Move-Item -LiteralPath $stagingDist -Destination $targetDist
+  } catch {
+    if (-not (Test-Path -LiteralPath $targetDist) -and (Test-Path -LiteralPath $backupDist)) {
+      Move-Item -LiteralPath $backupDist -Destination $targetDist
+    }
+    throw
+  }
+  Remove-Item -LiteralPath $backupDist -Recurse -Force
+} catch {
+  if (Test-Path -LiteralPath $stagingDist) {
+    Remove-Item -LiteralPath $stagingDist -Recurse -Force
+  }
+  throw
 }
 
 Write-Host '[3/4] Syncing Capacitor Android plugins and assets...'
