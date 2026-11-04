@@ -36,6 +36,14 @@ export interface SyncQueueSummary {
 
 const OUTBOX = 'sync_outbox';
 const PREFERENCES = 'sync_preferences';
+const SYNC_RETRY_BASE_MS = 5_000;
+const SYNC_RETRY_MAX_MS = 15 * 60 * 1000;
+
+function nextSyncRetryAt(attemptCount: number, now = Date.now()): number {
+    const exponent = Math.max(0, Math.min(8, attemptCount - 1));
+    const delay = Math.min(SYNC_RETRY_BASE_MS * (2 ** exponent), SYNC_RETRY_MAX_MS);
+    return now + delay;
+}
 
 function createEventId(): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -185,7 +193,11 @@ export async function listPendingSyncEvents(limit = 50): Promise<LocalSyncEvent[
     const index = tx.objectStore(OUTBOX).index('state');
     const events = await requestResult(index.getAll('pending')) as LocalSyncEvent[];
     await done;
-    return events.sort((a, b) => a.createdAt - b.createdAt).slice(0, Math.max(1, limit));
+    const now = Date.now();
+    return events
+        .filter(event => typeof event.retryAt !== 'number' || event.retryAt <= now)
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .slice(0, Math.max(1, limit));
 }
 
 export async function updateSyncEventState(
@@ -207,7 +219,9 @@ export async function updateSyncEventState(
         ...current,
         state,
         attemptCount: state === 'in_flight' ? current.attemptCount + 1 : current.attemptCount,
-        retryAt: state === 'pending' ? now : current.retryAt,
+        retryAt: state === 'pending'
+            ? (errorCode ? nextSyncRetryAt(current.attemptCount, now) : now)
+            : current.retryAt,
         inFlightAt: state === 'in_flight' ? now : undefined,
         lastErrorCode: errorCode ? errorCode.slice(0, 80) : undefined,
     });
@@ -234,7 +248,7 @@ export async function recoverStaleInFlightSyncEvents(maxAgeMs = 2 * 60 * 1000): 
         store.put({
             ...event,
             state: 'pending',
-            retryAt: Date.now(),
+            retryAt: nextSyncRetryAt(event.attemptCount),
             inFlightAt: undefined,
             lastErrorCode: 'INTERRUPTED_REQUEST',
         });
