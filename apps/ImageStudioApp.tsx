@@ -659,8 +659,8 @@ const ImageStudioApp: React.FC = () => {
             <input className="field" value={config.gpt.baseUrl} onChange={event => updateGpt({baseUrl:event.target.value})} placeholder="https://api.openai.com/v1"/>
             <label className="block text-xs font-semibold text-slate-600">API Key</label>
             <input className="field" type="password" autoComplete="off" value={config.gpt.apiKey} onChange={event => updateGpt({apiKey:event.target.value})} placeholder="sk-..."/>
-            <label className="block text-xs font-semibold text-slate-600">图片模型</label>
-            <select className="field" value={config.gpt.model} onChange={event => updateGpt({model:event.target.value})}><option value="gpt-image-2.5-flare">gpt-image-2.5-flare</option><option value="gpt-image-2.5-sunburst">gpt-image-2.5-sunburst</option><option value="gpt-image-2">gpt-image-2</option><option value="gpt-image-1.5">gpt-image-1.5</option></select>
+            <label className="block text-xs font-semibold text-slate-600">图片模型名称</label>
+            <input className="field" value={config.gpt.model} onChange={event => updateGpt({model:event.target.value})} placeholder="填写服务商支持的图片模型，例如 gpt-image-1"/>
             <p className="text-[10px] text-slate-400 leading-5">GPT API Key 保存在当前设备浏览器的本地存储中，不会上传到糯米机服务器。请勿在公共设备上保存密钥。</p>
           </section>
           <section className="glass rounded-[24px] p-4 space-y-3">
@@ -678,7 +678,11 @@ const ImageStudioApp: React.FC = () => {
             <label className="block text-xs font-semibold text-slate-600">{config.nai.provider === 'official' ? 'NovelAI Persistent Token' : '第三方 API Token'}</label>
             <input className="field" type="password" autoComplete="off" value={config.nai.apiKey} onChange={event => updateNai({apiKey:event.target.value})} placeholder={config.nai.provider === 'official' ? 'pst-...' : '填写服务商提供的 Token'}/>
             <label className="block text-xs font-semibold text-slate-600">图片模型</label>
-            <select className="field" value={config.nai.model} onChange={event => updateNai({model:event.target.value})}><option value="nai-diffusion-5-full">NovelAI Diffusion V5 Full</option><option value="nai-diffusion-5-curated">NovelAI Diffusion V5 Curated</option><option value="nai-diffusion-4-5-full">NovelAI Diffusion V4.5 Full</option><option value="nai-diffusion-4-5-curated">NovelAI Diffusion V4.5 Curated</option></select>
+            {config.nai.provider === 'official' ? (
+              <select className="field" value={config.nai.model} onChange={event => updateNai({model:event.target.value})}><option value="nai-diffusion-5-full">NovelAI Diffusion V5 Full</option><option value="nai-diffusion-5-curated">NovelAI Diffusion V5 Curated</option><option value="nai-diffusion-4-5-full">NovelAI Diffusion V4.5 Full</option><option value="nai-diffusion-4-5-curated">NovelAI Diffusion V4.5 Curated</option></select>
+            ) : (
+              <input className="field" value={config.nai.model} onChange={event => updateNai({model:event.target.value})} placeholder="填写第三方服务支持的模型 ID"/>
+            )}
             <p className="text-[10px] text-slate-400 leading-5">Token 保存在当前设备浏览器本地存储中，不会写入作品记录。第三方服务的模型名称和参数以服务商实际支持为准。</p>
           </section>
           <div className="rounded-2xl bg-sky-50/80 border border-sky-100 p-3 text-[10px] text-sky-800 leading-5">接口说明：OpenAI 兼容服务需要支持 /images/generations（参考图编辑还需 /images/edits）；NAI 第三方当前按 NovelAI 原生请求协议接入；NAI 官方使用 image.novelai.net。第三方服务是否支持浏览器跨域访问，取决于服务商设置。</div>
