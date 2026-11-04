@@ -4,7 +4,6 @@ import { extractContent, safeFetchJson } from './safeApi';
 import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel, normalizeApiHeaders, buildApiRequestHeaders } from './apiConfigNormalize';
 import { normalizeLlmBaseUrl } from './llmEndpoint';
 import { isBlobRef } from './blobRef';
-import { fetchOpenCodeGo } from './openCodeGoTransport';
 
 export const VISION_DESCRIPTION_METADATA_KEY = 'visionDescription';
 
