@@ -8,7 +8,7 @@ import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
 import { getBlobForRef } from '../utils/blobRef';
 import { visualCompanionRepository } from '../utils/visualCompanion/repository';
-import { mergeCharacterAppearancePrompt } from '../utils/visualCompanion/identityPrompt';
+import { mergeCharacterVisualContextPrompt } from '../utils/visualCompanion/identityPrompt';
 import type { CharacterVisualProfile } from '../utils/visualCompanion/types';
 import {
   generateGptImage, editGptImage, generateNaiImage,
@@ -373,7 +373,10 @@ const ImageStudioApp: React.FC = () => {
       const currentAppearanceProfile = activeCharacterId
         ? await visualCompanionRepository.getProfile('visual_profile_' + encodeURIComponent(activeCharacterId))
         : appearanceProfile;
-      const effectivePrompt = mergeCharacterAppearancePrompt(prompt, currentAppearanceProfile);
+      const visualMemories = activeCharacterId
+        ? await visualCompanionRepository.listMemories(activeCharacterId)
+        : [];
+      const effectivePrompt = mergeCharacterVisualContextPrompt(prompt, currentAppearanceProfile, visualMemories);
       // GPT 生图优先使用用户本次上传的参考图；未上传时回退到角色档案的基础形象图。
       // NAI 保持纯文生图，不把参考图悄悄发送给不支持该流程的接口。
       let effectiveReferenceImage: Blob | File | null = engine === 'gpt' ? referenceImage : null;
