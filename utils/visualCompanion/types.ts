@@ -188,6 +188,7 @@ export interface VisualAutonomySettings {
     enabled: boolean;
     /** 自然适中：日常偶尔分享，特殊情境可提高主动性。 */
     frequency: 'low' | 'natural' | 'high' | 'paused';
+    providerPreference: 'auto' | 'gpt' | 'nai_official' | 'nai_thirdparty';
     allowSpontaneousShare: boolean;
     allowPrivateCreation: boolean;
     requireApprovalForNewIdentity: boolean;
