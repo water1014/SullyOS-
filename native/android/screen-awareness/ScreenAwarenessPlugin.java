@@ -162,8 +162,7 @@ public class ScreenAwarenessPlugin extends Plugin {
 
     @PluginMethod
     public void clearLatestFrame(PluginCall call) {
-        File frame = ScreenAwarenessService.getLatestFrameFile(getContext());
-        boolean deleted = !frame.exists() || frame.delete();
+        boolean deleted = ScreenAwarenessService.clearTemporaryFrames(getContext());
         JSObject result = new JSObject();
         result.put("cleared", deleted);
         call.resolve(result);
