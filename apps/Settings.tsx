@@ -2687,6 +2687,19 @@ const Settings: React.FC = () => {
                     }}
                     fetchModels={fetchModels} isLoadingModels={isLoadingModels} openModelPicker={openModelPicker}
                 />
+                <button
+                    type="button"
+                    onClick={() => {
+                        setLocalUrl('https://opencode.ai/zen/go');
+                        setLocalApiType('openai');
+                        setTestApiResult(null);
+                        setStatusMsg('已填入 OpenCode Go 地址，请确认 Key 和模型后保存');
+                    }}
+                    className="w-full rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-left text-xs font-semibold text-sky-700 active:scale-[0.99]"
+                >
+                    使用 OpenCode Go 订阅
+                    <span className="mt-0.5 block text-[10px] font-normal text-sky-600/80">自动填写 https://opencode.ai/zen/go，保留当前 Key 和自定义请求头</span>
+                </button>
                 {(Object.keys(normalizeApiHeaders(localCustomHeaders)).length > 0 || isOpenCodeGoEndpoint(normalizeLlmBaseUrl(localUrl, localApiType))) && (
                     <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-relaxed text-amber-800">
                         自定义请求头或 OpenCode Go 已启用：前台聊天、模型列表和连接测试会使用本机请求头（Go 会自动附带 x-opencode-session）。当前云端主动消息 2.0 尚不支持自定义请求头 / Go 会话标识，因此不会把这份配置同步到云端；云端排程仍保留此前已同步的凭据。
