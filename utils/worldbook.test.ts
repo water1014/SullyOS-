@@ -170,6 +170,22 @@ describe('standard worldbook import', () => {
         });
     });
 
+    it('uses safe defaults when Tavern exports nullable numeric fields', () => {
+        const imported = parseStandardWorldbook(JSON.stringify({
+            entries: {
+                0: { uid: 3, comment: '默认设置', content: '正文', position: null, depth: null, probability: null },
+            },
+        }), '默认值测试', 55);
+
+        expect(imported[0]).toMatchObject({
+            position: 1,
+            depth: 4,
+            probability: 100,
+            order: 100,
+            constant: false,
+        });
+    });
+
     it('exports a whole group as a standard worldbook that can be imported again', () => {
         const source = [{
             ...book({
