@@ -11,6 +11,7 @@ const syncScript = read('scripts/sync-tiao-capacitor.ps1');
 const update = read('utils/androidAppUpdate.ts');
 const capacitor = JSON.parse(read('capacitor.config.json'));
 const updateManifest = JSON.parse(read('public/sullyos-update.json'));
+const archiveSigner = java.slice(java.indexOf('private String archiveSignerFingerprint'), java.indexOf('private String normalizeSha'));
 const capacitorEnv = read('.env.capacitor');
 const trackedFiles = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' }).split(/\\r?\\n/).filter(Boolean);
 const workflowFiles = trackedFiles.filter((path) => path.startsWith('.github/workflows/') && /\\.ya?ml$/i.test(path));
@@ -23,7 +24,7 @@ const checks = [
   ['APK path is restricted to app cache', java.includes('getCacheDir().getCanonicalPath()') && java.includes('candidate.startsWith(cache)')],
   ['APK digest is checked natively', java.includes('MessageDigest.getInstance("SHA-256")') && java.includes('actualSha.equals(expectedSha)')],
   ['package, signer and monotonic version are checked natively', java.includes('candidate.packageName') && java.includes('candidateSigner.length() != 64') && java.includes('candidateSigner.equals(installedSigner)') && java.includes('packageVersionCode(candidate) <= packageVersionCode(installed)')],
-  ['ambiguous or missing APK signing identities are rejected', java.includes('signatures.length != 1') && java.includes('info.signatures.length != 1') && java.includes('不支持多签名 APK')],
+  ['installed app and candidate APK both require exactly one signing certificate', java.includes('signatures.length != 1') && java.includes('info.signatures.length != 1') && archiveSigner.includes('signatures.length != 1') && archiveSigner.includes('info.signatures.length != 1') && archiveSigner.includes('不支持多签名 APK')],
   ['system installer receives read-only content URI grant', java.includes('FileProvider.getUriForFile') && java.includes('Intent.FLAG_GRANT_READ_URI_PERMISSION')],
   ['FileProvider exposes only verified update cache', pathsXml.includes('<cache-path name="verified_updates" path="verified-updates/" />') && !pathsXml.includes('<root-path') && !pathsXml.includes('<external-path')],
   ['wrapper integration declares install permission', integration.includes('android.permission.REQUEST_INSTALL_PACKAGES')],
