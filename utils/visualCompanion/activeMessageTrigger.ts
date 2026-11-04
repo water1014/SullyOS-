@@ -35,7 +35,7 @@ function readProviderSelection(preference: VisualAutonomySettings['providerPrefe
         const thirdParty = saved?.naiThirdParty || (legacyNai.provider === 'thirdparty' ? legacyNai : {});
 
         const selections: Record<Exclude<VisualAutonomySettings['providerPreference'], 'auto'>, ProviderSelection | null> = {
-            gpt: typeof gpt.apiKey === 'string' && gpt.apiKey.trim() ? {
+            gpt: typeof gpt.apiKey === 'string' && gpt.apiKey.trim() && typeof gpt.baseUrl === 'string' && gpt.baseUrl.trim() ? {
                 provider: 'openai_compatible',
                 providerConfigId: 'image-studio:gpt',
                 model: typeof gpt.model === 'string' && gpt.model.trim() ? gpt.model : 'gpt-image-2.5-flare',
@@ -45,7 +45,7 @@ function readProviderSelection(preference: VisualAutonomySettings['providerPrefe
                 providerConfigId: 'image-studio:nai-official',
                 model: typeof official.model === 'string' && official.model.trim() ? official.model : 'nai-diffusion-5-full',
             } : null,
-            nai_thirdparty: typeof thirdParty.apiKey === 'string' && thirdParty.apiKey.trim() ? {
+            nai_thirdparty: typeof thirdParty.apiKey === 'string' && thirdParty.apiKey.trim() && typeof thirdParty.baseUrl === 'string' && thirdParty.baseUrl.trim() ? {
                 provider: 'novelai_compatible',
                 providerConfigId: 'image-studio:nai-third-party',
                 model: typeof thirdParty.model === 'string' && thirdParty.model.trim() ? thirdParty.model : 'nai-diffusion-5-full',
