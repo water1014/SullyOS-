@@ -22,6 +22,10 @@ const NOTICES: Record<string, { title: string; hint: string }> = {
         title: '这一轮在本地生成',
         hint: '云端 Worker 版本较旧，暂不支持即时对话，请去设置里更新一下',
     },
+    'custom-headers-local-only': {
+        title: '这一轮在本地生成',
+        hint: '当前 API 使用了自定义请求头，云端即时对话暂不支持，前台聊天仍可正常使用',
+    },
     'worker-unreachable': {
         title: '这一轮在本地生成',
         hint: '一时连不上云端，网络恢复后会自动恢复',
