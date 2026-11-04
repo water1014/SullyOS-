@@ -275,6 +275,8 @@ export interface VisionApiConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** Optional provider-specific headers, kept separate from the dialogue API. */
+  customHeaders?: Record<string, string>;
 }
 
 /** A complete dialogue endpoint, separate from TTS/vision configuration. */
