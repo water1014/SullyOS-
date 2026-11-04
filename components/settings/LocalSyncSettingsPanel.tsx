@@ -5,6 +5,7 @@ import {
     listUnresolvedSyncConflicts,
     resolveRoomNoteSyncConflict,
     recoverStaleInFlightSyncEvents,
+    getOrCreateLocalSyncDeviceIdentity,
     setSyncPreference,
     type LocalSyncConflict,
     type SyncQueueSummary,
@@ -14,6 +15,7 @@ const SYNC_LABELS = [{ entityType: 'room_note' as const, label: '房间便签', 
 
 export default function LocalSyncSettingsPanel() {
     const [enabled, setEnabled] = useState(false);
+    const [localDeviceId, setLocalDeviceId] = useState('');
     const [queue, setQueue] = useState<SyncQueueSummary>({ pending: 0, inFlight: 0, blocked: 0 });
     const [conflicts, setConflicts] = useState<LocalSyncConflict[]>([]);
     const [resolving, setResolving] = useState<string | null>(null);
@@ -24,12 +26,14 @@ export default function LocalSyncSettingsPanel() {
     const refresh = useCallback(async () => {
         try {
             await recoverStaleInFlightSyncEvents();
-            const [preference, summary, unresolved] = await Promise.all([
+            const [preference, summary, unresolved, identity] = await Promise.all([
                 getSyncPreference('room_note'),
                 getSyncQueueSummary(),
                 listUnresolvedSyncConflicts(),
+                getOrCreateLocalSyncDeviceIdentity(),
             ]);
             setEnabled(preference.enabled && preference.mode === 'text');
+            setLocalDeviceId(identity.deviceId);
             setQueue(summary);
             setConflicts(unresolved);
             setError('');
@@ -65,6 +69,10 @@ export default function LocalSyncSettingsPanel() {
                     <p className="mt-1 text-[11px] leading-relaxed text-slate-500">先管理手机里的同步队列。云端接口尚未接入，开启后也不会上传数据。</p>
                 </div>
                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-700">本地阶段</span>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-white/80 px-3 py-2">
+                <span className="text-[10px] text-slate-500">本机设备编号 · 仅用于区分安装实例</span>
+                <code className="text-[10px] font-semibold tracking-wide text-slate-600">{localDeviceId ? localDeviceId.slice(0, 8) : '读取中'}</code>
             </div>
             {SYNC_LABELS.map(item => (
                 <label key={item.entityType} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-white/90 p-3">
