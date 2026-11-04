@@ -75,6 +75,8 @@ describe('image generation clients', () => {
     expect(normalizeNaiGenerateEndpoint('https://proxy.example/api', 'thirdparty')).toBe('https://proxy.example/api/ai/generate-image');
     expect(normalizeNaiGenerateEndpoint('https://proxy.example/ai/generate-image', 'thirdparty')).toBe('https://proxy.example/ai/generate-image');
     expect(() => normalizeNaiGenerateEndpoint('', 'thirdparty')).toThrow('请填写 NAI 第三方 API Base URL');
+    expect(() => normalizeNaiGenerateEndpoint('file:///tmp/nai', 'thirdparty')).toThrow('只支持 HTTP 或 HTTPS');
+    expect(normalizeNaiGenerateEndpoint('https://proxy.example/api/ai/generate-image?token=abc', 'thirdparty')).toBe('https://proxy.example/api/ai/generate-image?token=abc');
   });
 
   it('normalizes an OpenAI-compatible images endpoint', () => {
@@ -184,6 +186,33 @@ describe('image generation clients', () => {
       model: 'nai-diffusion-5-full',
       parameters: { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 0, negative_prompt: 'blurry' },
     });
+  });
+
+  it('accepts direct image responses from third-party NovelAI gateways', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Blob(['direct-image'], { type: 'image/webp' }), {
+      status: 200,
+      headers: { 'Content-Type': 'image/webp' },
+    })));
+    const blob = await generateNaiImage(
+      { apiKey: 'proxy-token', model: 'nai-model', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      'blue hair',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
+    );
+    expect(blob.type).toBe('image/webp');
+    expect(await blob.text()).toBe('direct-image');
+  });
+
+  it('surfaces JSON error details from gateways that return HTTP 200', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: { message: 'model is not enabled for this account' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })));
+    await expect(generateNaiImage(
+      { apiKey: 'proxy-token', model: 'nai-model', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      'blue hair',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
+    )).rejects.toThrow('model is not enabled for this account');
   });
 
   it('passes cancellation signals through to GPT generation requests', async () => {
