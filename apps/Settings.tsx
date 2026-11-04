@@ -53,6 +53,7 @@ import VersionInfo from '../components/settings/VersionInfo';
 import { isPushVapidReady } from '../utils/pushVapid';
 import ApiCallLogModal from '../components/settings/ApiCallLogModal';
 import StorageUsagePanel from '../components/settings/StorageUsagePanel';
+import LocalSyncSettingsPanel from '../components/settings/LocalSyncSettingsPanel';
 import WebCacheControl from '../components/settings/WebCacheControl';
 import McpConnectionConsole from '../components/settings/McpConnectionConsole';
 import { DB } from '../utils/db';
@@ -2238,6 +2239,7 @@ const Settings: React.FC = () => {
             }
         >
             <StorageUsagePanel />
+            <LocalSyncSettingsPanel />
             <WebCacheControl />
 
             <label className="mb-3 flex items-start gap-2 rounded-xl border border-slate-200 bg-white p-3 cursor-pointer">
