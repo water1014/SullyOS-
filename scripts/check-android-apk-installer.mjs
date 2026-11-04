@@ -8,6 +8,9 @@ const java = read('native/android/apk-installer/ApkInstallerPlugin.java');
 const pathsXml = read('native/android/apk-installer/apk_installer_paths.xml');
 const integration = read('scripts/install-apk-installer.ps1');
 const syncScript = read('scripts/sync-tiao-capacitor.ps1');
+const secureStorageJava = read('native/android/secure-storage/SecureStoragePlugin.java');
+const secureStorageInstall = read('scripts/install-secure-storage.ps1');
+const secureStorageClient = read('utils/androidSecureStorage.ts');
 const update = read('utils/androidAppUpdate.ts');
 const capacitor = JSON.parse(read('capacitor.config.json'));
 const updateManifest = JSON.parse(read('public/sullyos-update.json'));
@@ -20,6 +23,11 @@ const workflowSources = workflowFiles.map((path) => read(path));
 const checks = [
   ['native plugin package matches Capacitor app id', java.includes('package com.aetheros.simulator;') && capacitor.appId === 'com.aetheros.simulator'],
   ['Capacitor plugin name is stable', java.includes('@CapacitorPlugin(name = "ApkInstaller")') && update.includes("registerPlugin<ApkInstallerPlugin>('ApkInstaller')")],
+  ['native secure storage uses Android Keystore AES-GCM', secureStorageJava.includes('KeyStore.getInstance("AndroidKeyStore")') && secureStorageJava.includes('AES/GCM/NoPadding') && secureStorageJava.includes('GCMParameterSpec') && secureStorageJava.includes('setRandomizedEncryptionRequired(true)')],
+  ['secure storage binds ciphertext to its key name and never stores plaintext preferences', secureStorageJava.includes('cipher.updateAAD(key.getBytes(StandardCharsets.UTF_8))') && secureStorageJava.includes('putString(key, Base64.encodeToString(packed, Base64.NO_WRAP))') && !secureStorageJava.includes('putString(key, value)')],
+  ['secure storage exposes put/get/remove native methods', ['put', 'get', 'remove'].every((name) => secureStorageJava.includes('void ' + name + '(PluginCall call)'))],
+  ['browser preview never persists long-lived secrets', secureStorageClient.includes('volatileBrowserValues = new Map') && !secureStorageClient.includes('localStorage') && !secureStorageClient.includes('indexedDB')],
+  ['Capacitor sync installs secure storage plugin', syncScript.includes('install-secure-storage.ps1') && secureStorageInstall.includes('registerPlugin(SecureStoragePlugin.class)')],
   ['plugin exposes all required methods', ['getInstalledInfo', 'verifyApk', 'installApk', 'openInstallPermissionSettings'].every((name) => java.includes('void ' + name + '('))],
   ['APK path is restricted to app cache', java.includes('getCacheDir().getCanonicalPath()') && java.includes('candidate.startsWith(cache)')],
   ['APK digest is checked natively', java.includes('MessageDigest.getInstance("SHA-256")') && java.includes('actualSha.equals(expectedSha)')],
