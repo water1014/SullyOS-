@@ -114,7 +114,7 @@ const ScreenAwarenessSettingsPanel: React.FC = () => {
             </div>
 
             <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
-                开启时会先弹出 Android 官方屏幕共享确认框，并在通知栏显示持续运行的提示和停止按钮。当前版本每隔数秒只在本机缓存最新画面，不会自动上传云端，也不会自动发给宋祁。
+                开启前需要允许通知，然后会弹出 Android 官方屏幕共享确认框；运行期间通知栏会显示持续提示和停止按钮。当前版本每隔数秒只在本机缓存最新画面，不会自动上传云端，也不会自动发给宋祁。
             </p>
 
             {!available ? (
