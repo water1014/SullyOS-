@@ -9,7 +9,7 @@ import { DB } from '../utils/db';
 import {
   generateGptImage, editGptImage, generateNaiImage,
   suggestNaiTags, getNaiQualityTags, testGptImageConnection, testNaiImageConnection,
-  type GptImageConfig, type NaiImageConfig, type ImageEngine, ImageConnectionTestResult,
+  type GptImageConfig, type NaiImageConfig, type ImageEngine, type ImageConnectionTestResult,
 } from '../utils/imageGeneration';
 
 const CONFIG_KEY = 'sully-image-studio:config:v1';
