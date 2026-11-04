@@ -9,7 +9,18 @@ export function buildCharacterAppearancePrompt(profile: CharacterVisualProfile |
     const legacyAttributes = (profile.identity || [])
         .filter(item => item.confirmed && item.value.trim())
         .map(item => item.value.trim());
-    const description = [profile.anchorPrompt?.trim(), ...legacyAttributes].filter(Boolean).join(', ');
+    // Older profiles may repeat the same detail in both anchorPrompt and identity[].
+    const seen = new Set<string>();
+    const descriptionParts = [profile.anchorPrompt?.trim(), ...legacyAttributes]
+        .map(value => value?.replace(/\\s+/g, ' ').trim() || '')
+        .filter(value => {
+            if (!value) return false;
+            const key = value.toLocaleLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    const description = descriptionParts.join(', ');
     if (!description) return '';
     return [
         '[Fixed character appearance]',
@@ -36,11 +47,32 @@ export function buildCharacterVisualChangePrompt(
             (memory.visualChangeKind === 'temporary' &&
                 (memory.activeUntil === undefined || memory.activeUntil > now)))
     );
-    const permanent = eligible.filter(memory => memory.visualChangeKind === 'permanent');
-    const temporary = eligible.filter(memory => memory.visualChangeKind === 'temporary');
+    // Keep the timeline deterministic. Newer confirmations lead, so the model can resolve
+    // conflicting historical notes without silently discarding independent details.
+    const newestFirst = (items: typeof eligible) => {
+        const seen = new Set<string>();
+        return [...items]
+            .sort((a, b) =>
+                (b.confirmedAt ?? b.updatedAt ?? b.createdAt) - (a.confirmedAt ?? a.updatedAt ?? a.createdAt)
+                || b.createdAt - a.createdAt
+                || a.id.localeCompare(b.id),
+            )
+            .filter(item => {
+                const key = item.content.replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+    };
+    const permanent = newestFirst(eligible.filter(memory => memory.visualChangeKind === 'permanent'));
+    const temporary = newestFirst(eligible.filter(memory => memory.visualChangeKind === 'temporary'));
     const blocks = [
-        permanent.length ? '[Confirmed permanent visual changes]\n' + permanent.map(item => item.content.trim()).join('\n') : '',
-        temporary.length ? '[Temporary appearance for the current scene only]\n' + temporary.map(item => item.content.trim()).join('\n') + '\nDo not save these temporary conditions as permanent identity changes.' : '',
+        permanent.length
+            ? '[Confirmed permanent visual changes, newest first]\n' + permanent.map(item => item.content.trim()).join('\n') + '\nPreserve all compatible permanent details. When two notes conflict, the newer confirmed note takes precedence.'
+            : '',
+        temporary.length
+            ? '[Temporary appearance for the current scene only, newest first]\n' + temporary.map(item => item.content.trim()).join('\n') + '\nUse the newest temporary note when temporary notes conflict. These conditions apply only to this image and must not overwrite permanent identity.'
+            : '',
     ].filter(Boolean);
     return blocks.join('\n\n');
 }
