@@ -151,7 +151,7 @@ export async function generateNaiImage(
     use_order: true,
   });
   const provider = config.provider || 'official';
-  const response = await fetch(normalizeNaiGenerateEndpoint(config.baseUrl || 'https://image.novelai.net', provider), {
+  const response = await fetch(normalizeNaiGenerateEndpoint(config.baseUrl || (provider === 'official' ? 'https://image.novelai.net' : ''), provider), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
