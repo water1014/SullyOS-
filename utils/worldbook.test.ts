@@ -318,4 +318,12 @@ describe('mounted worldbook synchronization', () => {
         });
     });
 
+
+    it('explains that a Tavern prompt preset must be imported separately', () => {
+        expect(() => parseStandardWorldbook(JSON.stringify({
+            prompts: [{ identifier: 'main', content: 'system prompt' }],
+            prompt_order: [],
+        }), '测试')).toThrow(/提示词预设/);
+    });
+
 });
