@@ -5,6 +5,7 @@ import { describeDialogueApi, pickDialogueApi } from '../../utils/characterApi';
 import { configFromPreset, findActivePresetId } from '../../utils/apiPresetSwitch';
 import { extractModelIds } from '../../utils/modelList';
 import { extractContent, safeResponseJson } from '../../utils/safeApi';
+import { buildApiRequestHeaders, isOpenCodeGoEndpoint } from '../../utils/apiConfigNormalize';
 import Modal from '../os/Modal';
 import DialogueApiFields from '../settings/DialogueApiFields';
 import ModelPicker from '../settings/ModelPicker';
@@ -48,9 +49,17 @@ export default function CharacterApiPanel({ character, onChange }: {
     const version = ++requestVersion.current;
     setLoading(true); setStatus('');
     try {
-      const response = await fetchLlm(`${api.baseUrl}/models`, { headers: { Authorization: `Bearer ${api.apiKey || 'sk-none'}` } });
+      // OpenCode Go exposes one shared model catalogue for both protocol endpoints.
+      const isOpenCodeGo = isOpenCodeGoEndpoint(api.baseUrl);
+      const modelsUrl = isOpenCodeGo
+        ? 'https://opencode.ai/inference/go/v1/models'
+        : `${api.baseUrl}/models`;
+      const requestOptions = { method: 'GET', headers: buildApiRequestHeaders(api.apiKey, api.customHeaders) };
+      const response = isOpenCodeGo
+        ? await fetch(modelsUrl, requestOptions)
+        : await fetchLlm(modelsUrl, requestOptions);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const next = extractModelIds(await response.json());
+      const next = extractModelIds(await safeResponseJson(response));
       if (version !== requestVersion.current) return;
       setModels(next);
       setStatus(next.length ? `获取到 ${next.length} 个模型` : '模型列表为空，可手动输入');
@@ -66,7 +75,11 @@ export default function CharacterApiPanel({ character, onChange }: {
     setTesting(true); setStatus('');
     try {
       const response = await fetchLlm(`${api.baseUrl}/chat/completions`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${api.apiKey || 'sk-none'}` },
+        method: 'POST',
+        headers: buildApiRequestHeaders(api.apiKey, api.customHeaders, {
+          baseUrl: api.baseUrl,
+          sessionId: `character-api-test-${character.id}`,
+        }),
         body: JSON.stringify({ model: api.model, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 5, stream: api.stream ?? false }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
