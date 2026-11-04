@@ -7,6 +7,7 @@
 import type { ActiveMsg2InboxMessage } from '../../types';
 import { loadVisualAutonomySettings } from './autonomySettings';
 import { createAutonomousVisualTask } from './orchestrator';
+import { executeVisualTaskInForeground } from './foregroundExecutor';
 import { visualCompanionRepository } from './repository';
 import type { VisualProviderKind } from './types';
 import type { VisualShareContextKind } from './autonomyPolicy';
@@ -145,5 +146,15 @@ export async function maybeQueueVisualShareForActiveMessage(
         budget: { maxImages: 1 },
     });
 
-    return result.task ? 'queued' : 'denied';
+    if (!result.task) return 'denied';
+
+    // Run while the browser page is alive. If the page closes, the queued task remains local;
+    // durable background execution is a later phase and is not claimed here.
+    void executeVisualTaskInForeground(result.task.id).catch(error => {
+        console.warn('[VisualCompanion] foreground executor could not start', {
+            taskId: result.task?.id,
+            error,
+        });
+    });
+    return 'queued';
 }
