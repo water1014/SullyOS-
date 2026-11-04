@@ -5,8 +5,8 @@
  * Credentials/custom headers are read locally and are never copied into VisualTask records.
  * This is deliberately not a background/cloud executor: it runs only while the page is alive.
  */
-import { generateGptImage, generateNaiImage, type GptImageConfig, type NaiImageConfig } from '../imageGeneration';
-import { putImageBlob } from '../blobRef';
+import { editGptImage, generateGptImage, generateNaiImage, type GptImageConfig, type NaiImageConfig } from '../imageGeneration';
+import { getBlobForRef, putImageBlob } from '../blobRef';
 import {
     markVisualAssetsPersisted,
     recordGeneratedVisualAssets,
@@ -44,9 +44,31 @@ function getProviderConfig(task: VisualTask): GptImageConfig | NaiImageConfig {
     return { ...config, provider: 'thirdparty' } as NaiImageConfig;
 }
 
+async function loadStandardReferenceImage(task: VisualTask): Promise<Blob | null> {
+    const referenceAssetId = task.referenceAssetIds[0];
+    if (!referenceAssetId) return null;
+
+    const asset = await visualCompanionRepository.getAsset(referenceAssetId);
+    if (!asset || asset.status !== 'ready' || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
+        throw new Error('角色基础形象图片不可用，已停止生成以避免丢失形象锚点');
+    }
+    const blob = await getBlobForRef(asset.storage.ref);
+    if (!blob || !blob.type.startsWith('image/')) {
+        throw new Error('角色基础形象图片文件缺失或格式无效');
+    }
+    return blob;
+}
+
 async function generateForTask(task: VisualTask): Promise<Blob> {
     const config = getProviderConfig(task);
     if (task.provider === 'openai' || task.provider === 'openai_compatible') {
+        const referenceImage = await loadStandardReferenceImage(task);
+        if (referenceImage) {
+            return editGptImage(config as GptImageConfig, referenceImage, task.prompt, {
+                size: '1024x1024',
+                quality: 'high',
+            });
+        }
         return generateGptImage(config as GptImageConfig, task.prompt, {
             size: '1024x1024',
             quality: 'high',
