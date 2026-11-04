@@ -145,6 +145,7 @@ describe('视觉人格本地仓库', () => {
         const settings = {
             enabled: true,
             frequency: 'natural' as const,
+            providerPreference: 'auto' as const,
             allowSpontaneousShare: true,
             allowPrivateCreation: false,
             requireApprovalForNewIdentity: true,
