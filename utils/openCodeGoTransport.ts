@@ -4,7 +4,8 @@ type NativeHttpRequest = (options: Record<string, unknown>) => Promise<{
   headers?: Record<string, string>;
 }>;
 
-const fallbackFetch: typeof fetch = globalThis.fetch.bind(globalThis);
+// Resolve fetch at call time so tests, webviews, and host fetch instrumentation can replace it.
+const fallbackFetch: typeof fetch = (resource, init) => globalThis.fetch(resource, init);
 let activeTransport: typeof fetch = fallbackFetch;
 
 /**
