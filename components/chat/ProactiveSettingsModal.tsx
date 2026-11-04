@@ -328,7 +328,7 @@ const ProactiveSettingsModal: React.FC<ProactiveSettingsModalProps> = ({
                                     ))}
                                 </div>
                                 <p className="text-[10px] leading-relaxed text-slate-400">
-                                    GPT 使用 Images Edits 参考图；NAI 使用 img2img 参考图。两者都会优先读取已确认的基础形象图，缺失时才回退到文字锚点。
+                                    GPT 主动分享使用 Images Edits 参考图。NAI 官方/兼容接口支持 img2img，但目前仅用于你主动发起的生图；主动自动分享暂不调用 NAI，以遵守官方 API 的人工触发要求并避免第三方条款未核实。
                                 </p>
                             </div>
 
