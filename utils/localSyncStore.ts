@@ -81,9 +81,15 @@ export async function setSyncPreference(
         updatedAt: Date.now(),
     };
     const db = await openDB();
-    const tx = db.transaction(PREFERENCES, 'readwrite');
+    const stores = enabled ? [PREFERENCES] : [PREFERENCES, OUTBOX];
+    const tx = db.transaction(stores, 'readwrite');
     const done = transactionDone(tx);
     tx.objectStore(PREFERENCES).put(preference);
+    if (!enabled) {
+        const outbox = tx.objectStore(OUTBOX);
+        const queued = await requestResult(outbox.getAll()) as LocalSyncEvent[];
+        queued.filter(event => event.entityType === entityType).forEach(event => outbox.delete(event.eventId));
+    }
     await done;
     return preference;
 }

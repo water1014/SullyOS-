@@ -3,6 +3,7 @@ import { loadCharacterContextMessages } from '../utils/chatContextRange';
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
+import { enqueueRoomNoteSyncEvent } from '../utils/localSyncStore';
 import { RoomItem, CharacterProfile, RoomTodo, RoomNote, DailySchedule, AppID } from '../types';
 import ScheduleCard from '../components/schedule/ScheduleCard';
 import { ContextBuilder } from '../utils/context';
@@ -900,6 +901,7 @@ ${!shouldGenerateTodo ? `(系统: 今日待办已存在，无需生成，请忽�
                         relatedMessageId: msgId
                     };
                     await DB.saveRoomNote(newNote);
+                    await enqueueRoomNoteSyncEvent(newNote, 'create');
                     setNotebookEntries(prev => [newNote, ...prev]);
                 }
 
@@ -981,6 +983,7 @@ ${!shouldGenerateTodo ? `(系统: 今日待办已存在，无需生成，请忽�
         if (note && note.relatedMessageId) {
             await DB.deleteMessage(note.relatedMessageId);
         }
+        if (note) await enqueueRoomNoteSyncEvent(note, 'delete');
         await DB.deleteRoomNote(id);
         setNotebookEntries(prev => prev.filter(n => n.id !== id));
         addToast('笔记已彻底粉碎 (相关记录已清除)', 'success');

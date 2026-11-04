@@ -68,6 +68,19 @@ describe('local-first sync outbox', () => {
         expect(pending.lastErrorCode).toBe('NETWORK_UNAVAILABLE');
     });
 
+    it('purges queued note content when the user disables sync', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        await enqueueRoomNoteSyncEvent(note, 'create');
+        expect(await listPendingSyncEvents()).toHaveLength(1);
+
+        await setSyncPreference('room_note', false);
+        expect(await getSyncPreference('room_note')).toMatchObject({
+            enabled: false,
+            mode: 'local_only',
+        });
+        expect(await listPendingSyncEvents()).toHaveLength(0);
+    });
+
     it('uses an empty payload for delete events', async () => {
         await setSyncPreference('room_note', true, 'text');
         const event = await enqueueRoomNoteSyncEvent(note, 'delete');
