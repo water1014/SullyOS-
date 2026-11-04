@@ -665,6 +665,15 @@ const runLlmCredentialSync = async (reason: string): Promise<void> => {
  * 老 worker 没有凭据表，仍通过 refreshApiCredentialsForPendingTasks 逐条补刷。
  */
 export const syncAmsgLlmCredentials = (apiConfig: APIConfig): void => {
+  // 当前 amsg-server 协议只接受 URL / Key / Model 三件套，不能悄悄丢掉自定义头后
+  // 把错误凭据推给云端任务。保留云端此前的凭据，前台聊天仍可使用本机自定义头。
+  if (Object.keys(apiConfig.customHeaders || {}).length > 0) {
+    hasPendingCredSync = false;
+    pendingCredApiConfig = undefined;
+    writeCredSyncMark(false);
+    console.info(`${HEADER} 自定义请求头仅用于本机直连，跳过云端 LLM 凭据同步`);
+    return;
+  }
   pendingCredApiConfig = apiConfig;
   hasPendingCredSync = true;
   credRetryCount = 0;
