@@ -77,6 +77,21 @@ const readItems = (): SavedImage[] => {
   } catch { return []; }
 };
 const persistItems = (items: SavedImage[]) => localStorage.setItem(ITEMS_KEY, JSON.stringify(items));
+
+/** Serialize gallery read-modify-write transactions across tabs where Web Locks is available. */
+const updateItemsAtomically = async (
+  updater: (current: SavedImage[]) => SavedImage[],
+): Promise<SavedImage[]> => {
+  const commit = () => {
+    const next = updater(readItems());
+    persistItems(next);
+    return next;
+  };
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request('sully-image-studio:items-index', { mode: 'exclusive' }, commit);
+  }
+  return commit();
+};
 const readNaiSettings = () => {
   const fallback = { size: '832x1216', steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: '' };
   try {
@@ -388,8 +403,7 @@ const ImageStudioApp: React.FC = () => {
       // Keep the metadata index and binary asset consistent. If browser storage
       // is full or unavailable, remove the just-written blob instead of leaving
       // an invisible orphan that looks like a successful generation.
-      const next = [item, ...readItems()];
-      persistItems(next);
+      await updateItemsAtomically(current => [item, ...current]);
     } catch (error) {
       await DB.deleteBlobAsset(blobId).catch(() => undefined);
       throw new Error('图片文件已生成，但画廊索引保存失败。请检查浏览器本地存储空间后重试。', { cause: error });
@@ -465,11 +479,14 @@ const ImageStudioApp: React.FC = () => {
     }
   };
 
-  const updateImageMetadata = (id: string, updates: Partial<Pick<SavedImage, 'note' | 'category' | 'favorite'>>) => {
-    const next = readItems().map(item => item.id === id ? { ...item, ...updates } : item);
-    persistItems(next);
-    setImages(current => current.map(item => item.id === id ? { ...item, ...updates } : item));
-    setSelected(current => current?.id === id ? { ...current, ...updates } : current);
+  const updateImageMetadata = async (id: string, updates: Partial<Pick<SavedImage, 'note' | 'category' | 'favorite'>>) => {
+    try {
+      await updateItemsAtomically(current => current.map(item => item.id === id ? { ...item, ...updates } : item));
+      setImages(current => current.map(item => item.id === id ? { ...item, ...updates } : item));
+      setSelected(current => current?.id === id ? { ...current, ...updates } : current);
+    } catch {
+      addToast('作品信息保存失败，请检查本地存储空间', 'error');
+    }
   };
 
   const restoreImagePrompt = (item: DisplayImage) => {
@@ -630,9 +647,14 @@ const ImageStudioApp: React.FC = () => {
       }
 
       if (imported.length) {
-        const nextItems = [...imported.map(({ url: _url, ...item }) => item), ...existing];
         try {
-          persistItems(nextItems);
+          await updateItemsAtomically(current => {
+            const known = new Set(current.flatMap(item => [item.id, item.backupSourceId]).filter((id): id is string => typeof id === 'string' && !!id));
+            const additions = imported
+              .map(({ url: _url, ...item }) => item)
+              .filter(item => !known.has(item.id) && !(item.backupSourceId && known.has(item.backupSourceId)));
+            return [...additions, ...current];
+          });
           setImages(current => [...imported, ...current]);
         } catch (error) {
           // Roll back every binary written during this import if the metadata index
@@ -658,14 +680,19 @@ const ImageStudioApp: React.FC = () => {
     }
   };
 
-  const applyBulkCategory = () => {
+  const applyBulkCategory = async () => {
     if (!bulkCategory || selectedIds.size === 0) return;
-    const next = readItems().map(item => selectedIds.has(item.id) ? { ...item, category: bulkCategory } : item);
-    persistItems(next);
-    setImages(current => current.map(item => selectedIds.has(item.id) ? { ...item, category: bulkCategory } : item));
-    setSelected(current => current && selectedIds.has(current.id) ? { ...current, category: bulkCategory } : current);
-    addToast('已为 ' + selectedIds.size + ' 张作品设置分类', 'success');
-    setBulkCategory('');
+    const ids = new Set(selectedIds);
+    const category = bulkCategory;
+    try {
+      await updateItemsAtomically(current => current.map(item => ids.has(item.id) ? { ...item, category } : item));
+      setImages(current => current.map(item => ids.has(item.id) ? { ...item, category } : item));
+      setSelected(current => current && ids.has(current.id) ? { ...current, category } : current);
+      addToast('已为 ' + ids.size + ' 张作品设置分类', 'success');
+      setBulkCategory('');
+    } catch {
+      addToast('批量分类保存失败，请检查本地存储空间', 'error');
+    }
   };
 
   const deleteSelectedImages = async () => {
@@ -696,7 +723,7 @@ const ImageStudioApp: React.FC = () => {
       if (removedIds.size) {
         try {
           // Commit the metadata only after the binary deletions have completed.
-          persistItems(readItems().filter(item => !removedIds.has(item.id)));
+          await updateItemsAtomically(current => current.filter(item => !removedIds.has(item.id)));
         } catch (error) {
           // Restore every binary if the index commit fails, so the visible
           // gallery and its metadata remain usable.
@@ -741,8 +768,7 @@ const ImageStudioApp: React.FC = () => {
     const originalBlob = await DB.getBlobAsset(item.blobId).catch(() => null);
     try {
       if (originalBlob) await DB.deleteBlobAsset(item.blobId);
-      const next = readItems().filter(saved => saved.id !== item.id);
-      persistItems(next);
+      await updateItemsAtomically(current => current.filter(saved => saved.id !== item.id));
       setImages(current => current.filter(saved => saved.id !== item.id));
       if (selected?.id === item.id) setSelected(null);
       URL.revokeObjectURL(item.url);
