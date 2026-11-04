@@ -47,10 +47,11 @@ public class SecureStoragePlugin extends Plugin {
             System.arraycopy(iv, 0, packed, 0, iv.length);
             System.arraycopy(encrypted, 0, packed, iv.length, encrypted.length);
 
-            getContext().getSharedPreferences(PREFS_NAME, 0)
+            boolean saved = getContext().getSharedPreferences(PREFS_NAME, 0)
                 .edit()
                 .putString(key, Base64.encodeToString(packed, Base64.NO_WRAP))
                 .commit();
+            if (!saved) throw new IllegalStateException("安全存储写入未落盘");
 
             JSObject result = new JSObject();
             result.put("stored", true);
@@ -96,7 +97,8 @@ public class SecureStoragePlugin extends Plugin {
     public void remove(PluginCall call) {
         try {
             String key = validateKey(call.getString("key"));
-            getContext().getSharedPreferences(PREFS_NAME, 0).edit().remove(key).commit();
+            boolean removed = getContext().getSharedPreferences(PREFS_NAME, 0).edit().remove(key).commit();
+            if (!removed) throw new IllegalStateException("安全存储删除未落盘");
             JSObject result = new JSObject();
             result.put("removed", true);
             call.resolve(result);
