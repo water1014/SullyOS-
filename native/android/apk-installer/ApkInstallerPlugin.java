@@ -197,12 +197,13 @@ public class ApkInstallerPlugin extends Plugin {
     private String archiveSignerFingerprint(PackageInfo info) throws Exception {
         if (Build.VERSION.SDK_INT >= 28 && info.signingInfo != null) {
             android.content.pm.Signature[] signatures = info.signingInfo.getApkContentsSigners();
-            if (signatures.length > 0) return digest(signatures[0].toByteArray());
+            if (signatures.length != 1) throw new SecurityException("不支持多签名 APK");
+            return digest(signatures[0].toByteArray());
         }
-        if (info.signatures != null && info.signatures.length > 0) {
-            return digest(info.signatures[0].toByteArray());
+        if (info.signatures == null || info.signatures.length != 1) {
+            throw new SecurityException("APK 缺少唯一签名证书");
         }
-        return "";
+        return digest(info.signatures[0].toByteArray());
     }
 
     private String normalizeSha(String value) {
