@@ -58,7 +58,7 @@ import { DB } from './db';
 import { blobStore } from './blobStore';
 import { tryAcquireMaintenanceLock, releaseMaintenanceLock, currentMaintenanceHolder } from './maintenanceLock';
 
-// 引用面里的 17 张表。名字与 db.ts 的 STORE_* 常量值一一对应
+// 引用面里的 19 张表。名字与 db.ts 的 STORE_* 常量值一一对应
 // （STORE_CHARACTERS / STORE_MESSAGES / STORE_CC_PARTS / STORE_SONGS / STORE_GALLERY /
 //   STORE_ASSETS / STORE_THEMES / STORE_EMOJIS / STORE_USER / STORE_SOCIAL_POSTS /
 //   STORE_GROUPS / STORE_CHAR_GROUPS / STORE_STORY_THEATER_MASKS / STORE_BANK_DATA /
@@ -85,6 +85,7 @@ export const REF_SOURCE_STORES = [
     'guidebook',
     'life_sim',
     'pixel_home_assets',
+    'visual_assets', // 标准视觉资产的 storage.ref 可能持有 blobref:；私密引用不是该命名空间。
 ] as const;
 
 // 每批读多少行。批间事务各自独立（见 DB.getStoreRowsPage 注释），内存峰值只有一批。
