@@ -134,6 +134,7 @@ describe('local-first sync outbox', () => {
     });
 
     it('applies a remote note when no local note exists', async () => {
+        await setSyncPreference('room_note', true, 'text');
         await persistInboxEvents([{
             eventId: 'remote-create', serverSequence: 1, entityType: 'room_note',
             entityId: 'remote-note', operation: 'create', entityVersion: 1,
@@ -159,6 +160,7 @@ describe('local-first sync outbox', () => {
     });
 
     it('does not overwrite local edits and applies remote choice only after conflict resolution', async () => {
+        await setSyncPreference('room_note', true, 'text');
         const db = await openDB();
         await new Promise<void>((resolve, reject) => {
             const tx = db.transaction('room_notes', 'readwrite');

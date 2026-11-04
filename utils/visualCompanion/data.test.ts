@@ -29,7 +29,7 @@ beforeEach(async () => {
 });
 
 describe('宋祁视觉人格系统 · P1 数据层', () => {
-    it('从 v74 升级到 v75 时保留旧聊天、画廊和 Blob 数据', async () => {
+    it('从 v74 升级到 v76 时保留旧聊天、画廊和 Blob 数据', async () => {
         const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
             const request = indexedDB.open('AetherOS_Data', 74);
             request.onupgradeneeded = () => {
@@ -52,7 +52,7 @@ describe('宋祁视觉人格系统 · P1 数据层', () => {
         legacy.close();
 
         const upgraded = await openDB();
-        expect(upgraded.version).toBe(75);
+        expect(upgraded.version).toBe(76);
         expect(Array.from(upgraded.objectStoreNames)).toContain('visual_profiles');
 
         const read = (storeName: string) => new Promise<any[]>((resolve, reject) => {
@@ -66,9 +66,9 @@ describe('宋祁视觉人格系统 · P1 数据层', () => {
         expect((await read('gallery'))[0].id).toBe('gallery_legacy');
     });
 
-    it('v75 增量创建视觉 Store，同时保留原聊天与生图室 Store', async () => {
+    it('v76 数据库保留视觉 Store 与同步 Store，同时保留原聊天与生图室 Store', async () => {
         const db = await openDB();
-        expect(db.version).toBe(75);
+        expect(db.version).toBe(76);
 
         for (const name of [
             'visual_profiles',
