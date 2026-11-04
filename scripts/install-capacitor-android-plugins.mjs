@@ -85,6 +85,7 @@ async function main() {
     'android.permission.REQUEST_INSTALL_PACKAGES',
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
+    'android.permission.POST_NOTIFICATIONS',
   ];
   const missingPermissions = requiredPermissions.filter(permission =>
     !manifest.includes(`android:name="${permission}"`)
