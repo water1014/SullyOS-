@@ -64,7 +64,7 @@ import {
     type AvatarModelBackupInventory,
     type AvatarModelBackupProgress,
 } from '../utils/avatarModelBackup';
-import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel, normalizeApiHeaders, buildApiRequestHeaders, isOpenCodeInferenceEndpoint } from '../utils/apiConfigNormalize';
+import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel, normalizeApiHeaders, buildApiRequestHeaders, isOpenCodeGoEndpoint } from '../utils/apiConfigNormalize';
 import { configFromPreset, findActivePresetId, presetDiffersFromConfig, type PresetSwitchPatch } from '../utils/apiPresetSwitch';
 import type { APIConfig, TtsProvider, SttProvider } from '../types';
 import {
@@ -1433,8 +1433,8 @@ const Settings: React.FC = () => {
     setIsLoadingModels(true);
     setStatusMsg('正在连接...');
     try {
-        const isOpenCodeGo = isOpenCodeInferenceEndpoint(baseUrl);
-        const modelsUrl = isOpenCodeGo ? 'https://opencode.ai/inference/v1/models' : `${baseUrl}/models`;
+        const isOpenCodeGo = isOpenCodeGoEndpoint(baseUrl);
+        const modelsUrl = isOpenCodeGo ? 'https://opencode.ai/inference/go/v1/models' : `${baseUrl}/models`;
         const requestOptions = { method: 'GET', headers: buildApiRequestHeaders(apiKey, localCustomHeaders) };
         const response = isOpenCodeGo ? await fetch(modelsUrl, requestOptions) : await fetchLlm(modelsUrl, requestOptions);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
