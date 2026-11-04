@@ -332,13 +332,27 @@ export const parseStandardWorldbook = (
         throw new Error('JSON 文件无法解析，请确认文件没有损坏');
     }
 
-    // SillyTavern 通常直接导出 { entries: {...} }。
-    // 同时兼容常见的 world_info / worldbook 包装层，以及纯条目数组。
+    // Accept SillyTavern standalone worldbooks, character-card V2/V3
+    // character_book containers, and common lorebook wrappers.
+    const candidates = [
+        parsed,
+        parsed?.world_info,
+        parsed?.worldbook,
+        parsed?.worldBook,
+        parsed?.character_book,
+        parsed?.characterBook,
+        parsed?.data?.character_book,
+        parsed?.data?.characterBook,
+        parsed?.data?.world_info,
+        parsed?.data?.worldbook,
+        parsed?.data?.extensions?.world_info,
+    ];
     const container = Array.isArray(parsed)
         ? parsed
-        : parsed?.entries ?? parsed?.world_info?.entries ?? parsed?.worldbook?.entries ?? parsed?.worldBook?.entries;
+        : candidates.map(item => item?.entries ?? item?.entry)
+            .find(value => Array.isArray(value) || (value && typeof value === 'object'));
     if (!Array.isArray(container) && (!container || typeof container !== 'object')) {
-        throw new Error('不是受支持的世界书 JSON：未找到 entries 条目列表');
+        throw new Error('不是受支持的世界书 JSON：未找到条目列表。请使用酒馆世界书导出 JSON，或角色卡 V2/V3（character_book）JSON');
     }
 
     const rawEntries = Array.isArray(container) ? container : Object.values(container);
@@ -347,26 +361,31 @@ export const parseStandardWorldbook = (
         const hasUid = value.uid !== undefined && value.uid !== null && value.uid !== '';
         const parsedUid = hasUid ? Number(value.uid) : NaN;
         const uid = Number.isFinite(parsedUid) ? parsedUid : index;
-        const primary = asStringArray(value.key);
-        const secondary = asStringArray(value.keysecondary);
-        const position = clamp(value.position == null ? undefined : value.position, 0, 6, 1) as WorldbookPosition;
+        const primary = asStringArray(value.key ?? value.keys);
+        const secondary = asStringArray(value.keysecondary ?? value.secondary_keys ?? value.secondaryKeys);
+        const insertionOrder = value.position ?? value.insertion_order ?? value.insertionOrder;
+        const rawPosition = typeof insertionOrder === 'string'
+            ? ({ before: 0, after: 1, 'before_character': 0, 'after_character': 1 } as Record<string, number>)[insertionOrder.toLowerCase()] ?? Number(insertionOrder)
+            : insertionOrder;
+
+        const position = clamp(rawPosition == null ? undefined : rawPosition, 0, 6, 1) as WorldbookPosition;
         const rawRole = value.role == null ? null : clamp(value.role, 0, 2, 0) as WorldbookDepthRole;
         const rawOrder = value.order == null || value.order === '' ? NaN : Number(value.order);
         return [{
             id: `wb-${now}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-            title: String(value.comment || value.name || value.title || `条目 ${uid + 1}`).trim() || `条目 ${uid + 1}`,
+            title: String(value.comment || value.name || value.title || value.key?.[0] || value.keys?.[0] || `条目 ${uid + 1}`).trim() || `条目 ${uid + 1}`,
             content: value.content,
             category,
             createdAt: now,
             updatedAt: now,
             key: primary,
             keysecondary: secondary,
-            constant: value.constant === true,
+            constant: value.constant === true || value.enabled === true && value.disable !== true,
             selective: value.selective === true || (value.selective == null && secondary.length > 0),
             selectiveLogic: clamp(value.selectiveLogic == null ? undefined : value.selectiveLogic, 0, 3, 0) as WorldbookSelectiveLogic,
-            order: Number.isFinite(rawOrder) ? rawOrder : 100,
+            order: Number.isFinite(rawOrder) ? rawOrder : Number.isFinite(Number(value.insertion_order)) ? Number(value.insertion_order) : 100,
             position,
-            disable: value.disable === true,
+            disable: value.disable === true || value.enabled === false,
             probability: clamp(value.probability == null ? undefined : value.probability, 0, 100, 100),
             useProbability: value.useProbability === true,
             depth: Math.max(0, Math.floor(clamp(value.depth == null ? undefined : value.depth, 0, 999, 4))),
