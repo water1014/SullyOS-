@@ -4109,6 +4109,13 @@ export interface FullBackupData {
     pixelHomeAssets?: any[];
     pixelHomeLayouts?: any[];
 
+    // 宋祁视觉人格系统。标准备份只携带普通范围数据，不导出私密二进制/私密记录。
+    visualProfiles?: any[];
+    visualMemories?: any[];
+    visualProjects?: any[];
+    visualTaskMirror?: any[];
+    visualAssets?: any[];
+
     // Chat 设置（翻译 / 归档 / 润色 prompts）
     chatTranslateSourceLang?: string;
     chatTranslateTargetLang?: string;
