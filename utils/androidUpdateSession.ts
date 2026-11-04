@@ -59,6 +59,7 @@ export const createAndroidUpdateSession = (deps: Dependencies) => {
     message: pendingAtStart ? `正在核对上次更新 ${pendingAtStart.versionName} 是否安装完成` : '',
   };
   const listeners = new Set<() => void>();
+  let verifyingInstall = false;
   const update = (patch: Partial<UpdateState>) => {
     state = { ...state, ...patch };
     listeners.forEach(listener => listener());
@@ -83,18 +84,27 @@ export const createAndroidUpdateSession = (deps: Dependencies) => {
   };
   const install = async (path: string, manifest: AndroidUpdateManifest) => {
     update({ phase: 'installing' });
-    const result = await deps.install(path, manifest);
-    update(result.status === 'permission_required'
-      ? { phase: 'permission', message: '请允许“安装未知应用”，返回后点“继续安装”' }
-      : { phase: 'ready', message: '已打开 Android 系统安装器，返回应用后会自动核对安装结果' });
-    if (result.status === 'installer_opened' && state.manifest) {
-      try {
-        storage?.setItem(PENDING_INSTALL_KEY, JSON.stringify({
-          versionCode: state.manifest.versionCode, versionName: state.manifest.versionName,
-        } satisfies PendingInstall));
-      } catch { /* Version confirmation remains available during this WebView session. */ }
+    // Persist the expected version before handing control to Android. The OS may
+    // background or kill this WebView as soon as the package installer launches.
+    try {
+      storage?.setItem(PENDING_INSTALL_KEY, JSON.stringify({
+        versionCode: manifest.versionCode, versionName: manifest.versionName,
+      } satisfies PendingInstall));
+    } catch { /* In-session confirmation remains available if storage is unavailable. */ }
+    try {
+      const result = await deps.install(path, manifest);
+      if (result.status === 'permission_required') {
+        try { storage?.removeItem(PENDING_INSTALL_KEY); } catch { /* Non-fatal. */ }
+        update({ phase: 'permission', message: '请允许“安装未知应用”，返回后点“继续安装”' });
+      } else {
+        update({ phase: 'ready', message: '已打开 Android 系统安装器，返回应用后会自动核对安装结果' });
+      }
+      return result;
+    } catch (error) {
+      // Keep the marker: if Android opened the installer before the bridge failed,
+      // the next app launch can still reconcile the installed version safely.
+      throw error;
     }
-    return result;
   };
   const download = async () => {
     if (state.phase !== 'available' || !state.manifest) return;
@@ -127,8 +137,10 @@ export const createAndroidUpdateSession = (deps: Dependencies) => {
     }
   };
   const verifyInstallCompletion = async () => {
+    if (verifyingInstall) return;
     const pending = readPendingInstall(storage);
     if (!pending) return;
+    verifyingInstall = true;
     try {
       const installed = await deps.getInstalled();
       if (installed.versionCode >= pending.versionCode) {
@@ -145,6 +157,8 @@ export const createAndroidUpdateSession = (deps: Dependencies) => {
       }
     } catch (error) {
       update({ message: `暂时无法确认安装结果：${errorMessage(error)}` });
+    } finally {
+      verifyingInstall = false;
     }
   };
   const continueInstall = async () => {
