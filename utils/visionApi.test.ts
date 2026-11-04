@@ -69,7 +69,7 @@ describe('independent vision API', () => {
       method: 'POST',
       headers: expect.objectContaining({
         authorization: 'Bearer go-token',
-        'x-opencode-session': 'sullyos-vision',
+        'x-opencode-session': expect.stringMatching(/^sullyos-vision-[a-z0-9]+$/),
         'x-client-tag': 'sullyos-vision-test',
       }),
     });
