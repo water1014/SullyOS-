@@ -165,12 +165,16 @@ export const visualCompanionRepository = {
     getTask: (id: string) => readOne<VisualTask>(STORE.tasks, id),
     listTasks: (charId: string) => readByCharacter<VisualTask>(STORE.tasks, charId),
     saveTask: (record: VisualTask) => writeOne(STORE.tasks, record),
-    transitionTask: (id: string, nextStatus: VisualTaskStatus, patch: Partial<VisualTask> = {}) =>
+    transitionTask: (
+        id: string,
+        nextStatus: VisualTaskStatus,
+        patch: Partial<Omit<VisualTask, 'id' | 'charId' | 'deliveryId' | 'privacyScope' | 'status' | 'createdAt'>> = {}
+    ) =>
         updateOne<VisualTask>(STORE.tasks, id, current => {
             if (!TASK_TRANSITIONS[current.status].includes(nextStatus)) {
                 throw new Error('不允许的视觉任务状态转换：' + current.status + ' -> ' + nextStatus);
             }
-            return { ...current, ...patch, id: current.id, status: nextStatus, updatedAt: Date.now() };
+            return { ...current, ...patch, id: current.id, charId: current.charId, deliveryId: current.deliveryId, privacyScope: current.privacyScope, createdAt: current.createdAt, status: nextStatus, updatedAt: Date.now() };
         }),
 
     getAsset: (id: string) => readOne<VisualAssetRecord>(STORE.assets, id),
@@ -179,7 +183,14 @@ export const visualCompanionRepository = {
         assertAssetPrivacy(record);
         return writeOne(STORE.assets, record);
     },
-    deleteAsset: (id: string) => removeOne(STORE.assets, id),
+    deleteAsset: async (id: string) => {
+        const current = await readOne<VisualAssetRecord>(STORE.assets, id);
+        if (!current) return;
+        if (current.privacyScope === 'private') {
+            throw new Error('私密资产必须先通过私密保险库完成加密销毁，不能直接删除元数据');
+        }
+        await removeOne(STORE.assets, id);
+    },
 };
 
 export { TASK_TRANSITIONS, assertAssetPrivacy };
