@@ -40,6 +40,21 @@ const readItems = (): SavedImage[] => {
 };
 const persistItems = (items: SavedImage[]) => localStorage.setItem(ITEMS_KEY, JSON.stringify(items));
 
+type TagCategory = '主体' | '发型' | '眼睛' | '表情' | '服装' | '动作' | '构图' | '场景' | '画风' | '质量';
+const NAI_TAGS: Record<TagCategory, string[]> = {
+  '主体': ['1girl', '1boy', '2girls', '2boys', 'solo', 'duo', 'multiple girls', 'multiple boys', 'animal', 'cat', 'original'],
+  '发型': ['long hair', 'short hair', 'very long hair', 'bob cut', 'ponytail', 'twintails', 'braided hair', 'messy hair', 'wavy hair', 'blunt bangs', 'ahoge'],
+  '眼睛': ['blue eyes', 'brown eyes', 'green eyes', 'red eyes', 'golden eyes', 'heterochromia', 'closed eyes', 'looking at viewer'],
+  '表情': ['smile', 'gentle smile', 'blush', 'open mouth', 'closed mouth', 'serious', 'shy', 'crying', 'laughing', 'wink'],
+  '服装': ['dress', 'school uniform', 'sailor uniform', 'kimono', 'hanfu', 'hoodie', 'sweater', 'white shirt', 'lace dress', 'long sleeves', 'ribbon'],
+  '动作': ['standing', 'sitting', 'lying', 'looking back', 'holding', 'walking', 'dancing', 'holding flower', 'holding book', 'hand on own cheek'],
+  '构图': ['portrait', 'upper body', 'cowboy shot', 'full body', 'close-up', 'from above', 'from below', 'from behind', 'wide shot', 'dynamic angle', 'depth of field'],
+  '场景': ['indoors', 'outdoors', 'flower field', 'garden', 'forest', 'bedroom', 'library', 'cafe', 'city', 'night sky', 'rain', 'sunset', 'moonlight'],
+  '画风': ['anime coloring', 'watercolor (medium)', 'ink (medium)', 'pencil sketch', 'soft shading', 'painterly', 'visual novel cg', '3d (medium)', 'muted color', 'pastel colors', 'monochrome'],
+  '质量': ['masterpiece', 'very aesthetic', 'best quality', 'amazing quality', 'high complexity', 'no text', 'absurdres'],
+};
+const TAG_CATEGORIES = Object.keys(NAI_TAGS) as TagCategory[];
+
 const ImageStudioApp: React.FC = () => {
   const { closeApp, addToast } = useOS();
   const [tab, setTab] = useState<'create' | 'gallery' | 'settings'>('create');
@@ -49,6 +64,7 @@ const ImageStudioApp: React.FC = () => {
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('low quality, worst quality, blurry, bad anatomy');
+  const [activeTagCategory, setActiveTagCategory] = useState<TagCategory>('主体');
   const [gptSize, setGptSize] = useState('1024x1024');
   const [gptQuality, setGptQuality] = useState('high');
   const [naiSize, setNaiSize] = useState('832x1216');
@@ -97,6 +113,16 @@ const ImageStudioApp: React.FC = () => {
     setConfig(current => ({ ...current, gpt: { ...current.gpt, ...updates } }));
   const updateNai = (updates: Partial<NaiImageConfig>) =>
     setConfig(current => ({ ...current, nai: { ...current.nai, ...updates } }));
+
+  const addNaiTag = (tag: string) => {
+    const existing = prompt.split(',').map(value => value.trim()).filter(Boolean);
+    if (existing.some(value => value.toLowerCase() === tag.toLowerCase())) return;
+    setPrompt([...existing, tag].join(', '));
+  };
+  const removeNaiTag = (tag: string) => {
+    setPrompt(prompt.split(',').map(value => value.trim()).filter(value => value && value.toLowerCase() !== tag.toLowerCase()).join(', '));
+  };
+  const promptTags = prompt.split(',').map(value => value.trim()).filter(Boolean);
 
   const saveImage = useCallback(async (blob: Blob) => {
     const id = `studio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -249,6 +275,22 @@ const ImageStudioApp: React.FC = () => {
               </div>
             )}
             {engine === 'nai' && <>
+              <div className="rounded-2xl border border-sky-100 bg-white/55 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div><div className="text-xs font-semibold text-slate-700">标签灵感库</div><p className="text-[10px] text-slate-400 mt-1">点选标签加入提示词，重复标签会自动跳过</p></div>
+                  <button type="button" onClick={() => setPrompt('')} className="text-[10px] text-slate-400">清空提示词</button>
+                </div>
+                <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                  {TAG_CATEGORIES.map(category => <button key={category} type="button" onClick={() => setActiveTagCategory(category)} className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-semibold ${activeTagCategory === category ? 'bg-sky-600 text-white' : 'bg-white/80 text-slate-500 border border-slate-100'}`}>{category}</button>)}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {NAI_TAGS[activeTagCategory].map(tag => {
+                    const added = promptTags.some(value => value.toLowerCase() === tag.toLowerCase());
+                    return <button key={tag} type="button" onClick={() => added ? removeNaiTag(tag) : addNaiTag(tag)} className={`rounded-lg px-2.5 py-1.5 text-[10px] border ${added ? 'bg-sky-100 border-sky-200 text-sky-800' : 'bg-white/75 border-white text-slate-600'}`}>{added ? '✓ ' : '+ '}{tag}</button>;
+                  })}
+                </div>
+                {promptTags.length > 0 && <div className="border-t border-sky-100 pt-2"><div className="text-[10px] text-slate-400 mb-2">已加入 · {promptTags.length}</div><div className="flex flex-wrap gap-1.5">{promptTags.map((tag, index) => <button key={`${tag}-${index}`} type="button" onClick={() => removeNaiTag(tag)} className="rounded-lg bg-sky-50 text-sky-800 px-2 py-1 text-[10px]">{tag} ×</button>)}</div></div>}
+              </div>
               <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">反向提示词</label><button onClick={() => copyPrompt(negativePrompt)} className="text-[10px] text-sky-700 flex items-center gap-1"><Copy size={12}/>复制</button></div>
               <textarea className="field min-h-[76px] resize-y leading-5" value={negativePrompt} onChange={event => setNegativePrompt(event.target.value)} placeholder="不希望出现在画面中的内容……"/>
             </>}
