@@ -82,7 +82,7 @@ export async function setSyncPreference(
         updatedAt: Date.now(),
     };
     const db = await openDB();
-    const stores = enabled ? [PREFERENCES] : [PREFERENCES, OUTBOX, INBOX, CONFLICTS];
+    const stores = enabled ? [PREFERENCES] : [PREFERENCES, OUTBOX, INBOX, SYNC_STATE, CONFLICTS];
     const tx = db.transaction(stores, 'readwrite');
     const done = transactionDone(tx);
     tx.objectStore(PREFERENCES).put(preference);
@@ -103,6 +103,12 @@ export async function setSyncPreference(
         const snapshots = await requestResult(conflicts.getAll()) as LocalSyncConflict[];
         snapshots.filter(conflict => conflict.entityType === entityType)
             .forEach(conflict => conflicts.delete(conflict.conflictId));
+        // Opting out resets cursors as well, so re-enabling starts from a clean
+        // server watermark instead of skipping events created after the opt-out.
+        const syncState = tx.objectStore(SYNC_STATE);
+        const stateRecords = await requestResult(syncState.getAll()) as Array<{ id?: string }>;
+        stateRecords.filter(record => record.id !== LOCAL_DEVICE_IDENTITY_KEY)
+            .forEach(record => { if (record.id) syncState.delete(record.id); });
     }
     await done;
     return preference;
