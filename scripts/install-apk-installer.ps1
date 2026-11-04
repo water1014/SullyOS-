@@ -88,6 +88,8 @@ if ($manifest -notmatch 'androidx\.core\.content\.FileProvider') {
   if ($manifest -notmatch '</application>') { throw 'AndroidManifest.xml has no application closing tag.' }
   $manifest = $manifest.Replace('</application>', $provider + [Environment]::NewLine + '    </application>')
   Set-Content -LiteralPath $manifestPath -Value $manifest -Encoding UTF8
+} elseif ($manifest -notmatch 'android:authorities="\$\{applicationId\}\.fileprovider"' -or $manifest -notmatch 'android:resource="@xml/apk_installer_paths"') {
+  throw 'An existing FileProvider uses a different authority or paths resource. Resolve the conflict manually before building.'
 }
 
 Write-Host 'ApkInstaller sources copied and Capacitor plugin registration checked.'
