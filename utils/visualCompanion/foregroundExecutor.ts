@@ -32,16 +32,16 @@ function getProviderConfig(task: VisualTask): GptImageConfig | NaiImageConfig {
     if (task.provider === 'openai' || task.provider === 'openai_compatible') {
         const config = saved.gpt;
         if (!config?.apiKey?.trim()) throw new Error('GPT 生图尚未配置 API Key');
-        return config as GptImageConfig;
+        return { ...config, model: task.model || config.model } as GptImageConfig;
     }
     if (task.provider === 'novelai_official') {
         const config = saved.naiOfficial || (saved.nai?.provider !== 'thirdparty' ? saved.nai : null);
         if (!config?.apiKey?.trim()) throw new Error('NovelAI 官方接口尚未配置 Token');
-        return { ...config, provider: 'official' } as NaiImageConfig;
+        return { ...config, model: task.model || config.model, provider: 'official' } as NaiImageConfig;
     }
     const config = saved.naiThirdParty || (saved.nai?.provider === 'thirdparty' ? saved.nai : null);
     if (!config?.apiKey?.trim()) throw new Error('NAI 第三方接口尚未配置 Token');
-    return { ...config, provider: 'thirdparty' } as NaiImageConfig;
+    return { ...config, model: task.model || config.model, provider: 'thirdparty' } as NaiImageConfig;
 }
 
 async function loadStandardReferenceImage(task: VisualTask): Promise<Blob | null> {
