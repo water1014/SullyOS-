@@ -60,6 +60,38 @@ export function normalizeOpenAIImageEditsEndpoint(baseUrl: string): string {
   return clean.endsWith('/images/edits') ? clean : `${clean}/images/edits`;
 }
 
+async function readGptImageResponse(response: Response, actionLabel: string): Promise<Blob> {
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(errorMessage(payload, `${actionLabel}失败（HTTP ${response.status}）`));
+  }
+
+  const contentType = response.headers.get('Content-Type') || '';
+  if (contentType.toLowerCase().startsWith('image/')) return response.blob();
+
+  const payload = await response.json().catch(() => null);
+  const encoded = payload?.data?.[0]?.b64_json;
+  if (typeof encoded === 'string' && encoded) {
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: 'image/png' });
+  }
+
+  const imageUrl = payload?.data?.[0]?.url;
+  if (typeof imageUrl === 'string' && imageUrl) {
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) throw new Error(`${actionLabel}返回了图片链接，但下载失败（HTTP ${imageResponse.status}）`);
+    const blob = await imageResponse.blob();
+    if (!blob.type.toLowerCase().startsWith('image/')) {
+      throw new Error(`${actionLabel}返回的链接不是可识别的图片文件`);
+    }
+    return blob;
+  }
+
+  throw new Error(`${actionLabel}没有返回图片数据。请确认服务支持 OpenAI Images API，并返回 b64_json、url 或图片文件。`);
+}
+
 async function blobToDataUrl(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = '';
@@ -101,16 +133,7 @@ export async function editGptImage(
     }),
     signal: options.signal,
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(errorMessage(payload, `GPT 图片编辑失败（HTTP ${response.status}）`));
-  const encoded = payload?.data?.[0]?.b64_json;
-  if (typeof encoded !== 'string' || !encoded) {
-    throw new Error('GPT API 没有返回编辑后的图片数据，请确认服务支持 Images Edits 接口。');
-  }
-  const binary = atob(encoded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: 'image/png' });
+  return readGptImageResponse(response, 'GPT 图片编辑');
 }
 
 export async function generateGptImage(
@@ -136,16 +159,7 @@ export async function generateGptImage(
     }),
     signal: options.signal,
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(errorMessage(payload, `GPT 生图失败（HTTP ${response.status}）`));
-  const encoded = payload?.data?.[0]?.b64_json;
-  if (typeof encoded !== 'string' || !encoded) {
-    throw new Error('GPT API 没有返回图片数据。请确认接口支持 GPT Image 图片生成，而不只是聊天补全。');
-  }
-  const binary = atob(encoded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return new Blob([bytes], { type: 'image/png' });
+  return readGptImageResponse(response, 'GPT 生图');
 }
 
 export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'official' | 'thirdparty' = 'official'): string {
