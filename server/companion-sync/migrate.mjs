@@ -32,7 +32,7 @@ try {
   `);
 
   const names = (await readdir(migrationsDirectory))
-    .filter(name => /^\\d{4}_[a-z0-9_-]+\\.sql$/i.test(name))
+    .filter(name => /^\d{4}_[a-z0-9_-]+\.sql$/i.test(name))
     .sort();
 
   if (!names.length) throw new Error('NO_COMPANION_MIGRATIONS_FOUND');
@@ -43,7 +43,7 @@ try {
       [name],
     );
     if (existing.rowCount) {
-      process.stdout.write(`Already applied: ${name}\\n`);
+      process.stdout.write(`Already applied: ${name}\n`);
       continue;
     }
 
@@ -54,14 +54,14 @@ try {
         'INSERT INTO companion_schema_migrations (name) VALUES ($1) ON CONFLICT (name) DO NOTHING',
         [name],
       );
-      process.stdout.write(`Applied: ${name}\\n`);
+      process.stdout.write(`Applied: ${name}\n`);
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       throw error;
     }
   }
 
-  process.stdout.write('Companion sync schema is up to date.\\n');
+  process.stdout.write('Companion sync schema is up to date.\n');
 } finally {
   if (lockAcquired) {
     await client.query("SELECT pg_advisory_unlock(hashtext('companion-sync-schema-migrations'))").catch(() => {});
