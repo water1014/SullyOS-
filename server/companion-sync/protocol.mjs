@@ -75,6 +75,6 @@ export function parseBearerToken(header) {
 export function parsePositiveInteger(value, fallback, max) {
   if (value === null || value === undefined || value === '') return fallback;
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > max) throw new Error('INVALID_INTEGER_PARAMETER');
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > max) throw Object.assign(new Error('INVALID_INTEGER_PARAMETER'), { status: 400 });
   return parsed;
 }
