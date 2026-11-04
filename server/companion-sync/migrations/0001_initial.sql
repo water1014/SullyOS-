@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS companion_sync_policies (
 
 CREATE TABLE IF NOT EXISTS companion_sync_events (
     server_sequence BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
-    event_id UUID NOT NULL,
+    event_id TEXT NOT NULL CHECK (length(event_id) BETWEEN 1 AND 160),
     account_id UUID NOT NULL REFERENCES companion_accounts(id) ON DELETE CASCADE,
     device_id UUID NOT NULL,
     entity_type TEXT NOT NULL CHECK (entity_type IN ('room_note')),
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS companion_sync_entity_heads (
     entity_type TEXT NOT NULL CHECK (entity_type IN ('room_note')),
     entity_id TEXT NOT NULL CHECK (length(entity_id) BETWEEN 1 AND 256),
     current_version BIGINT NOT NULL CHECK (current_version > 0),
-    last_event_id UUID NOT NULL,
+    last_event_id TEXT NOT NULL CHECK (length(last_event_id) BETWEEN 1 AND 160),
     deleted_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (account_id, entity_type, entity_id)
