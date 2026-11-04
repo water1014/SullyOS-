@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
-import { editGptImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint, suggestNaiTags } from './imageGeneration';
+import { editGptImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint, suggestNaiTags, getNaiQualityTags } from './imageGeneration';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -112,6 +112,20 @@ describe('image generation clients', () => {
       { apiKey: '', model: 'nai-diffusion-5-full' },
       'blue',
     )).rejects.toThrow('Persistent API Token');
+  });
+
+  it('uses the official V5 Full quality tag combinations', () => {
+    expect(getNaiQualityTags('nai-diffusion-5-full', 'light')).toEqual(['very aesthetic', 'amazing quality', 'no text']);
+    expect(getNaiQualityTags('nai-diffusion-5-full', 'standard')).toEqual(['very aesthetic', 'masterpiece', 'no text']);
+  });
+
+  it('uses the official V5 Curated quality tag combinations', () => {
+    expect(getNaiQualityTags('nai-diffusion-5-curated', 'standard')).toEqual(['very aesthetic', 'masterpiece', 'no text']);
+  });
+
+  it('uses the V4.5 Full and Curated model-specific quality tags', () => {
+    expect(getNaiQualityTags('nai-diffusion-4-5-full', 'standard')).toEqual(['location', 'very aesthetic', 'masterpiece', 'no text']);
+    expect(getNaiQualityTags('nai-diffusion-4-5-curated', 'standard')).toEqual(['location', 'masterpiece', 'no text', '-0.8::feet::', 'rating:general']);
   });
 
 });
