@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { pairCompanionDevice, syncCompanionOnce, disconnectCompanionDevice, setCompanionRemoteSyncPolicy } from '../../utils/companionSyncClient';
+import { isPersistentSecureStorageAvailable } from '../../utils/androidSecureStorage';
 import {
     getSyncPreference,
     getSyncQueueSummary,
@@ -8,6 +10,8 @@ import {
     getOrCreateLocalSyncDeviceIdentity,
     updateLocalSyncDeviceLabel,
     setSyncPreference,
+    getCompanionSyncConnection,
+    type CompanionSyncConnection,
     type LocalSyncConflict,
     type SyncQueueSummary,
 } from '../../utils/localSyncStore';
@@ -18,6 +22,11 @@ export default function LocalSyncSettingsPanel() {
     const [enabled, setEnabled] = useState(false);
     const [localDeviceId, setLocalDeviceId] = useState('');
     const [deviceLabel, setDeviceLabel] = useState('这台手机');
+    const [connection, setConnection] = useState<CompanionSyncConnection | null>(null);
+    const [serverUrl, setServerUrl] = useState('');
+    const [pairingCode, setPairingCode] = useState('');
+    const [syncBusy, setSyncBusy] = useState(false);
+    const [syncStatus, setSyncStatus] = useState('');
     const [savingDeviceLabel, setSavingDeviceLabel] = useState(false);
     const [queue, setQueue] = useState<SyncQueueSummary>({ pending: 0, inFlight: 0, blocked: 0 });
     const [conflicts, setConflicts] = useState<LocalSyncConflict[]>([]);
@@ -29,15 +38,18 @@ export default function LocalSyncSettingsPanel() {
     const refresh = useCallback(async () => {
         try {
             await recoverStaleInFlightSyncEvents();
-            const [preference, summary, unresolved, identity] = await Promise.all([
+            const [preference, summary, unresolved, identity, savedConnection] = await Promise.all([
                 getSyncPreference('room_note'),
                 getSyncQueueSummary(),
                 listUnresolvedSyncConflicts(),
                 getOrCreateLocalSyncDeviceIdentity(),
+                getCompanionSyncConnection(),
             ]);
             setEnabled(preference.enabled && preference.mode === 'text');
             setLocalDeviceId(identity.deviceId);
             setDeviceLabel(identity.label || '这台手机');
+            setConnection(savedConnection);
+
             setQueue(summary);
             setConflicts(unresolved);
             setError('');
@@ -57,6 +69,16 @@ export default function LocalSyncSettingsPanel() {
         try {
             await setSyncPreference('room_note', next, next ? 'text' : 'local_only');
             setEnabled(next);
+            if (!next && connection) {
+                try {
+                    await setCompanionRemoteSyncPolicy(false);
+                    setSyncStatus('云端已确认停止同步并清理便签副本。');
+                } catch {
+                    setSyncStatus('本机已停止同步并清除待发送内容，但云端清理尚未确认，请联网后重试断开。');
+                }
+            } else if (next) {
+                setSyncStatus('已允许便签文字进入待同步队列。连接设备后点击“立即同步”才会传输。');
+            }
             await refresh();
         } catch {
             setError('保存失败，本地数据没有被上传。');
@@ -73,6 +95,69 @@ export default function LocalSyncSettingsPanel() {
                     <p className="mt-1 text-[11px] leading-relaxed text-slate-500">先管理手机里的同步队列。云端接口尚未接入，开启后也不会上传数据。</p>
                 </div>
                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-700">本地阶段</span>
+            </div>
+            <div className="space-y-3 rounded-xl border border-sky-100 bg-white/90 p-3">
+                <div className="flex items-center justify-between gap-2">
+                    <div>
+                        <p className="text-xs font-bold text-slate-700">云端设备配对</p>
+                        <p className="mt-1 text-[10px] leading-relaxed text-slate-400">服务器准备好后，输入服务器地址和一次性配对码。每台设备使用独立令牌。</p>
+                    </div>
+                    <span className={connection ? "rounded-full bg-emerald-50 px-2 py-1 text-[10px] text-emerald-700" : "rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500"}>{connection ? '已配对' : '未连接'}</span>
+                </div>
+                {connection ? (
+                    <>
+                        <div className="rounded-lg bg-slate-50 p-3">
+                            <p className="text-[10px] text-slate-400">当前同步服务器</p>
+                            <p className="mt-1 break-all text-xs font-medium text-slate-700">{connection.baseUrl}</p>
+                            <p className="mt-1 text-[10px] text-slate-400">设备：{connection.label} · {connection.serverDeviceId.slice(0, 8)}</p>
+                        </div>
+                        {!isPersistentSecureStorageAvailable() && <p className="text-[10px] leading-relaxed text-amber-700">当前是浏览器预览环境，令牌只保存在当前页面内存，刷新后需要重新配对。正式 APK 会使用 Android Keystore。</p>}
+                        <div className="flex gap-2">
+                            <button type="button" disabled={!enabled || syncBusy} onClick={async () => {
+                                setSyncBusy(true);
+                                setError('');
+                                setSyncStatus('正在上传并接收便签…');
+                                try {
+                                    const result = await syncCompanionOnce();
+                                    setSyncStatus(`同步完成：上传 ${result.pushed} 条，接收 ${result.received} 条，应用 ${result.applied} 条，冲突 ${result.conflicts} 条。`);
+                                    await refresh();
+                                } catch (syncError) {
+                                    setError(syncError instanceof Error ? `同步失败：${syncError.message}` : '同步失败，请检查网络和服务器地址。');
+                                    setSyncStatus('');
+                                } finally { setSyncBusy(false); }
+                            }} className="flex-1 rounded-lg bg-sky-600 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-40">{syncBusy ? '同步中…' : '立即同步'}</button>
+                            <button type="button" disabled={syncBusy} onClick={async () => {
+                                setSyncBusy(true);
+                                setError('');
+                                try {
+                                    await disconnectCompanionDevice(true);
+                                    setSyncStatus('已撤销本设备云端令牌并断开配对。');
+                                    await refresh();
+                                } catch (disconnectError) {
+                                    setError(disconnectError instanceof Error ? `断开失败：${disconnectError.message}` : '断开失败，请联网后重试。');
+                                } finally { setSyncBusy(false); }
+                            }} className="rounded-lg border border-rose-200 px-3 py-2.5 text-xs font-semibold text-rose-600 disabled:opacity-40">断开</button>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <input value={serverUrl} onChange={event => setServerUrl(event.target.value)} placeholder="https://你的同步服务器地址" aria-label="同步服务器地址" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-sky-300" />
+                        <input value={pairingCode} onChange={event => setPairingCode(event.target.value)} placeholder="一次性配对码" aria-label="一次性配对码" autoComplete="off" className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-sky-300" />
+                        <button type="button" disabled={syncBusy || !serverUrl.trim() || !pairingCode.trim()} onClick={async () => {
+                            setSyncBusy(true);
+                            setError('');
+                            try {
+                                const result = await pairCompanionDevice({ baseUrl: serverUrl, pairingCode, label: deviceLabel });
+                                setPairingCode('');
+                                setSyncStatus(result.persistentTokenStorage ? '设备配对成功，令牌已存入 Android Keystore。' : '配对成功，但当前预览环境令牌仅保存在页面内存。');
+                                await refresh();
+                            } catch (pairError) {
+                                setError(pairError instanceof Error ? `配对失败：${pairError.message}` : '配对失败，请检查服务器地址和配对码。');
+                            } finally { setSyncBusy(false); }
+                        }} className="w-full rounded-lg bg-slate-800 px-3 py-2.5 text-xs font-semibold text-white disabled:opacity-40">{syncBusy ? '正在配对…' : '配对这台设备'}</button>
+                    </>
+                )}
+                {syncStatus && <p role="status" className="text-[10px] leading-relaxed text-sky-700">{syncStatus}</p>}
             </div>
             <div className="space-y-2 rounded-xl border border-slate-100 bg-white/80 p-3">
                 <div className="flex items-center justify-between gap-2">
@@ -161,7 +246,7 @@ export default function LocalSyncSettingsPanel() {
                 <div className="rounded-xl bg-white p-2 text-center"><strong className="block text-base text-slate-700">{queue.blocked}</strong><span className="text-[10px] text-slate-400">已阻止</span></div>
             </div>
             {error && <p role="alert" className="text-[11px] text-rose-600">{error}</p>}
-            <p className="text-[10px] leading-relaxed text-slate-400">关闭开关会清除该类别待发送事件、接收缓存和冲突副本，但保留本机原始便签。正式云同步、设备配对和云端清理入口尚未开放。</p>
+            <p className="text-[10px] leading-relaxed text-slate-400">关闭开关会清除本机待发送事件、接收缓存和冲突副本，并尝试要求服务器删除该类云端副本；本机原始便签会保留。服务器尚未部署时，配对与同步暂时无法使用。</p>
         </section>
     );
 }
