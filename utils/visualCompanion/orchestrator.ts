@@ -97,9 +97,10 @@ export function markVisualAssetsPersisted(taskId: string): Promise<VisualTask> {
 }
 
 /** 投递成功后才标记 delivered。调用方应使用 task.deliveryId 做消息幂等。 */
-export function markVisualTaskDelivered(taskId: string): Promise<VisualTask> {
+export function markVisualTaskDelivered(taskId: string, messageId?: number): Promise<VisualTask> {
     return visualCompanionRepository.transitionTask(taskId, 'delivered', {
         completedAt: Date.now(),
+        deliveredMessageId: messageId,
         errorCode: undefined,
         errorMessage: undefined,
         nextAttemptAt: undefined,
