@@ -187,7 +187,9 @@ const ImageStudioApp: React.FC = () => {
       setConnectionResult({ target, result });
       addToast(result.ok ? '接口检查完成' : '接口检查发现问题', result.ok ? 'success' : 'error');
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : '连接检查失败';
+      const message = cause instanceof TypeError
+        ? '浏览器无法读取接口响应。请检查网络、HTTPS 证书，以及服务商是否允许当前网页跨域访问（CORS）。'
+        : cause instanceof Error ? cause.message : '连接检查失败';
       setConnectionResult({ target, result: null, error: message });
       addToast(message.slice(0, 80), 'error');
     } finally {
