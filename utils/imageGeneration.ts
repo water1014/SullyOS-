@@ -6,6 +6,7 @@ export interface GptImageConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  customHeaders?: string;
 }
 
 export interface NaiImageConfig {
@@ -13,6 +14,7 @@ export interface NaiImageConfig {
   model: string;
   provider?: 'official' | 'thirdparty';
   baseUrl?: string;
+  customHeaders?: string;
 }
 
 export interface NaiImageOptions {
@@ -22,6 +24,24 @@ export interface NaiImageOptions {
   scale: number;
   sampler: string;
   seed?: number;
+}
+
+export function buildImageRequestHeaders(base: Record<string, string>, customHeaders = ''): Headers {
+  const headers = new Headers(base);
+  if (!customHeaders.trim()) return headers;
+  let parsed: unknown;
+  try { parsed = JSON.parse(customHeaders); }
+  catch { throw new Error('额外请求头必须是合法 JSON 对象'); }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('额外请求头必须是 JSON 对象，例如 {"x-api-key":"你的密钥"}');
+  }
+  for (const [name, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof value !== 'string' || !name.trim() || /[\r\n]/.test(name + value)) {
+      throw new Error('额外请求头的名称和值必须是有效字符串');
+    }
+    headers.set(name.trim(), value);
+  }
+  return headers;
 }
 
 function errorMessage(payload: any, fallback: string): string {
@@ -66,10 +86,10 @@ export async function editGptImage(
   const imageUrl = await blobToDataUrl(image);
   const response = await fetch(normalizeOpenAIImageEditsEndpoint(config.baseUrl), {
     method: 'POST',
-    headers: {
+    headers: buildImageRequestHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey.trim()}`,
-    },
+    }, config.customHeaders),
     body: JSON.stringify({
       model: config.model || 'gpt-image-2.5-flare',
       images: [{ image_url: imageUrl }],
@@ -102,10 +122,10 @@ export async function generateGptImage(
   if (!prompt.trim()) throw new Error('先写下你想生成的画面吧');
   const response = await fetch(normalizeOpenAIImagesEndpoint(config.baseUrl), {
     method: 'POST',
-    headers: {
+    headers: buildImageRequestHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey.trim()}`,
-    },
+    }, config.customHeaders),
     body: JSON.stringify({
       model: config.model || 'gpt-image-2.5-flare',
       prompt: prompt.trim(),
@@ -153,11 +173,11 @@ export async function generateNaiImage(
   const provider = config.provider || 'official';
   const response = await fetch(normalizeNaiGenerateEndpoint(config.baseUrl || (provider === 'official' ? 'https://image.novelai.net' : ''), provider), {
     method: 'POST',
-    headers: {
+    headers: buildImageRequestHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey.trim()}`,
       Accept: 'application/zip',
-    },
+    }, config.customHeaders),
     body: JSON.stringify({
       input: prompt.trim(),
       model: config.model || 'nai-diffusion-5-full',
