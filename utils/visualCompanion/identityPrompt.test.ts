@@ -72,11 +72,11 @@ describe('character visual change timeline', () => {
             memory({ id: 'permanent', content: '右眉新增一道浅疤', visualChangeKind: 'permanent', activeUntil: undefined }),
             memory({ id: 'temporary', content: '雨水打湿头发', activeUntil: 500 }),
         ], 100);
-        expect(prompt).toContain('[Confirmed permanent visual changes]');
+        expect(prompt).toContain('[Confirmed permanent visual changes, newest first]');
         expect(prompt).toContain('右眉新增一道浅疤');
-        expect(prompt).toContain('[Temporary appearance for the current scene only]');
+        expect(prompt).toContain('[Temporary appearance for the current scene only, newest first]');
         expect(prompt).toContain('雨水打湿头发');
-        expect(prompt).toContain('Do not save these temporary conditions');
+        expect(prompt).toContain('must not overwrite permanent identity');
     });
 
     it('excludes expired, unconfirmed and private visual changes', () => {
@@ -92,7 +92,7 @@ describe('character visual change timeline', () => {
         const prompt = mergeCharacterVisualContextPrompt('海边黄昏', profile, [
             memory({ id: 'permanent', visualChangeKind: 'permanent', content: '右耳耳钉' }),
         ], 100);
-        expect(prompt.indexOf('[Fixed character appearance]')).toBeLessThan(prompt.indexOf('[Confirmed permanent visual changes]'));
+        expect(prompt.indexOf('[Fixed character appearance]')).toBeLessThan(prompt.indexOf('[Confirmed permanent visual changes, newest first]'));
         expect(prompt.indexOf('[Confirmed permanent visual changes]')).toBeLessThan(prompt.indexOf('海边黄昏'));
     });
 
