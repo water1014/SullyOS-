@@ -219,11 +219,19 @@ async function pushEvents(device, events) {
         [`${device.account_id}:event:${event.eventId}`],
       );
       const existing = await client.query(
-        'SELECT server_sequence, entity_version FROM companion_sync_events WHERE account_id = $1 AND event_id = $2',
-        [device.account_id, event.eventId],
+        `SELECT server_sequence, entity_version,
+                (entity_type = $3 AND entity_id = $4 AND operation = $5
+                 AND base_version = $6 AND payload = $7::jsonb) AS same_event
+           FROM companion_sync_events WHERE account_id = $1 AND event_id = $2`,
+        [device.account_id, event.eventId, event.entityType, event.entityId, event.operation,
+          event.baseVersion ?? 0, JSON.stringify(event.payload)],
       );
       if (existing.rowCount) {
-        outcomes.push({ eventId: event.eventId, status: 'duplicate', serverSequence: Number(existing.rows[0].server_sequence), entityVersion: Number(existing.rows[0].entity_version) });
+        if (!existing.rows[0].same_event) {
+          outcomes.push({ eventId: event.eventId, status: 'rejected', error: 'EVENT_ID_COLLISION' });
+        } else {
+          outcomes.push({ eventId: event.eventId, status: 'duplicate', serverSequence: Number(existing.rows[0].server_sequence), entityVersion: Number(existing.rows[0].entity_version) });
+        }
         continue;
       }
       await client.query(
@@ -263,7 +271,16 @@ async function pushEvents(device, events) {
            updated_at = now()`,
         [device.account_id, event.entityType, event.entityId, entityVersion, event.eventId, event.operation],
       );
-      outcomes.push({ eventId: event.eventId, status: 'accepted', serverSequence: Number(inserted.rows[0].server_sequence), entityVersion });
+      const serverSequence = Number(inserted.rows[0].server_sequence);
+      await client.query(
+        `INSERT INTO companion_sync_account_state (account_id, last_server_sequence)
+         VALUES ($1,$2)
+         ON CONFLICT (account_id) DO UPDATE SET
+           last_server_sequence = GREATEST(companion_sync_account_state.last_server_sequence, EXCLUDED.last_server_sequence),
+           updated_at = now()`,
+        [device.account_id, serverSequence],
+      );
+      outcomes.push({ eventId: event.eventId, status: 'accepted', serverSequence, entityVersion });
     }
     await client.query('COMMIT');
     return { status: 200, body: { outcomes } };
@@ -279,7 +296,7 @@ async function pullEvents(device, url) {
   const cursor = parsePositiveInteger(url.searchParams.get('cursor'), 0, Number.MAX_SAFE_INTEGER);
   const limit = Math.min(100, Math.max(1, parsePositiveInteger(url.searchParams.get('limit'), 50, 100)));
   const highest = await pool.query(
-    'SELECT COALESCE(MAX(server_sequence), 0) AS max_sequence FROM companion_sync_events WHERE account_id = $1',
+    'SELECT COALESCE(last_server_sequence, 0) AS max_sequence FROM companion_sync_account_state WHERE account_id = $1',
     [device.account_id],
   );
   const maxSequence = Number(highest.rows[0].max_sequence);
