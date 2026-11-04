@@ -225,7 +225,8 @@ const ImageStudioApp: React.FC = () => {
       const profileKey = nai.provider === 'thirdparty' ? 'naiThirdParty' : 'naiOfficial';
       return { ...current, nai, [profileKey]: { ...current[profileKey], ...updates } };
     });
-  const switchNaiProvider = (provider: 'official' | 'thirdparty') =>
+  const switchNaiProvider = (provider: 'official' | 'thirdparty') => {
+    setReferenceImage(null);
     setConfig(current => ({
       ...current,
       nai: {
@@ -233,6 +234,7 @@ const ImageStudioApp: React.FC = () => {
         provider,
       },
     }));
+  };
 
   const addNaiTag = (tag: string) => {
     const existing = prompt.split(',').map(value => value.trim()).filter(Boolean);
@@ -678,7 +680,7 @@ const ImageStudioApp: React.FC = () => {
                 <div className="flex items-center justify-between gap-1"><span className="text-xs font-bold text-slate-700">NAI 第三方</span>{engine === 'nai' && config.nai.provider === 'thirdparty' && <Check size={13} className="text-sky-600"/>}</div>
                 <div className="text-[9px] text-slate-500 mt-1">自定义代理地址</div>
               </button>
-              <button onClick={() => { setEngine('nai'); updateNai({ provider: 'official' }); }} className={`rounded-2xl p-2.5 text-left border ${engine === 'nai' && config.nai.provider === 'official' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
+              <button onClick={() => { setEngine('nai'); switchNaiProvider('official'); }} className={`rounded-2xl p-2.5 text-left border ${engine === 'nai' && config.nai.provider === 'official' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
                 <div className="flex items-center justify-between gap-1"><span className="text-xs font-bold text-slate-700">NAI 官方</span>{engine === 'nai' && config.nai.provider === 'official' && <Check size={13} className="text-sky-600"/>}</div>
                 <div className="text-[9px] text-slate-500 mt-1">官方原生接口</div>
               </button>
