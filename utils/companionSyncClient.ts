@@ -72,13 +72,21 @@ export async function pairCompanionDevice(input: {
     appVersion?: string;
 }): Promise<{ accountId: string; deviceId: string; persistentTokenStorage: boolean }> {
     const baseUrl = input.baseUrl.trim().replace(/\/$/, '');
+    let parsedBaseUrl: URL;
+    try { parsedBaseUrl = new URL(baseUrl); } catch { throw new Error('INVALID_SYNC_BASE_URL'); }
+    const localHttp = parsedBaseUrl.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsedBaseUrl.hostname);
+    if ((parsedBaseUrl.protocol !== 'https:' && !localHttp) || parsedBaseUrl.username || parsedBaseUrl.password || parsedBaseUrl.search || parsedBaseUrl.hash) {
+        throw new Error('INVALID_SYNC_BASE_URL');
+    }
     const code = input.pairingCode.trim();
+    const label = input.label.trim();
     if (!code || code.length > 128) throw new Error('INVALID_PAIRING_CODE');
+    if (!label || label.length > 24 || /[\u0000-\u001f]/.test(label)) throw new Error('INVALID_DEVICE_LABEL');
     const paired = await requestJson<PairResponse>(baseUrl, '/v1/devices/pair', {
         method: 'POST',
         body: {
             code,
-            label: input.label.trim(),
+            label,
             platform: 'android',
             appVersion: input.appVersion ?? '1.0.0',
         },
@@ -93,7 +101,7 @@ export async function pairCompanionDevice(input: {
             baseUrl,
             accountId: paired.accountId,
             serverDeviceId: paired.deviceId,
-            label: paired.label || input.label.trim(),
+            label: paired.label || label,
         });
     } catch (error) {
         await secureStorageRemove(TOKEN_KEY).catch(() => {});
