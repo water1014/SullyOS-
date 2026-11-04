@@ -28,14 +28,10 @@ export async function createVisualTask(
     }
 ): Promise<VisualTask> {
     const deliveryId = input.deliveryId || createId('visual_delivery');
-    const existing = await visualCompanionRepository.listTasks(input.charId);
-    const duplicate = existing.find(task => task.deliveryId === deliveryId);
-    if (duplicate) return duplicate;
-
-    const now = Date.now();
+    const taskId = input.id || 'visual_task_' + encodeURIComponent(deliveryId);
     const task: VisualTask = {
         ...input,
-        id: input.id || createId('visual_task'),
+        id: taskId,
         status: 'queued',
         deliveryId,
         attempt: 0,
@@ -43,8 +39,15 @@ export async function createVisualTask(
         createdAt: now,
         updatedAt: now,
     };
-    await visualCompanionRepository.saveTask(task);
-    return task;
+    try {
+        await visualCompanionRepository.createTaskOnce(task);
+        return task;
+    } catch (error) {
+        // 相同 deliveryId 映射到相同任务 ID；并发重复请求只返回已创建的任务。
+        const existing = await visualCompanionRepository.getTask(taskId);
+        if (existing && existing.deliveryId === deliveryId && existing.charId === input.charId) return existing;
+        throw error;
+    }
 }
 
 /** 抢占一个排队任务。IndexedDB 写事务中的状态检查可避免同一任务被重复认领。 */
