@@ -103,20 +103,31 @@ const ProactiveSettingsModal: React.FC<ProactiveSettingsModalProps> = ({
             setVisualTaskError('');
             try {
                 const current = await visualCompanionRepository.listTasks(char.id);
+                if (cancelled) return;
+                setVisualTasks(current.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 8));
+                setVisualTaskLoading(false);
+
                 const resumable = current
                     .filter(task => RESUMABLE_VISUAL_TASK_STATUSES.has(task.status))
                     .sort((a, b) => a.createdAt - b.createdAt);
 
-                // Resume local checkpoints when the user returns to this panel.
+                // Show persisted states immediately; recovery continues without blocking the panel.
                 // The executor deduplicates concurrent calls and never retries before nextAttemptAt.
-                await Promise.all(resumable.map(task => executeVisualTaskInForeground(task.id)));
-                const latest = await visualCompanionRepository.listTasks(char.id);
-                if (!cancelled) {
-                    setVisualTasks(latest.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 8));
-                }
+                void Promise.all(resumable.map(task => executeVisualTaskInForeground(task.id)))
+                    .then(() => visualCompanionRepository.listTasks(char.id))
+                    .then(latest => {
+                        if (!cancelled) {
+                            setVisualTasks(latest.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 8));
+                        }
+                    })
+                    .catch(error => {
+                        if (!cancelled) {
+                            setVisualTaskError(error instanceof Error ? error.message : '恢复图片任务失败');
+                        }
+                    });
             } catch (error) {
                 if (!cancelled) {
-                    setVisualTaskError(error instanceof Error ? error.message : '恢复图片任务失败');
+                    setVisualTaskError(error instanceof Error ? error.message : '读取图片任务记录失败');
                 }
             } finally {
                 if (!cancelled) setVisualTaskLoading(false);
