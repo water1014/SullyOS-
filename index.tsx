@@ -14,7 +14,8 @@ import { installIOSStandaloneWorkaround } from './utils/iosStandalone';
 import { installIOSStatusBarEdge } from './utils/iosStatusBarEdge';
 import { installWakeListener } from './utils/proactivePushConfig';
 import { initAnalytics } from './utils/analytics';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { configureOpenCodeGoNativeTransport } from './utils/openCodeGoTransport';
 
 // 默认构建不开启时 Rollup 会整段裁掉；普通浏览器/PWA 不加载原生插件、不申请权限。
 if (import.meta.env.VITE_AMSG_NATIVE_PUSH === 'true' && Capacitor.isNativePlatform()) {
@@ -53,6 +54,12 @@ initAnalytics();
 // 浏览器自动翻译 (Chrome/Edge 等) 会改动 React 托管的 DOM，导致 reconcile 时
 // insertBefore/removeChild 抛 NotFoundError 白屏。挂载前先打护栏。详见该 util 注释。
 installTranslateCrashGuard();
+
+// OpenCode Go does not expose reliable browser CORS headers. Only the installed native app
+// routes those inference calls through Capacitor's native HTTP bridge; web/PWA keeps fetch.
+if (Capacitor.isNativePlatform()) {
+  configureOpenCodeGoNativeTransport(true, options => CapacitorHttp.request(options as any));
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
