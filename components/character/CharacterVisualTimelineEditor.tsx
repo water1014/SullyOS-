@@ -66,13 +66,16 @@ export default function CharacterVisualTimelineEditor({ charId }: { charId: stri
     <textarea value={content} onChange={event => setContent(event.target.value)} rows={3} placeholder={kind === 'permanent' ? '例如：右眉新增一道浅疤，之后的形象都保留它。' : '例如：刚淋过雨，黑色长发和衣领微湿，仅用于近期场景。'} style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d9e4f3', borderRadius: 12, padding: 11, background: '#ffffffd9', color: '#26364d', fontSize: 12, lineHeight: 1.6 }} />
     <button type="button" disabled={!content.trim() || saving} onClick={() => void add()} style={{ marginTop: 8, border: 0, borderRadius: 11, padding: '9px 15px', background: '#416fae', color: 'white', fontSize: 12, fontWeight: 700, opacity: !content.trim() || saving ? .55 : 1 }}>{saving ? '保存中…' : '确认加入时间线'}</button>
     {loading ? <p style={{ fontSize: 11, color: '#8492a7' }}>正在读取时间线…</p> : items.length === 0 ? <p style={{ fontSize: 11, color: '#8492a7', marginTop: 12 }}>还没有变化记录。</p> : <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
-      {items.map(item => <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 10, borderRadius: 12, background: '#ffffffb8', border: '1px solid #e3ebf7' }}>
+      {items.map(item => {
+      const expired = item.visualChangeKind === 'temporary' && item.activeUntil !== undefined && item.activeUntil <= Date.now();
+      return <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: 10, borderRadius: 12, background: expired ? '#f8fafc' : '#ffffffb8', border: '1px solid #e3ebf7' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 750, color: item.visualChangeKind === 'permanent' ? '#3865a8' : '#71819a' }}>{item.visualChangeKind === 'permanent' ? '永久变化' : '临时状态'}{item.activeUntil ? ' · 至 ' + new Date(item.activeUntil).toLocaleDateString() : ''}</div>
+          <div style={{ fontSize: 10, fontWeight: 750, color: expired ? '#94a3b8' : item.visualChangeKind === 'permanent' ? '#3865a8' : '#71819a' }}>{item.visualChangeKind === 'permanent' ? '永久变化' : expired ? '临时状态 · 已过期' : '临时状态 · 生效中'}{item.activeUntil ? ' · 截止 ' + new Date(item.activeUntil).toLocaleDateString() : ''}</div>
           <div style={{ fontSize: 12, lineHeight: 1.6, marginTop: 3, overflowWrap: 'anywhere' }}>{item.content}</div>
         </div>
         <button type="button" onClick={() => void remove(item.id)} style={{ border: 0, background: 'transparent', color: '#b45353', fontSize: 11, padding: 4 }}>删除</button>
-      </div>)}
+      </div>;
+    })}
     </div>}
     {error && <div role="alert" style={{ color: '#b42318', fontSize: 11, marginTop: 8 }}>{error}</div>}
   </section>;
