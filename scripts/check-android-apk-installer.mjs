@@ -8,6 +8,8 @@ const pathsXml = read('native/android/apk-installer/apk_installer_paths.xml');
 const integration = read('scripts/install-apk-installer.ps1');
 const update = read('utils/androidAppUpdate.ts');
 const capacitor = JSON.parse(read('capacitor.config.json'));
+const updateManifest = JSON.parse(read('public/sullyos-update.json'));
+const capacitorEnv = read('.env.capacitor');
 
 const checks = [
   ['native plugin package matches Capacitor app id', java.includes('package com.aetheros.simulator;') && capacitor.appId === 'com.aetheros.simulator'],
@@ -21,6 +23,7 @@ const checks = [
   ['wrapper integration declares install permission', integration.includes('android.permission.REQUEST_INSTALL_PACKAGES')],
   ['wrapper integration checks package identity and provider authority', integration.includes('package\\s+com\\.aetheros\\.simulator') && integration.includes('android:authorities="${applicationId}.fileprovider"')],
   ['web update flow requires native verification and exact manifest size', update.includes('!verified.valid') && update.includes('Number(fileInfo.size) === manifest.sizeBytes') && update.includes('verified.versionCode <= installed.versionCode')],
+  ['fork update channel stays disabled until its own signed release exists', updateManifest.status === 'disabled' && updateManifest.versionCode === 0 && updateManifest.apkUrl === '' && updateManifest.sha256 === '' && /VITE_APK_UPDATE_MANIFEST_URL=\\s*$/.test(capacitorEnv)],
 ];
 
 for (const [label, passed] of checks) {
