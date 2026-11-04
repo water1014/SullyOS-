@@ -50,7 +50,7 @@ public class SecureStoragePlugin extends Plugin {
             getContext().getSharedPreferences(PREFS_NAME, 0)
                 .edit()
                 .putString(key, Base64.encodeToString(packed, Base64.NO_WRAP))
-                .apply();
+                .commit();
 
             JSObject result = new JSObject();
             result.put("stored", true);
@@ -96,7 +96,7 @@ public class SecureStoragePlugin extends Plugin {
     public void remove(PluginCall call) {
         try {
             String key = validateKey(call.getString("key"));
-            getContext().getSharedPreferences(PREFS_NAME, 0).edit().remove(key).apply();
+            getContext().getSharedPreferences(PREFS_NAME, 0).edit().remove(key).commit();
             JSObject result = new JSObject();
             result.put("removed", true);
             call.resolve(result);
@@ -124,6 +124,7 @@ public class SecureStoragePlugin extends Plugin {
             KEY_ALIAS,
             KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT
         )
+            .setKeySize(256)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setRandomizedEncryptionRequired(true)
