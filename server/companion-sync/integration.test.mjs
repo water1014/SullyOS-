@@ -237,6 +237,24 @@ async function main() {
     method: 'POST', token: deviceOne, body: { entityType: 'room_note', enabled: false },
   });
   assertStatus(disable, 200, 'disable sync');
+
+  // A newly paired device must not receive cached replicas after opt-out.
+  const postOptOutCode = await request('/v1/admin/pairing-codes', { method: 'POST', admin: true });
+  assertStatus(postOptOutCode, 201, 'issue post-opt-out pairing code');
+  const postOptOutPair = await request('/v1/devices/pair', {
+    method: 'POST',
+    body: { code: postOptOutCode.body.pairingCode, label: '退出同步后的设备', platform: 'android' },
+  });
+  assertStatus(postOptOutPair, 201, 'pair post-opt-out device');
+  const postOptOutPull = await request('/v1/sync/pull?cursor=0&limit=50', { token: postOptOutPair.body.deviceToken });
+  assertStatus(postOptOutPull, 200, 'pull after opt-out');
+  assert.deepEqual(postOptOutPull.body.events, []);
+  const postOptOutForgedAck = await request('/v1/sync/ack', {
+    method: 'POST', token: postOptOutPair.body.deviceToken,
+    body: { lastAckedSequence: sequenceThree },
+  });
+  assertStatus(postOptOutForgedAck, 409, 'disabled pull must not create a delivery allowance');
+
   // The account is discovered from the authenticated device row, never trusted from the client.
   const account = await pool.query('SELECT account_id FROM companion_devices WHERE id = $1', [firstPair.body.deviceId]);
   const remaining = await pool.query('SELECT count(*)::int AS count FROM companion_sync_events WHERE account_id = $1', [account.rows[0].account_id]);
