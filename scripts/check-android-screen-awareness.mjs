@@ -12,6 +12,7 @@ const checks = [
   ['screen capture requires Android system consent for each session', plugin.includes('createScreenCaptureIntent()') && plugin.includes('startActivityForResult(call') && plugin.includes('Activity.RESULT_OK')],
   ['screen capture can only start from an explicit user-facing plugin call', plugin.includes('void startSession(PluginCall call)') && !plugin.includes('load()') && !plugin.includes('handleOnResume')],
   ['foreground service declares media projection type', service.includes('FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION') && installer.includes('android:foregroundServiceType="mediaProjection"')],
+  ['Android 13+ notification permission is requested before projection consent', plugin.includes('Manifest.permission.POST_NOTIFICATIONS') && plugin.includes('requestPermissionForAlias("notifications"') && installer.includes('android.permission.POST_NOTIFICATIONS')],
   ['foreground service notification is ongoing and has an explicit stop action', service.includes('setOngoing(true)') && service.includes('addAction(') && service.includes('ACTION_STOP')],
   ['Android 14 media projection permission is added', installer.includes('android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION') && installer.includes('android.permission.FOREGROUND_SERVICE')],
   ['native installer registers plugin and service source', installer.includes('ScreenAwarenessPlugin') && installer.includes('ScreenAwarenessService.java')],
