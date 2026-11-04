@@ -7,7 +7,7 @@ import {
 import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
 import {
-  generateGptImage, editGptImage, generateNaiImage, editNaiImage,
+  generateGptImage, editGptImage, generateNaiImage,
   suggestNaiTags, getNaiQualityTags, testGptImageConnection, testNaiImageConnection,
   type GptImageConfig, type NaiImageConfig, type ImageEngine, type ImageConnectionTestResult,
 } from '../utils/imageGeneration';
@@ -15,6 +15,7 @@ import {
 const CONFIG_KEY = 'sully-image-studio:config:v1';
 const ITEMS_KEY = 'sully-image-studio:items:v1';
 const TEMPLATES_KEY = 'sully-image-studio:nai-templates:v1';
+const NAI_SETTINGS_KEY = 'sully-image-studio:nai-settings:v1';
 const IMAGE_CATEGORIES = ['未分类', '人物', '场景', '头像', '壁纸', '灵感草稿', '其他'];
 const DEFAULT_CONFIG = {
   gpt: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-image-2.5-flare' },
@@ -31,6 +32,7 @@ type StudioConfig = {
 type SavedImage = {
   id: string; blobId: string; engine: ImageEngine; prompt: string; negativePrompt: string;
   model: string; createdAt: number; mimeType: string;
+  naiSettings?: { size: string; steps: number; scale: number; sampler: string; seed?: number };
   note?: string; category?: string; favorite?: boolean; backupSourceId?: string;
 };
 type DisplayImage = SavedImage & { url: string };
@@ -71,6 +73,19 @@ const readItems = (): SavedImage[] => {
   } catch { return []; }
 };
 const persistItems = (items: SavedImage[]) => localStorage.setItem(ITEMS_KEY, JSON.stringify(items));
+const readNaiSettings = () => {
+  const fallback = { size: '832x1216', steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: '' };
+  try {
+    const saved = JSON.parse(localStorage.getItem(NAI_SETTINGS_KEY) || '{}');
+    return {
+      size: typeof saved.size === 'string' ? saved.size : fallback.size,
+      steps: Number.isFinite(saved.steps) ? Math.min(50, Math.max(10, saved.steps)) : fallback.steps,
+      scale: Number.isFinite(saved.scale) ? Math.min(12, Math.max(1, saved.scale)) : fallback.scale,
+      sampler: typeof saved.sampler === 'string' ? saved.sampler : fallback.sampler,
+      seed: typeof saved.seed === 'string' ? saved.seed : fallback.seed,
+    };
+  } catch { return fallback; }
+};
 const readTemplates = (): NaiPromptTemplate[] => {
   try {
     const value = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]');
@@ -119,10 +134,11 @@ const ImageStudioApp: React.FC = () => {
   const [templateName, setTemplateName] = useState('');
   const [gptSize, setGptSize] = useState('1024x1024');
   const [gptQuality, setGptQuality] = useState('high');
-  const [naiSize, setNaiSize] = useState('832x1216');
-  const [naiSteps, setNaiSteps] = useState(28);
-  const [naiScale, setNaiScale] = useState(5);
-  const [naiSampler, setNaiSampler] = useState('k_euler_ancestral');
+  const [naiSize, setNaiSize] = useState(() => readNaiSettings().size);
+  const [naiSteps, setNaiSteps] = useState(() => readNaiSettings().steps);
+  const [naiScale, setNaiScale] = useState(() => readNaiSettings().scale);
+  const [naiSampler, setNaiSampler] = useState(() => readNaiSettings().sampler);
+  const [naiSeed, setNaiSeed] = useState(() => readNaiSettings().seed);
   const [naiStrength, setNaiStrength] = useState(0.35);
   const [naiNoise, setNaiNoise] = useState(0.05);
   const [generating, setGenerating] = useState(false);
@@ -167,6 +183,10 @@ const ImageStudioApp: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(TEMPLATES_KEY, JSON.stringify(naiTemplates));
   }, [naiTemplates]);
+
+  useEffect(() => {
+    localStorage.setItem(NAI_SETTINGS_KEY, JSON.stringify({ size: naiSize, steps: naiSteps, scale: naiScale, sampler: naiSampler, seed: naiSeed }));
+  }, [naiSize, naiSteps, naiScale, naiSampler, naiSeed]);
 
   useEffect(() => {
     if (!referenceImage) { setReferencePreview(''); return; }
@@ -310,6 +330,7 @@ const ImageStudioApp: React.FC = () => {
     const item: SavedImage = {
       id, blobId, engine, prompt: prompt.trim(), negativePrompt: engine === 'nai' ? negativePrompt.trim() : '',
       model: engine === 'gpt' ? config.gpt.model : config.nai.model,
+      ...(engine === 'nai' ? { naiSettings: { size: naiSize, steps: naiSteps, scale: naiScale, sampler: naiSampler, ...(naiSeed.trim() ? { seed: Number(naiSeed) } : {}) } } : {}),
       createdAt: Date.now(), mimeType: blob.type || 'image/png',
     };
     const next = [item, ...readItems()];
@@ -330,6 +351,7 @@ const ImageStudioApp: React.FC = () => {
       const naiOptions = {
         width: Number(naiSize.split('x')[0]), height: Number(naiSize.split('x')[1]),
         steps: naiSteps, scale: naiScale, sampler: naiSampler,
+        ...(naiSeed.trim() ? { seed: Number(naiSeed) } : {}),
       };
       const blob = engine === 'gpt'
         ? referenceImage
@@ -367,7 +389,16 @@ const ImageStudioApp: React.FC = () => {
     setPrompt(item.prompt);
     setNegativePrompt(item.negativePrompt || '');
     if (item.engine === 'gpt') updateGpt({ model: item.model });
-    else updateNai({ model: item.model });
+    else {
+      updateNai({ model: item.model });
+      if (item.naiSettings) {
+        setNaiSize(item.naiSettings.size);
+        setNaiSteps(item.naiSettings.steps);
+        setNaiScale(item.naiSettings.scale);
+        setNaiSampler(item.naiSettings.sampler);
+        setNaiSeed(item.naiSettings.seed === undefined ? '' : String(item.naiSettings.seed));
+      }
+    }
     setReferenceImage(null);
     setError('');
     setTab('create');
@@ -757,13 +788,10 @@ const ImageStudioApp: React.FC = () => {
               <div><div className="flex justify-between text-xs font-semibold text-slate-600"><span>迭代步数 Steps</span><span>{naiSteps}</span></div><input className="w-full accent-sky-600 mt-2" type="range" min="10" max="50" value={naiSteps} onChange={event => setNaiSteps(Number(event.target.value))}/></div>
               <div><div className="flex justify-between text-xs font-semibold text-slate-600"><span>提示词引导 Scale</span><span>{naiScale.toFixed(1)}</span></div><input className="w-full accent-sky-600 mt-2" type="range" min="1" max="12" step=".5" value={naiScale} onChange={event => setNaiScale(Number(event.target.value))}/></div>
               <label className="block text-xs font-semibold text-slate-600">采样器</label>
-              <select className="field" value={naiSampler} onChange={event => setNaiSampler(event.target.value)}><option value="k_euler_ancestral">Euler Ancestral</option><option value="k_euler">Euler</option><option value="k_dpmpp_2m">DPM++ 2M</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="ddim">DDIM</option></select>
-              {referenceImage && <div className="rounded-2xl border border-sky-100 bg-sky-50/65 p-3 space-y-3">
-                <div className="text-xs font-semibold text-slate-700">图生图专属参数</div>
-                <div><div className="flex justify-between text-[11px] text-slate-600"><span>重绘强度 Strength</span><span>{naiStrength.toFixed(2)}</span></div><input className="w-full accent-sky-600 mt-2" type="range" min="0.01" max="0.99" step="0.01" value={naiStrength} onChange={event => setNaiStrength(Number(event.target.value))}/><p className="text-[10px] text-slate-400">越低越接近原图，越高改动越明显。</p></div>
-                <div><div className="flex justify-between text-[11px] text-slate-600"><span>噪声 Noise</span><span>{naiNoise.toFixed(2)}</span></div><input className="w-full accent-sky-600 mt-2" type="range" min="0" max="0.99" step="0.01" value={naiNoise} onChange={event => setNaiNoise(Number(event.target.value))}/><p className="text-[10px] text-slate-400">适量噪声可增加细节，过高可能产生瑕疵。</p></div>
-              </div>}
-              <p className="text-[10px] text-slate-400">当前模型：{config.nai.model} · {referenceImage ? '图生图' : '文生图'}</p>
+              <select className="field" value={naiSampler} onChange={event => setNaiSampler(event.target.value)}><option value="k_euler_ancestral">Euler Ancestral · 推荐</option><option value="k_dpmpp_2m">DPM++ 2M · 推荐</option><option value="k_euler">Euler</option><option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option><option value="k_dpmpp_sde">DPM++ SDE</option><option value="k_dpm_2">DPM2</option><option value="k_dpm_fast">DPM Fast</option><option value="k_heun">Heun</option><option value="ddim">DDIM</option></select>
+              <div className="space-y-1"><label className="block text-xs font-semibold text-slate-600">随机种子 Seed <span className="font-normal text-slate-400">· 留空为随机</span></label><input className="field" type="number" inputMode="numeric" min="0" max="4294967295" step="1" value={naiSeed} onChange={event => setNaiSeed(event.target.value)} placeholder="留空自动随机生成"/><p className="text-[10px] text-slate-400">固定种子并保持模型、尺寸、提示词和参数一致，可帮助复现相近构图。</p></div>
+              <div className="flex gap-2"><button type="button" className="soft flex-1 rounded-xl py-2 text-[11px] font-semibold" onClick={() => { setNaiSize('832x1216'); setNaiSteps(28); setNaiScale(5); setNaiSampler('k_euler_ancestral'); setNaiSeed(''); }}>恢复推荐参数</button><button type="button" className="soft flex-1 rounded-xl py-2 text-[11px] font-semibold" onClick={() => setNaiSeed(String(Math.floor(Math.random() * 4294967295)))}>随机生成 Seed</button></div>
+              <p className="text-[10px] text-slate-400">当前模型：{config.nai.model} · 文生图 · 参数自动保存在本机</p>
             </>}
           </section>
 
@@ -802,7 +830,8 @@ const ImageStudioApp: React.FC = () => {
                   <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">反向提示词</label><button onClick={() => copyPrompt(selected.negativePrompt)} className="text-[10px] text-sky-700">复制</button></div>
                   <p className="text-xs leading-5 text-slate-500 whitespace-pre-wrap break-words rounded-xl bg-white/45 p-3">{selected.negativePrompt}</p>
                 </>}
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                {selected.engine === 'nai' && selected.naiSettings && <div className="rounded-xl bg-sky-50/70 border border-sky-100 p-3 space-y-1"><div className="text-[10px] font-semibold text-sky-800">本次生成参数</div><p className="text-[10px] text-slate-600">{selected.naiSettings.size} · {selected.naiSettings.steps} Steps · Scale {selected.naiSettings.scale} · {selected.naiSettings.sampler}</p><div className="flex items-center justify-between gap-2"><span className="text-[10px] text-slate-500">Seed：{selected.naiSettings.seed ?? '随机'}</span>{selected.naiSettings.seed !== undefined && <button type="button" onClick={() => copyPrompt(String(selected.naiSettings?.seed))} className="text-[10px] text-sky-700">复制 Seed</button>}</div></div>}
+              <div className="grid grid-cols-2 gap-2 pt-1">
                   <button onClick={() => restoreImagePrompt(selected)} className="primary rounded-xl py-2.5 text-xs font-semibold">载入提示词继续创作</button>
                   <button onClick={() => updateImageMetadata(selected.id, { favorite: !selected.favorite })} className="soft rounded-xl py-2.5 text-xs">{selected.favorite ? '★ 已收藏' : '☆ 收藏作品'}</button>
                   <button onClick={() => downloadImage(selected)} className="soft rounded-xl py-2.5 text-xs flex items-center justify-center gap-1"><DownloadSimple size={14}/>下载图片</button>
