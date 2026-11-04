@@ -1433,7 +1433,7 @@ const Settings: React.FC = () => {
     setIsLoadingModels(true);
     setStatusMsg('正在连接...');
     try {
-        const isOpenCodeGo = /opencode\.ai\/inference\/go\/(?:openai|anthropic)\/v1$/i.test(baseUrl);
+        const isOpenCodeGo = /opencode\.ai\/inference\/go\/(?:openai|anthropic)\/v1(?:\/messages)?$/i.test(baseUrl);
         const modelsUrl = isOpenCodeGo ? 'https://opencode.ai/inference/go/v1/models' : `${baseUrl}/models`;
         const requestOptions = { method: 'GET', headers: buildApiRequestHeaders(apiKey, localCustomHeaders) };
         const response = isOpenCodeGo ? await fetch(modelsUrl, requestOptions) : await fetchLlm(modelsUrl, requestOptions);
