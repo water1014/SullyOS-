@@ -323,14 +323,14 @@ const ImageStudioApp: React.FC = () => {
     }
   };
 
-  const saveImage = useCallback(async (blob: Blob) => {
+  const saveImage = useCallback(async (blob: Blob, generatedSeed?: number) => {
     const id = `studio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const blobId = `image-studio:${id}`;
     await DB.putBlobAsset(blobId, blob);
     const item: SavedImage = {
       id, blobId, engine, prompt: prompt.trim(), negativePrompt: engine === 'nai' ? negativePrompt.trim() : '',
       model: engine === 'gpt' ? config.gpt.model : config.nai.model,
-      ...(engine === 'nai' ? { naiSettings: { size: naiSize, steps: naiSteps, scale: naiScale, sampler: naiSampler, ...(naiSeed.trim() ? { seed: Number(naiSeed) } : {}) } } : {}),
+      ...(engine === 'nai' ? { naiSettings: { size: naiSize, steps: naiSteps, scale: naiScale, sampler: naiSampler, ...(generatedSeed !== undefined ? { seed: generatedSeed } : {}) } } : {}),
       createdAt: Date.now(), mimeType: blob.type || 'image/png',
     };
     const next = [item, ...readItems()];
@@ -354,17 +354,21 @@ const ImageStudioApp: React.FC = () => {
           throw new Error('Seed 必须是 0 到 4294967295 之间的整数，或留空使用随机种子');
         }
       }
+      const effectiveNaiSeed = engine === 'nai'
+        ? (naiSeed.trim() ? Number(naiSeed) : Math.floor(Math.random() * 4294967296))
+        : undefined;
+      if (effectiveNaiSeed !== undefined) setNaiSeed(String(effectiveNaiSeed));
       const naiOptions = {
         width: Number(naiSize.split('x')[0]), height: Number(naiSize.split('x')[1]),
         steps: naiSteps, scale: naiScale, sampler: naiSampler,
-        ...(naiSeed.trim() ? { seed: Number(naiSeed) } : {}),
+        ...(effectiveNaiSeed !== undefined ? { seed: effectiveNaiSeed } : {}),
       };
       const blob = engine === 'gpt'
         ? referenceImage
           ? await editGptImage(config.gpt, referenceImage, prompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
           : await generateGptImage(config.gpt, prompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
         : await generateNaiImage(config.nai, prompt, negativePrompt, naiOptions, controller.signal);
-      await saveImage(blob);
+      await saveImage(blob, effectiveNaiSeed);
       addToast('图片已生成并保存到我的画廊', 'success');
     } catch (cause) {
       if (cause instanceof Error && cause.name === 'AbortError') {
