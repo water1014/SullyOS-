@@ -148,10 +148,41 @@ async function updateOne<T extends { id: string }>(
     return next;
 }
 
+async function saveCharacterVisualProfile(record: CharacterVisualProfile): Promise<void> {
+    assertRecordId(record.id, STORE.profiles);
+    assertRecordId(record.charId, 'charId');
+    if (!Number.isSafeInteger(record.version) || record.version < 1) {
+        throw new Error('角色形象档案版本必须是正整数');
+    }
+    const db = await openDB();
+    const tx = db.transaction(STORE.profiles, 'readwrite');
+    const store = tx.objectStore(STORE.profiles);
+    const current = await requestResult<CharacterVisualProfile | undefined>(store.get(record.id));
+    if (current) {
+        if (current.charId !== record.charId) {
+            tx.abort();
+            throw new Error('角色形象档案不能转移到其他角色');
+        }
+        if (record.version !== current.version + 1) {
+            tx.abort();
+            throw new Error('角色形象档案版本冲突，请先读取最新版本再修改');
+        }
+    } else if (record.version !== 1) {
+        tx.abort();
+        throw new Error('新建角色形象档案必须从版本 1 开始');
+    }
+    store.put(record);
+    await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error('角色形象档案保存失败'));
+        tx.onabort = () => reject(tx.error || new Error('角色形象档案保存已中止'));
+    });
+}
+
 export const visualCompanionRepository = {
     getProfile: (id: string) => readOne<CharacterVisualProfile>(STORE.profiles, id),
     listProfiles: (charId: string) => readByCharacter<CharacterVisualProfile>(STORE.profiles, charId),
-    saveProfile: (record: CharacterVisualProfile) => writeOne(STORE.profiles, record),
+    saveProfile: saveCharacterVisualProfile,
     deleteProfile: (id: string) => removeOne(STORE.profiles, id),
 
     getMemory: (id: string) => readOne<VisualMemoryRecord>(STORE.memories, id),
