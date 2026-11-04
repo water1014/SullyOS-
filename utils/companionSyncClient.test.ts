@@ -33,7 +33,7 @@ const secure = vi.hoisted(() => ({
 vi.mock('./localSyncStore', () => store);
 vi.mock('./androidSecureStorage', () => secure);
 
-import { pairCompanionDevice, syncCompanionOnce, setCompanionRemoteSyncPolicy } from './companionSyncClient';
+import { pairCompanionDevice, syncCompanionOnce, setCompanionRemoteSyncPolicy, listCompanionDevices, revokeCompanionDevice } from './companionSyncClient';
 
 describe('companion sync client pairing', () => {
     beforeEach(() => {
@@ -117,5 +117,55 @@ describe('companion sync client pairing', () => {
         const { setCompanionRemoteSyncPolicy } = await import('./companionSyncClient');
         await setCompanionRemoteSyncPolicy(false);
         expect(fetch).toHaveBeenCalledTimes(1);
+    });
+});
+
+
+describe('companion sync device management', () => {
+    beforeEach(() => {
+        state.connection = {
+            baseUrl: 'https://sync.example.test',
+            accountId: 'account-1',
+            serverDeviceId: '11111111-1111-4111-8111-111111111111',
+            label: '主手机',
+        };
+        state.token = 'device-token';
+        vi.clearAllMocks();
+    });
+
+    it('lists paired devices using the authenticated current-device token', async () => {
+        const devices = [{
+            id: '11111111-1111-4111-8111-111111111111',
+            label: '主手机',
+            platform: 'android',
+            appVersion: '1.0.0',
+            createdAt: '2026-11-04T00:00:00.000Z',
+            lastSeenAt: null,
+            revokedAt: null,
+        }];
+        vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+            expect(url).toBe('https://sync.example.test/v1/devices');
+            expect(new Headers(init.headers).get('authorization')).toBe('Bearer device-token');
+            return new Response(JSON.stringify({ devices }), { status: 200 });
+        }));
+        await expect(listCompanionDevices()).resolves.toEqual(devices);
+    });
+
+    it('revokes only a valid other-device identifier through the authenticated API', async () => {
+        vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+            expect(url).toBe('https://sync.example.test/v1/devices/22222222-2222-4222-8222-222222222222');
+            expect(init.method).toBe('DELETE');
+            expect(new Headers(init.headers).get('authorization')).toBe('Bearer device-token');
+            return new Response(JSON.stringify({ revoked: true }), { status: 200 });
+        }));
+        await revokeCompanionDevice('22222222-2222-4222-8222-222222222222');
+        expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects malformed device IDs before making a request', async () => {
+        const fetchSpy = vi.fn();
+        vi.stubGlobal('fetch', fetchSpy);
+        await expect(revokeCompanionDevice('not-a-device')).rejects.toThrow('INVALID_DEVICE_ID');
+        expect(fetchSpy).not.toHaveBeenCalled();
     });
 });
