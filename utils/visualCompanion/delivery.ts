@@ -43,6 +43,10 @@ export async function deliverVisualTaskToChat(
     if (!storedContent.startsWith('blobref:')) {
         throw new Error('聊天图片必须先保存为 blobref 资产引用');
     }
+    const ownedAsset = await Promise.all(task.resultAssetIds.map(id => visualCompanionRepository.getAsset(id)));
+    if (!ownedAsset.some(asset => asset?.status === 'ready' && asset.privacyScope === 'standard' && asset.charId === task.charId && asset.storage.kind === 'blobref' && asset.storage.ref === storedContent)) {
+        throw new Error('投递图片必须属于当前任务已保存的视觉资产');
+    }
 
     // 不把完整提示词、Provider 凭据或私密信息复制进聊天元数据。
     const messageId = await DB.saveMessageOnce(task.deliveryId, {
