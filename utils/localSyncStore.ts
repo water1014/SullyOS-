@@ -91,8 +91,10 @@ export async function setSyncPreference(
         queued.filter(event => event.entityType === entityType).forEach(event => outbox.delete(event.eventId));
         const inbox = tx.objectStore(INBOX);
         const incoming = await requestResult(inbox.getAll()) as LocalSyncInboxEvent[];
+        // Applied inbox rows are still duplicate copies of remote content.
+        // Keep the user's local entity, but remove every cached transport payload on opt-out.
         incoming
-            .filter(event => event.entityType === entityType && event.applyState !== 'applied')
+            .filter(event => event.entityType === entityType)
             .forEach(event => inbox.delete(event.eventId));
         // Conflict snapshots can contain copies of both devices' note text.
         // Opting out must remove those replicas too, not just pending queue rows.
