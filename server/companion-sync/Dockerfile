@@ -3,9 +3,10 @@ FROM node:22-alpine
 ENV NODE_ENV=production
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod --frozen-lockfile
+# The sync service only needs PostgreSQL's driver. Do not install the large
+# frontend dependency tree into the small VPS runtime image.
+RUN npm install --omit=dev --no-audit --no-fund --save-exact pg@8.20.0 \
+    && npm cache clean --force
 
 COPY --chown=node:node server/companion-sync ./server/companion-sync
 USER node
