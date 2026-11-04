@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { DB } from '../db';
 import { assertAssetPrivacy, TASK_TRANSITIONS, visualCompanionRepository } from './repository';
 import type { VisualAssetRecord, VisualTask } from './types';
+import { claimNextVisualTask, createVisualTask, markVisualAssetsPersisted, markVisualTaskDelivered, recordGeneratedVisualAssets, resumeVisualTaskRetry, scheduleVisualTaskRetry, startVisualGeneration } from './orchestrator';
 
 const now = 1_800_000_000_000;
 
@@ -137,5 +138,78 @@ describe('视觉人格本地仓库', () => {
         await expect(visualCompanionRepository.deleteAsset('asset_private')).rejects.toThrow('私密资产必须先通过私密保险库');
         await visualCompanionRepository.deleteAsset('asset_1');
         expect(await visualCompanionRepository.getAsset('asset_1')).toBeNull();
+    });
+
+    it('任务编排支持创建、认领、生成和进入投递阶段', async () => {
+        const created = await createVisualTask({
+            charId: 'char_1',
+            kind: 'spontaneous_share',
+            privacyScope: 'standard',
+            provider: 'openai',
+            providerConfigId: 'provider_ref_only',
+            model: 'gpt-image',
+            prompt: '窗边自然光',
+            referenceAssetIds: [],
+            maxAttempts: 3,
+            budget: { maxImages: 1 },
+        });
+        expect(created.status).toBe('queued');
+        expect(await createVisualTask({
+            charId: 'char_1',
+            kind: 'spontaneous_share',
+            privacyScope: 'standard',
+            provider: 'openai',
+            providerConfigId: 'provider_ref_only',
+            model: 'gpt-image',
+            prompt: '重复请求',
+            referenceAssetIds: [],
+            maxAttempts: 3,
+            budget: { maxImages: 1 },
+            deliveryId: created.deliveryId,
+        })).toEqual(created);
+
+        const claimed = await claimNextVisualTask('char_1');
+        expect(claimed?.id).toBe(created.id);
+        expect(claimed?.status).toBe('planning');
+        await startVisualGeneration(created.id);
+        const generated = await recordGeneratedVisualAssets(created.id, ['asset_result_1']);
+        expect(generated.status).toBe('persisting');
+        expect(generated.resultAssetIds).toEqual(['asset_result_1']);
+        const pending = await markVisualAssetsPersisted(created.id);
+        expect(pending.status).toBe('delivery_pending');
+    });
+
+    it('投递失败恢复时只回到 delivery_pending，不重新生成', async () => {
+        const created = await createVisualTask({
+            charId: 'char_1',
+            kind: 'chat_requested',
+            privacyScope: 'standard',
+            provider: 'openai',
+            providerConfigId: 'provider_ref_only',
+            model: 'gpt-image',
+            prompt: '已生成图片',
+            referenceAssetIds: [],
+            maxAttempts: 3,
+            budget: { maxImages: 1 },
+        });
+        await claimNextVisualTask('char_1');
+        await startVisualGeneration(created.id);
+        await recordGeneratedVisualAssets(created.id, ['asset_already_generated']);
+        await markVisualAssetsPersisted(created.id);
+        const retryAt = Date.now() + 60_000;
+        const waiting = await scheduleVisualTaskRetry(created.id, {
+            code: 'CHAT_DELIVERY_FAILED',
+            message: '聊天消息投递暂时失败',
+        }, retryAt);
+        expect(waiting.status).toBe('retry_wait');
+        expect(waiting.retryStage).toBe('delivery_pending');
+        expect(waiting.resultAssetIds).toEqual(['asset_already_generated']);
+        await expect(resumeVisualTaskRetry(created.id)).rejects.toThrow('重试时间尚未到达');
+        const resumed = await resumeVisualTaskRetry(created.id, retryAt);
+        expect(resumed.status).toBe('delivery_pending');
+        expect(resumed.resultAssetIds).toEqual(['asset_already_generated']);
+        const delivered = await markVisualTaskDelivered(created.id);
+        expect(delivered.status).toBe('delivered');
+        expect(delivered.deliveryId).toBe(created.deliveryId);
     });
 });
