@@ -18,7 +18,8 @@
     "build:chat-preview": "node scripts/build-chat-preview-css.mjs",
     "check:android-installer": "node scripts/check-android-apk-installer.mjs",
     "start:companion-sync": "node server/companion-sync/server.mjs",
-    "check:companion-sync": "node --check server/companion-sync/protocol.mjs && node --check server/companion-sync/server.mjs"
+    "check:companion-sync": "node --check server/companion-sync/protocol.mjs && node --check server/companion-sync/server.mjs",
+    "test:companion-sync-integration": "node server/companion-sync/integration.test.mjs"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "^6.0.1",
