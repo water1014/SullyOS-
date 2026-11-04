@@ -31,6 +31,7 @@ export function pickDialogueApi(api: DialogueApiConfig): DialogueApiConfig {
     ...(typeof api.stream === 'boolean' ? { stream: api.stream } : {}),
     ...(typeof api.temperature === 'number' ? { temperature: api.temperature } : {}),
     ...(normalizeDialogueMaxTokens(api.maxTokens) !== undefined ? { maxTokens: api.maxTokens } : {}),
+    ...(api.customHeaders ? { customHeaders: { ...api.customHeaders } } : {}),
   };
 }
 
