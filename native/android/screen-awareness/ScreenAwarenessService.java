@@ -140,7 +140,7 @@ public final class ScreenAwarenessService extends Service {
         );
         channel.setDescription("屏幕感知开启时持续显示，可随时停止");
         channel.setShowBadge(false);
-        NotificationManager manager = getSystemService(NotificationManager.class);
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager != null) manager.createNotificationChannel(channel);
     }
 
