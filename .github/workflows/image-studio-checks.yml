@@ -78,6 +78,8 @@ jobs:
           }
       - name: Run tests
         run: pnpm exec vitest run utils/imageGeneration.test.ts utils/blobGc.test.ts utils/visualCompanion/data.test.ts utils/visualCompanion/repository.test.ts utils/visualCompanion/autonomyPolicy.test.ts utils/visualCompanion/autonomySettings.test.ts utils/apiConfigNormalize.test.ts utils/characterApi.test.ts utils/apiPresetSwitch.test.ts utils/localSyncStore.test.ts utils/androidSecureStorage.test.ts utils/companionSyncClient.test.ts server/companion-sync/protocol.test.ts utils/androidAppUpdate.test.ts utils/androidUpdateSession.test.ts utils/androidUpdateControl.test.ts
+      - name: Check first-party Android build scripts
+        run: node --check scripts/install-capacitor-android-plugins.mjs && node --check scripts/build-capacitor-android.mjs
       - name: Build production app
         run: pnpm build
       - name: Setup Java for Android build
@@ -86,11 +88,5 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - name: Generate the first-party Capacitor Android project
-        run: pnpm exec cap add android
-      - name: Install SullyOS native Android plugins
-        run: pnpm prepare:android
-      - name: Sync Capacitor Android dependencies
-        run: pnpm exec cap sync android
-      - name: Compile Android debug package (not published)
-        run: cd android && ./gradlew assembleDebug --no-daemon
+      - name: Build first-party Capacitor Android debug package (not published)
+        run: pnpm build:capacitor:apk
