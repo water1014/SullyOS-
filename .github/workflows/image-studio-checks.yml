@@ -56,7 +56,7 @@ jobs:
       - name: Parse Android PowerShell integration scripts
         shell: pwsh
         run: |
-          $files = @('scripts/install-apk-installer.ps1', 'scripts/sync-tiao-capacitor.ps1')
+          $files = @('scripts/install-apk-installer.ps1', 'scripts/install-secure-storage.ps1', 'scripts/sync-tiao-capacitor.ps1')
           foreach ($file in $files) {
             $tokens = $null
             $errors = $null
@@ -68,6 +68,6 @@ jobs:
             Write-Host "PowerShell syntax OK: $file"
           }
       - name: Run tests
-        run: pnpm exec vitest run utils/imageGeneration.test.ts utils/blobGc.test.ts utils/visualCompanion/data.test.ts utils/visualCompanion/repository.test.ts utils/visualCompanion/autonomyPolicy.test.ts utils/visualCompanion/autonomySettings.test.ts utils/apiConfigNormalize.test.ts utils/characterApi.test.ts utils/apiPresetSwitch.test.ts utils/localSyncStore.test.ts server/companion-sync/protocol.test.ts utils/androidAppUpdate.test.ts utils/androidUpdateSession.test.ts utils/androidUpdateControl.test.ts
+        run: pnpm exec vitest run utils/imageGeneration.test.ts utils/blobGc.test.ts utils/visualCompanion/data.test.ts utils/visualCompanion/repository.test.ts utils/visualCompanion/autonomyPolicy.test.ts utils/visualCompanion/autonomySettings.test.ts utils/apiConfigNormalize.test.ts utils/characterApi.test.ts utils/apiPresetSwitch.test.ts utils/localSyncStore.test.ts utils/androidSecureStorage.test.ts server/companion-sync/protocol.test.ts utils/androidAppUpdate.test.ts utils/androidUpdateSession.test.ts utils/androidUpdateControl.test.ts
       - name: Build production app
         run: pnpm build
