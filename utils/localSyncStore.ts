@@ -260,20 +260,62 @@ export async function getSyncPreferences(): Promise<SyncPreference[]> {
 
 export async function persistInboxEvents(events: Omit<LocalSyncInboxEvent, 'receivedAt' | 'applyState'>[]): Promise<number> {
     if (events.length === 0) return 0;
-    if (events.some(event => !Number.isSafeInteger(event.serverSequence) || event.serverSequence < 1)) {
-        throw new Error('INVALID_SERVER_SEQUENCE');
+    if (events.length > 100) throw new Error('INBOX_BATCH_TOO_LARGE');
+
+    // Treat pulled server events as untrusted input. Keep the first version
+    // deliberately narrow: only allowlisted text room notes can enter the inbox.
+    for (const event of events) {
+        if (!event || typeof event.eventId !== 'string' || !event.eventId.trim() || event.eventId.length > 160
+            || typeof event.entityId !== 'string' || !event.entityId.trim() || event.entityId.length > 256) {
+            throw new Error('INVALID_INBOX_IDENTITY');
+        }
+        if (!Number.isSafeInteger(event.serverSequence) || event.serverSequence < 1) {
+            throw new Error('INVALID_SERVER_SEQUENCE');
+        }
+        if (event.entityType !== 'room_note'
+            || !['create', 'update', 'delete'].includes(event.operation)
+            || !Number.isSafeInteger(event.entityVersion) || event.entityVersion < 1) {
+            throw new Error('INVALID_INBOX_METADATA');
+        }
+        if (!event.payload || typeof event.payload !== 'object' || Array.isArray(event.payload)) {
+            throw new Error('INVALID_INBOX_PAYLOAD');
+        }
+        let payloadSize = 0;
+        try {
+            payloadSize = JSON.stringify(event.payload).length;
+        } catch {
+            throw new Error('INVALID_INBOX_PAYLOAD');
+        }
+        if (payloadSize > 64 * 1024) throw new Error('INBOX_PAYLOAD_TOO_LARGE');
+        if (event.operation === 'delete' && Object.keys(event.payload).length !== 0) {
+            throw new Error('DELETE_EVENT_PAYLOAD_MUST_BE_EMPTY');
+        }
     }
+
     const db = await openDB();
     const tx = db.transaction(INBOX, 'readwrite');
     const done = transactionDone(tx);
     const store = tx.objectStore(INBOX);
+    const sequenceIndex = store.index('serverSequence');
     let inserted = 0;
     for (const event of events) {
         const existing = await requestResult(store.get(event.eventId)) as LocalSyncInboxEvent | undefined;
-        if (!existing) {
-            store.add({ ...event, receivedAt: Date.now(), applyState: 'pending' } satisfies LocalSyncInboxEvent);
-            inserted += 1;
+        if (existing) {
+            const sameEvent = existing.serverSequence === event.serverSequence
+                && existing.entityType === event.entityType
+                && existing.entityId === event.entityId
+                && existing.operation === event.operation
+                && existing.entityVersion === event.entityVersion
+                && JSON.stringify(existing.payload) === JSON.stringify(event.payload);
+            if (!sameEvent) throw new Error('INBOX_EVENT_ID_COLLISION');
+            continue;
         }
+        const sequenceOwner = await requestResult(sequenceIndex.get(event.serverSequence)) as LocalSyncInboxEvent | undefined;
+        if (sequenceOwner && sequenceOwner.eventId !== event.eventId) {
+            throw new Error('INBOX_SEQUENCE_COLLISION');
+        }
+        store.add({ ...event, receivedAt: Date.now(), applyState: 'pending' } satisfies LocalSyncInboxEvent);
+        inserted += 1;
     }
     await done;
     return inserted;
