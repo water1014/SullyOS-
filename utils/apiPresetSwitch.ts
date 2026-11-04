@@ -78,7 +78,7 @@ export function presetDiffersFromConfig(
  */
 export function findActivePresetId(
   presets: ApiPreset[],
-  config: Pick<APIConfig, 'baseUrl' | 'apiKey' | 'model'>,
+  config: Pick<APIConfig, 'baseUrl' | 'apiKey' | 'model'> & Partial<Pick<APIConfig, 'customHeaders'>>,
 ): string | null {
   if (!normalizeApiBaseUrl(config.baseUrl) && !normalizeApiModel(config.model)) return null;
   return presets.find(preset => presetMatchesConfig(preset, config))?.id ?? null;
