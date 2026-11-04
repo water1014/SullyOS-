@@ -25,6 +25,7 @@ describe('configFromPreset', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'sk-abc',
       model: 'gpt-x',
+      customHeaders: {},
     });
   });
 
@@ -78,10 +79,11 @@ describe('findActivePresetId', () => {
 });
 
 describe('presetMatchesConfig', () => {
-  it('只看三件套，温度 / 流式不参与判定', () => {
+  it('比较三件套和自定义请求头，温度 / 流式不参与判定', () => {
     const p = preset('a', { baseUrl: 'https://x', apiKey: 'k', model: 'm', temperature: 0.85 });
 
     expect(presetMatchesConfig(p, { baseUrl: 'https://x', apiKey: 'k', model: 'm' })).toBe(true);
+    expect(presetMatchesConfig(preset('b', { ...p.config, customHeaders: { 'X-Route': 'a' } }), { baseUrl: 'https://x', apiKey: 'k', model: 'm', customHeaders: { 'X-Route': 'b' } })).toBe(false);
   });
 });
 
