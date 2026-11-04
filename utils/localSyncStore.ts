@@ -307,8 +307,14 @@ export async function getOrCreateLocalSyncDeviceIdentity(): Promise<LocalSyncDev
     const store = tx.objectStore(SYNC_STATE);
     const existing = await requestResult(store.get(LOCAL_DEVICE_IDENTITY_KEY)) as LocalSyncDeviceIdentity | undefined;
     if (existing && typeof existing.deviceId === 'string' && existing.deviceId.length >= 8) {
+        if (typeof existing.label === 'string' && existing.label.trim()) {
+            await done;
+            return existing;
+        }
+        const migrated: LocalSyncDeviceIdentity = { ...existing, label: '这台手机', updatedAt: Date.now(), schemaVersion: 1 };
+        store.put(migrated);
         await done;
-        return existing;
+        return migrated;
     }
     const now = Date.now();
     const identity: LocalSyncDeviceIdentity = {
