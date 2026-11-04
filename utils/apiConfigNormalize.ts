@@ -42,7 +42,7 @@ export const buildApiRequestHeaders = (
 ): Headers => {
   const headers = new Headers({ 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey || 'sk-none'}` });
   // OpenCode Go asks clients to identify each conversation with a stable session ID.
-  if (options?.sessionId && options.baseUrl && isOpenCodeGoEndpoint(options.baseUrl)) {
+  if (options?.sessionId && options.baseUrl && isOpenCodeInferenceEndpoint(options.baseUrl)) {
     headers.set('x-opencode-session', options.sessionId);
   }
   for (const [name, value] of Object.entries(normalizeApiHeaders(customHeaders))) headers.set(name, value);
