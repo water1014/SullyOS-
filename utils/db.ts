@@ -2591,6 +2591,26 @@ export const DB = {
       const db = await openDB();
       const transaction = db.transaction(STORE_WORLDBOOKS, 'readwrite');
       transaction.objectStore(STORE_WORLDBOOKS).put(book);
+      await new Promise<void>((resolve, reject) => {
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error || new Error('世界书保存失败'));
+          transaction.onabort = () => reject(transaction.error || new Error('世界书保存已中止'));
+      });
+  },
+
+  saveWorldbooks: async (books: Worldbook[]): Promise<void> => {
+      if (books.length === 0) return;
+      const ids = books.map(book => book.id);
+      if (new Set(ids).size !== ids.length) throw new Error('导入批次中存在重复的世界书 ID');
+      const db = await openDB();
+      const transaction = db.transaction(STORE_WORLDBOOKS, 'readwrite');
+      const store = transaction.objectStore(STORE_WORLDBOOKS);
+      books.forEach(book => store.put(book));
+      await new Promise<void>((resolve, reject) => {
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error || new Error('批量保存世界书失败'));
+          transaction.onabort = () => reject(transaction.error || new Error('批量保存世界书已中止'));
+      });
   },
 
   deleteWorldbook: async (id: string): Promise<void> => {
