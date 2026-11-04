@@ -19,7 +19,7 @@ APK：所有功能完成后的最后阶段。
 - 主动消息：`worker/amsg/` 已有 Cron、agentic tool loop、主动消息和推送；`worker/proactive-push/` 是推送加速器。
 
 ### 当前缺口
-- 没有统一的 local-first 增量同步层（Outbox / Inbox / cursor / conflict policy）。
+- 已有第一版 local-first 本地同步底座：Outbox / Inbox / cursor / conflict policy，当前仅 room_notes 进入可选文字队列，尚无网络传输。
 - 交换日记并不等于双方各自独立的日记与便签产品。
 - 社交平台目前以小红书适配为主，尚需统一的平台连接器、权限分级与操作确认。
 - 现有 AMSG Worker 已经负责部分主动任务调度；新增 VPS 不可再并行创建一套相同 cron，否则可能重复触发。
@@ -148,10 +148,13 @@ P0：盘点与契约
 - 定义同步实体、事件封套、冲突策略、设备认证和撤销。
 - 确认 VPS 与 AMSG Worker 的唯一调度职责。
 
-P1：本地同步基础
-- Outbox / Inbox / cursor。
-- 幂等、断网重试、软删除、冲突队列。
-- 旧数据迁移不丢记录。
+P1：本地同步基础（本地底座已实现，端到端仍未完成）
+- [x] Outbox / Inbox / cursor / conflict store 的加性迁移。
+- [x] room_notes 文字白名单、显式 opt-in、稳定 eventId、断点恢复、游标单调合并。
+- [x] 关闭同步时清理传输副本；标准备份恢复前清空旧队列/Inbox/冲突/游标，保留本机设备身份和本地授权偏好。
+- [x] 每次安装稳定设备 ID、本机设备命名。
+- [ ] 真实网络 push / pull / ack、服务端幂等和设备撤销。
+- [ ] 多设备断网/重连与端到端验收。
 
 P2：VPS 同步与设备服务
 - API、PostgreSQL schema、配对、撤销、健康检查。
@@ -181,6 +184,14 @@ P7：最终整合与 APK
 - 全量测试、性能与权限审查。
 - 最后才生成 APK；本路线图阶段不做 APK。
 
-## 8. 本轮执行边界
+## 8. 当前实现进度（2026-11-04）
+
+- 本地同步代码：utils/localSyncStore.ts、utils/localSyncStore.test.ts、components/settings/LocalSyncSettingsPanel.tsx。
+- 备份恢复钩子：标准数据恢复开始前清空旧传输状态；媒体补充导入不影响同步状态。
+- PostgreSQL 初始结构：server/companion-sync/migrations/0001_initial.sql，包含账户、独立设备令牌哈希、同步策略、事件日志、实体版本头、设备游标、持久任务和加密凭据表。
+- SQL migration 只是尚未执行的源文件；没有数据库连接、API 服务、设备配对或真实网络同步。
+- 阿里云仍未部署；不创建资源、不写入真实凭据。
+
+## 9. 本轮执行边界
 
 本轮只完成现状盘点与架构基线文档；没有创建阿里云资源、没有部署、没有改动 AMSG Worker 的 Cron、没有实现 Toy Control、没有生成 APK。后续代码任务必须继续在 `feature/image-studio`，不得改动 `master`。
