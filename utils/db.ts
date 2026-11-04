@@ -47,7 +47,8 @@ const DB_NAME = 'AetherOS_Data';
 // v72: home projection reads only home-source rows, never scans private-chat history.
 // v73: direct home-turn lookups for incremental journal writes.
 // v74: merge master delivery lookup with both home indexes, including existing v73 databases.
-const DB_VERSION = 74;
+// v75: add isolated visual companion metadata stores; existing chat, gallery and blob stores are untouched.
+const DB_VERSION = 75;
 
 const STORE_CHARACTERS = 'characters';
 const STORE_CHAR_GROUPS = 'character_groups'; // 角色分组定义（角色通过 groupId 指向；与群聊 groups 无关）
@@ -552,6 +553,52 @@ export const openDB = (): Promise<IDBDatabase> => {
           const phlStore = db.createObjectStore('pixel_home_layouts', { keyPath: ['charId', 'roomId'] });
           phlStore.createIndex('charId', 'charId', { unique: false });
       }
+
+      // ─── v75: 宋祁视觉人格系统（只增量建表，不改写既有数据） ───
+      // Store 创建和索引创建均按存在性判断，兼容中断后重试及未来版本的部分预建。
+      const createVisualStore = (
+          name: string,
+          indexes: Array<{ name: string; keyPath: string | string[] }>
+      ) => {
+          const store = db.objectStoreNames.contains(name)
+              ? upgradeTransaction.objectStore(name)
+              : db.createObjectStore(name, { keyPath: 'id' });
+          for (const index of indexes) {
+              if (!store.indexNames.contains(index.name)) {
+                  store.createIndex(index.name, index.keyPath, { unique: false });
+              }
+          }
+      };
+
+      createVisualStore('visual_profiles', [
+          { name: 'charId', keyPath: 'charId' },
+          { name: 'charId_version', keyPath: ['charId', 'version'] },
+      ]);
+      createVisualStore('visual_memories', [
+          { name: 'charId', keyPath: 'charId' },
+          { name: 'charId_status', keyPath: ['charId', 'status'] },
+          { name: 'charId_category', keyPath: ['charId', 'category'] },
+      ]);
+      createVisualStore('visual_projects', [
+          { name: 'charId', keyPath: 'charId' },
+          { name: 'charId_status', keyPath: ['charId', 'status'] },
+      ]);
+      createVisualStore('visual_task_mirror', [
+          { name: 'charId', keyPath: 'charId' },
+          { name: 'status', keyPath: 'status' },
+          { name: 'updatedAt', keyPath: 'updatedAt' },
+      ]);
+      createVisualStore('visual_assets', [
+          { name: 'charId', keyPath: 'charId' },
+          { name: 'privacyScope', keyPath: 'privacyScope' },
+          { name: 'taskId', keyPath: 'taskId' },
+          { name: 'projectId', keyPath: 'projectId' },
+      ]);
+      // 私密二进制独立于 blob_assets，避免进入普通 Blob GC / 画廊 / 导出链路。
+      createVisualStore('private_visual_blobs', [
+          { name: 'charId', keyPath: 'charId' },
+          { name: 'createdAt', keyPath: 'createdAt' },
+      ]);
     };
   });
 
