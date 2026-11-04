@@ -6,17 +6,16 @@ import type { CharacterVisualProfile } from './types';
  */
 export function buildCharacterAppearancePrompt(profile: CharacterVisualProfile | null | undefined): string {
     if (!profile || profile.status !== 'active') return '';
-    const attributes = (profile.identity || [])
+    const legacyAttributes = (profile.identity || [])
         .filter(item => item.confirmed && item.value.trim())
         .map(item => item.value.trim());
-    const extra = profile.anchorPrompt?.trim();
-    const details = [...attributes, ...(extra ? [extra] : [])];
-    if (!details.length) return '';
+    const description = profile.anchorPrompt?.trim() || legacyAttributes.join(', ');
+    if (!description) return '';
     return [
-        '【固定人物外貌档案】',
-        '以下内容描述同一人物不可随场景改变的外貌身份。保持脸部特征、发型发色、眼睛、体态和标志性细节一致；不要擅自改变人物身份。',
-        ...details,
-    ].join('\n');
+        '[Fixed character appearance]',
+        'Preserve this character’s recognizable facial identity, hair, eyes, proportions and defining visual traits. Treat this as the same person in every image. Do not let the scene prompt alter these fixed traits.',
+        description,
+    ].join('\\n');
 }
 
 export function mergeCharacterAppearancePrompt(scenePrompt: string, profile: CharacterVisualProfile | null | undefined): string {
