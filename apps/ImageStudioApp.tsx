@@ -404,10 +404,10 @@ const ImageStudioApp: React.FC = () => {
                 <div className="border-t border-sky-100 pt-3 space-y-2">
                   <div className="text-xs font-semibold text-slate-700">模型专属质量标签</div>
                   <p className="text-[10px] text-slate-400">按当前模型追加推荐组合，不会覆盖已有内容</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  {config.nai.model.startsWith("nai-diffusion-5") ? <div className="grid grid-cols-2 gap-2">
                     <button type="button" onClick={() => addNaiQualityPreset("light")} className="soft rounded-xl py-2 text-[11px] font-semibold">＋ 轻量质量</button>
                     <button type="button" onClick={() => addNaiQualityPreset("standard")} className="soft rounded-xl py-2 text-[11px] font-semibold">＋ 标准质量</button>
-                  </div>
+                  </div> : <button type="button" onClick={() => addNaiQualityPreset("standard")} className="soft w-full rounded-xl py-2 text-[11px] font-semibold">＋ 追加当前模型官方质量组合</button>}
                 </div>
                 <button type="button" onClick={generateRandomIdea} className="w-full soft rounded-xl py-2.5 text-xs font-semibold flex items-center justify-center gap-2"><Sparkle size={14}/>随机灵感组合 <span className="text-[10px] font-normal opacity-65">· 只追加，不覆盖原提示词</span></button>
                 <div className="border-t border-sky-100 pt-3 space-y-2">
