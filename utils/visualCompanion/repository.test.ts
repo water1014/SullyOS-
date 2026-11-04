@@ -5,7 +5,7 @@ import { deliverVisualTaskToChat } from './delivery';
 import type { VisualAssetRecord, VisualTask } from './types';
 import { claimNextVisualTask, createAutonomousVisualTask, createVisualTask, markVisualAssetsPersisted, markVisualTaskDelivered, recordGeneratedVisualAssets, resumeVisualTaskRetry, scheduleVisualTaskRetry, startVisualGeneration } from './orchestrator';
 
-const now = 1_800_000_000_000;
+const now = 1_800_000_000_000;\n\nasync function saveReadyAsset(id: string, charId = 'char_1'): Promise<void> {\n    await visualCompanionRepository.saveAsset({\n        id, charId, privacyScope: 'standard', status: 'ready', mimeType: 'image/png', byteSize: 10,\n        storage: { kind: 'blobref', ref: 'blobref:' + id }, createdAt: now,\n    });\n}
 
 beforeEach(async () => {
     await DB.deleteDB();
@@ -231,8 +231,21 @@ describe('视觉人格本地仓库', () => {
         const generated = await recordGeneratedVisualAssets(created.id, ['asset_result_1']);
         expect(generated.status).toBe('persisting');
         expect(generated.resultAssetIds).toEqual(['asset_result_1']);
-        const pending = await markVisualAssetsPersisted(created.id);
+        await saveReadyAsset('asset_result_1');\n        const pending = await markVisualAssetsPersisted(created.id);
         expect(pending.status).toBe('delivery_pending');
+    });
+
+    it('拒绝在结果资产未落盘时推进到聊天投递阶段', async () => {
+        const created = await createVisualTask({
+            charId: 'char_1', kind: 'chat_requested', privacyScope: 'standard',
+            provider: 'openai', providerConfigId: 'provider_ref_only', model: 'gpt-image',
+            prompt: '等待保存的图片', referenceAssetIds: [], maxAttempts: 3, budget: { maxImages: 1 },
+        });
+        await claimNextVisualTask('char_1');
+        await startVisualGeneration(created.id);
+        await recordGeneratedVisualAssets(created.id, ['asset_not_saved']);
+        await expect(markVisualAssetsPersisted(created.id)).rejects.toThrow('视觉资产尚未完成安全保存');
+        expect((await visualCompanionRepository.getTask(created.id))?.status).toBe('persisting');
     });
 
     it('将已保存的标准图片以幂等方式投递回角色聊天', async () => {
@@ -251,7 +264,7 @@ describe('视觉人格本地仓库', () => {
         await claimNextVisualTask('char_1');
         await startVisualGeneration(created.id);
         await recordGeneratedVisualAssets(created.id, ['asset_chat_1']);
-        await markVisualAssetsPersisted(created.id);
+        await saveReadyAsset('asset_chat_1');\n        await saveReadyAsset('asset_already_generated');\n        await markVisualAssetsPersisted(created.id);
 
         const first = await deliverVisualTaskToChat(created.id, 'blobref:b_visual_chat_1');
         const second = await deliverVisualTaskToChat(created.id, 'blobref:b_visual_chat_1');
