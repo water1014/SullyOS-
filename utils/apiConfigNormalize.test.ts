@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { normalizeLlmBaseUrl } from './llmEndpoint';
 import {
   normalizeApiBaseUrl,
   normalizeApiConfig,
