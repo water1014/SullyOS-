@@ -12,6 +12,7 @@ import {
     listUnresolvedSyncConflicts,
     resolveSyncConflict,
     getSyncPreference,
+    getSyncCursorState,
     getSyncQueueSummary,
     listPendingSyncEvents,
     removeSyncEvent,
