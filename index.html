@@ -129,7 +129,7 @@
         --primary-lightness: 65%;
         /* 安全区单一来源：原生 env 与 JS 探测值 --standalone-safe-area-*（见 utils/iosStandalone.ts）取大，
            iOS 全屏 PWA 下原生 env 偶发返回 0 时由探测值兜底。新增 App 一律引用这三个变量。 */
-        --safe-top: max(env(safe-area-inset-top, 0px), var(--standalone-safe-area-top, 0px));
+        --safe-top: max(env(safe-area-inset-top, 0px), var(--standalone-safe-area-top, 0px), var(--android-safe-area-top, 0px));
         --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--standalone-safe-area-bottom, 0px));
         /* 全屏界面顶栏让开「安全区 + SullyOS 顶部状态栏(时间/电量, 约 1.5rem)」；背景仍铺满，只挪控件。 */
         --chrome-top: calc(var(--safe-top) + 1.5rem);
@@ -169,6 +169,12 @@
       }
       /* 紧凑显示：时间/电量嵌入安全区左右两侧，App 顶栏从安全区底部开始。
          无刘海设备仍至少留 1.5rem 给时间栏；有灵动岛时不把按钮顶进遮挡区。 */
+      /* Android immersive WebView: keep the custom status row in the top strip, but
+         start page controls below the physical status-bar / punch-hole inset.
+         max() avoids stacking a second full status-bar gap on top of the inset. */
+      html.sully-android-native {
+        --chrome-top: max(var(--safe-top), 1.5rem);
+      }
       html.sully-statusbar-compact {
         --chrome-top: max(var(--safe-top), 1.5rem);
       }
