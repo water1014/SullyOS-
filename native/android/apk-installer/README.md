@@ -25,7 +25,7 @@
    }
    ```
 
-4. 确认 `AndroidManifest.xml` 在 `<application>` 外声明 `android.permission.REQUEST_INSTALL_PACKAGES`。接入脚本会自动补上该权限声明。\n5. 在 `AndroidManifest.xml` 的 `<application>` 内注册 FileProvider：
+4. 确认 `AndroidManifest.xml` 在 `<application>` 外声明 `android.permission.REQUEST_INSTALL_PACKAGES`。接入脚本会自动补上该权限声明。\n\n5. 在 `AndroidManifest.xml` 的 `<application>` 内注册 FileProvider：
 
    ```xml
    <provider
@@ -39,8 +39,8 @@
    </provider>
    ```
 
-5. 确认 app module 依赖包含 AndroidX Core（Capacitor Android 通常已传递提供）。
-6. 使用相同 applicationId、长期保管的同一 release 签名证书构建并在真实 Android 设备验证。
+6. 确认 app module 依赖包含 AndroidX Core（Capacitor Android 通常已传递提供）。
+7. 使用相同 applicationId、长期保管的同一 release 签名证书构建并在真实 Android 设备验证。
 
 ## 安全边界
 
