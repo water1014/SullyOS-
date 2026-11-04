@@ -26,6 +26,79 @@ export interface NaiImageOptions {
   seed?: number;
 }
 
+export interface ImageConnectionTestResult {
+  ok: boolean;
+  message: string;
+  status?: number;
+  durationMs: number;
+}
+
+function validateProviderUrl(value: string, label: string): string {
+  let parsed: URL;
+  try { parsed = new URL(value.trim()); }
+  catch { throw new Error(`请检查 ${label}，必须是完整的 https:// 地址`); }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`${label} 只支持 HTTP 或 HTTPS 地址`);
+  }
+  return parsed.toString().replace(/\\/$/, '');
+}
+
+async function responseError(response: Response, fallback: string): Promise<string> {
+  const raw = await response.text().catch(() => '');
+  if (!raw) return fallback;
+  try { return String(errorMessage(JSON.parse(raw), fallback)).slice(0, 220); }
+  catch { return raw.slice(0, 220); }
+}
+
+/** Lightweight credential check for OpenAI-compatible providers. It calls GET /models and never creates an image. */
+export async function testGptImageConnection(config: GptImageConfig): Promise<ImageConnectionTestResult> {
+  if (!config.apiKey.trim()) throw new Error('请先填写 GPT API Key');
+  const base = validateProviderUrl(config.baseUrl, 'GPT API Base URL');
+  const headers = buildImageRequestHeaders({ Authorization: `Bearer ${config.apiKey.trim()}`, Accept: 'application/json' }, config.customHeaders);
+  const startedAt = Date.now();
+  const response = await fetch(`${base}/models`, { method: 'GET', headers });
+  const durationMs = Date.now() - startedAt;
+  if (response.ok) return { ok: true, status: response.status, durationMs, message: '连接成功，服务商允许访问 /models。图片模型是否可用仍以实际生图为准。' };
+  if (response.status === 404 || response.status === 405) {
+    return { ok: true, status: response.status, durationMs, message: '服务地址可达，但未开放 /models 检查接口。请用一次实际生成验证图片模型。' };
+  }
+  return { ok: false, status: response.status, durationMs, message: await responseError(response, `连接失败（HTTP ${response.status}）`) };
+}
+
+/** NovelAI official subscription endpoint validates the persistent token without generating an image. */
+export async function testNaiImageConnection(config: NaiImageConfig): Promise<ImageConnectionTestResult> {
+  if (!config.apiKey.trim()) throw new Error('请先填写 NovelAI / NAI API Token');
+  const provider = config.provider || 'official';
+  const startedAt = Date.now();
+  if (provider === 'official') {
+    const response = await fetch('https://api.novelai.net/user/subscription', {
+      method: 'GET',
+      headers: buildImageRequestHeaders({
+        Authorization: `Bearer ${config.apiKey.trim()}`,
+        Accept: 'application/json',
+      }, config.customHeaders),
+    });
+    const durationMs = Date.now() - startedAt;
+    if (response.ok) return { ok: true, status: response.status, durationMs, message: 'NovelAI 官方接口连接成功，Persistent Token 已通过验证。' };
+    return { ok: false, status: response.status, durationMs, message: await responseError(response, `NovelAI 验证失败（HTTP ${response.status}）`) };
+  }
+
+  const endpoint = normalizeNaiGenerateEndpoint(config.baseUrl || '', 'thirdparty');
+  // Third-party NovelAI-compatible services do not share a standard auth/health endpoint.
+  // OPTIONS checks reachability only; it deliberately does not send a generation payload or spend credits.
+  const response = await fetch(endpoint, { method: 'OPTIONS', headers: { Accept: 'application/json' } });
+  const durationMs = Date.now() - startedAt;
+  if (response.status < 500) {
+    return {
+      ok: true,
+      status: response.status,
+      durationMs,
+      message: '服务地址可达（OPTIONS 检查通过）。第三方没有统一的鉴权测试协议，Token 和模型仍需通过实际生图确认。',
+    };
+  }
+  return { ok: false, status: response.status, durationMs, message: `第三方服务返回服务器错误（HTTP ${response.status}）` };
+}
+
 export function buildImageRequestHeaders(base: Record<string, string>, customHeaders = ''): Headers {
   const headers = new Headers(base);
   if (!customHeaders.trim()) return headers;
