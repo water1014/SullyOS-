@@ -17,7 +17,7 @@ import { readShareFile } from '../utils/pngShare';
 import { trackEvent } from '../utils/analytics';
 
 const WorldbookApp: React.FC = () => {
-    const { closeApp, worldbooks, addWorldbook, updateWorldbook, updateWorldbooks, deleteWorldbook, deleteWorldbooks, addToast } = useOS();
+    const { closeApp, worldbooks, addWorldbook, addWorldbooks, updateWorldbook, updateWorldbooks, deleteWorldbook, deleteWorldbooks, addToast } = useOS();
     
     // View State
     const [isEditing, setIsEditing] = useState(false);
@@ -203,7 +203,7 @@ const WorldbookApp: React.FC = () => {
             const text = await source.text();
             const category = source.name.replace(/\.json$/i, '').trim() || '导入世界书';
             const imported = parseStandardWorldbook(text, category);
-            for (const book of imported) await addWorldbook(book);
+            await addWorldbooks(imported);
             addToast(`已导入 ${imported.length} 条世界书条目`, 'success');
             setExpandedCategory(category);
         } catch (error: any) {
