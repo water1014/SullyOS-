@@ -1,5 +1,5 @@
 import { resolveDialogueApi, dialogueMaxTokens } from '../utils/characterApi';
-import { buildApiRequestHeaders } from '../utils/apiConfigNormalize';
+import { buildApiRequestHeaders, isOpenCodeGoEndpoint } from '../utils/apiConfigNormalize';
 import { createReplyRun, withReplyCancellation } from '../utils/chatReplyCancellation';
 
 import { useState, useRef, useEffect, useSyncExternalStore, MutableRefObject } from 'react';
@@ -833,7 +833,7 @@ export const useChatAI = ({
                     : instantChatReadiness.workerBundleCurrent === undefined ? 'sar-module-worker-unverified'
                         : null;
             const instantChatVeto: string | null = sarWorkerVeto
-                ?? (Object.keys(effectiveApi.customHeaders || {}).length > 0 ? 'custom-headers-local-only'
+                ?? ((Object.keys(effectiveApi.customHeaders || {}).length > 0 || isOpenCodeGoEndpoint(effectiveApi.baseUrl)) ? 'custom-headers-local-only'
                 : luckinChatOn ? 'luckin-chat'
                 : mcdMiniOpen ? 'mcd'
                     : luckinMiniOpen ? 'luckin'
