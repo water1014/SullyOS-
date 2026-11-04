@@ -7,7 +7,7 @@ import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
 import {
   generateGptImage, editGptImage, generateNaiImage,
-  suggestNaiTags, type GptImageConfig, type NaiImageConfig, type ImageEngine,
+  suggestNaiTags, getNaiQualityTags, type GptImageConfig, type NaiImageConfig, type ImageEngine,
 } from '../utils/imageGeneration';
 
 const CONFIG_KEY = 'sully-image-studio:config:v1';
@@ -48,14 +48,7 @@ const readTemplates = (): NaiPromptTemplate[] => {
   } catch { return []; }
 };
 
-const getNaiQualityTags = (model: string, level: 'light' | 'standard'): string[] => {
-  if (model.startsWith('nai-diffusion-5')) return level === 'light'
-    ? ['very aesthetic', 'amazing quality', 'no text']
-    : ['very aesthetic', 'masterpiece', 'no text'];
-  if (model === 'nai-diffusion-4-5-curated') return ['location', 'masterpiece', 'no text', '-0.8::feet::', 'rating:general'];
-  if (model.startsWith('nai-diffusion-4-5')) return ['location', 'very aesthetic', 'masterpiece', 'no text'];
-  return ['best quality', 'amazing quality', 'very aesthetic', 'absurdres'];
-};
+
 
 type TagCategory = '主体' | '发型' | '眼睛' | '表情' | '服装' | '动作' | '构图' | '场景' | '画风' | '质量';
 const NAI_TAGS: Record<TagCategory, string[]> = {
