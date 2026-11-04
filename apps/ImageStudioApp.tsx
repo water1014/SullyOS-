@@ -123,6 +123,7 @@ const ImageStudioApp: React.FC = () => {
   const [naiScale, setNaiScale] = useState(5);
   const [naiSampler, setNaiSampler] = useState('k_euler_ancestral');
   const [generating, setGenerating] = useState(false);
+  const generationAbortRef = useRef<AbortController | null>(null);
   const [error, setError] = useState('');
   const [images, setImages] = useState<DisplayImage[]>([]);
   const imagesRef = useRef<DisplayImage[]>([]);
@@ -295,24 +296,32 @@ const ImageStudioApp: React.FC = () => {
 
   const handleGenerate = async () => {
     if (generating) return;
+    const controller = new AbortController();
+    generationAbortRef.current = controller;
     setGenerating(true);
     setError('');
     try {
       const blob = engine === 'gpt'
         ? referenceImage
-          ? await editGptImage(config.gpt, referenceImage, prompt, { size: gptSize, quality: gptQuality })
-          : await generateGptImage(config.gpt, prompt, { size: gptSize, quality: gptQuality })
+          ? await editGptImage(config.gpt, referenceImage, prompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
+          : await generateGptImage(config.gpt, prompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
         : await generateNaiImage(config.nai, prompt, negativePrompt, {
             width: Number(naiSize.split('x')[0]), height: Number(naiSize.split('x')[1]),
             steps: naiSteps, scale: naiScale, sampler: naiSampler,
-          });
+          }, controller.signal);
       await saveImage(blob);
       addToast('图片已生成并保存到我的画廊', 'success');
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : '生成失败，请稍后重试';
-      setError(message);
-      addToast(message.slice(0, 80), 'error');
+      if (cause instanceof Error && cause.name === 'AbortError') {
+        setError('本次生成已取消');
+        addToast('已取消生成', 'success');
+      } else {
+        const message = cause instanceof Error ? cause.message : '生成失败，请稍后重试';
+        setError(message);
+        addToast(message.slice(0, 80), 'error');
+      }
     } finally {
+      if (generationAbortRef.current === controller) generationAbortRef.current = null;
       setGenerating(false);
     }
   };
@@ -705,6 +714,7 @@ const ImageStudioApp: React.FC = () => {
           <button onClick={handleGenerate} disabled={generating || !configured || !prompt.trim()} className="primary w-full rounded-2xl py-4 flex items-center justify-center gap-2 text-sm font-bold">
             {generating ? <><ArrowsClockwise size={18} className="animate-spin"/>{referenceImage ? '正在编辑参考图…' : '正在绘制，请稍候…'}</> : <><Sparkle size={18}/>{referenceImage && engine === 'gpt' ? '开始编辑图片' : '开始生成'}</>}
           </button>
+          {generating && <button onClick={() => generationAbortRef.current?.abort()} className="soft w-full rounded-xl py-2.5 text-xs font-semibold text-rose-600">取消本次生成</button>}
           <p className="text-center text-[10px] text-slate-400">生成费用由对应平台收取 · 作品只保存在本机设备</p>
         </main>
       )}
