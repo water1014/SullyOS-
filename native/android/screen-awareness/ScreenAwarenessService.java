@@ -41,6 +41,7 @@ public final class ScreenAwarenessService extends Service {
     private static volatile long latestFrameAt = 0L;
 
     private MediaProjection projection;
+    private MediaProjection.Callback projectionCallback;
     private VirtualDisplay virtualDisplay;
     private ImageReader imageReader;
     private HandlerThread captureThread;
@@ -90,13 +91,14 @@ public final class ScreenAwarenessService extends Service {
             projection = manager.getMediaProjection(resultCode, resultData);
             if (projection == null) throw new IllegalStateException("MediaProjection unavailable");
 
-            projection.registerCallback(new MediaProjection.Callback() {
+            projectionCallback = new MediaProjection.Callback() {
                 @Override
                 public void onStop() {
-                    stopCapture();
+                    stopCapture(false);
                     stopSelf();
                 }
-            }, new Handler(getMainLooper()));
+            };
+            projection.registerCallback(projectionCallback, new Handler(getMainLooper()));
 
             startCapturePipeline();
             running = true;
@@ -193,6 +195,7 @@ public final class ScreenAwarenessService extends Service {
 
     private void saveLatestFrame(ImageReader reader) {
         Image image = null;
+        boolean ownsFrameLock = false;
         try {
             image = reader.acquireLatestImage();
             if (image == null) return;
@@ -200,6 +203,7 @@ public final class ScreenAwarenessService extends Service {
             if (now - lastFrameAt < FRAME_INTERVAL_MS || !frameWriting.compareAndSet(false, true)) {
                 return;
             }
+            ownsFrameLock = true;
 
             Image.Plane[] planes = image.getPlanes();
             if (planes.length == 0) return;
@@ -246,11 +250,15 @@ public final class ScreenAwarenessService extends Service {
             // Screen capture is best-effort; never log screen contents or file data.
         } finally {
             if (image != null) image.close();
-            frameWriting.set(false);
+            if (ownsFrameLock) frameWriting.set(false);
         }
     }
 
     private void stopCapture() {
+        stopCapture(true);
+    }
+
+    private void stopCapture(boolean stopProjection) {
         running = false;
         latestFrameAt = 0L;
         if (virtualDisplay != null) {
@@ -263,13 +271,23 @@ public final class ScreenAwarenessService extends Service {
             imageReader = null;
         }
         if (projection != null) {
-            try {
-                projection.unregisterCallback(null);
-            } catch (Exception ignored) {
-                // Projection may already be stopped by Android.
-            }
-            projection.stop();
+            MediaProjection current = projection;
             projection = null;
+            if (projectionCallback != null) {
+                try {
+                    current.unregisterCallback(projectionCallback);
+                } catch (Exception ignored) {
+                    // Projection may already be stopped by Android.
+                }
+                projectionCallback = null;
+            }
+            if (stopProjection) {
+                try {
+                    current.stop();
+                } catch (Exception ignored) {
+                    // Android may already have revoked the projection.
+                }
+            }
         }
         if (captureThread != null) {
             captureThread.quitSafely();
