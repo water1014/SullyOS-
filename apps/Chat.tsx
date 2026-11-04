@@ -612,7 +612,7 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
         const attempt = async (): Promise<string> => {
             const res = await fetch(`${apiConfig.baseUrl}/chat/completions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiConfig.apiKey}` },
+                headers: buildApiRequestHeaders(apiConfig.apiKey, apiConfig.customHeaders),
                 body: JSON.stringify({
                     model: apiConfig.model,
                     messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: text }],
@@ -2871,7 +2871,7 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
 
                 const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+                    headers: buildApiRequestHeaders(apiConfig.apiKey, apiConfig.customHeaders),
                     body: JSON.stringify({
                         model: apiConfig.model,
                         messages: [{ role: "user", content: prompt }],
