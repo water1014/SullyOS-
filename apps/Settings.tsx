@@ -2693,7 +2693,7 @@ const Settings: React.FC = () => {
                         setLocalUrl('https://opencode.ai/zen/go');
                         setLocalApiType('openai');
                         setTestApiResult(null);
-                        setStatusMsg('已填入 OpenCode Go 地址，请确认 Key 和模型后保存');
+                        addToast('已填入 OpenCode Go 地址，请确认 Key 和模型后保存', 'success');
                     }}
                     className="w-full rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-left text-xs font-semibold text-sky-700 active:scale-[0.99]"
                 >
