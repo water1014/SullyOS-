@@ -24,7 +24,7 @@ export const normalizeApiHeaders = (value: unknown): Record<string, string> => {
   for (const [rawName, rawValue] of Object.entries(value as Record<string, unknown>)) {
     const name = cleanEdgeCharacters(rawName).trim();
     const headerValue = String(rawValue ?? '').trim();
-    if (!name || !headerValue || /[\\r\\n\\0]/.test(headerValue) || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) continue;
+    if (!name || !headerValue || /[\r\n\0]/.test(headerValue) || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name)) continue;
     const lower = name.toLowerCase();
     if (lower === 'host' || lower === 'content-length' || lower === 'origin' || lower === 'referer' || lower === 'cookie' || lower.startsWith('sec-') || lower.startsWith('proxy-')) continue;
     result[name] = headerValue;
