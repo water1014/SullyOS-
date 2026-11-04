@@ -142,6 +142,13 @@ export async function executeVisualTaskInForeground(taskId: string): Promise<Vis
                     errorCode: 'foreground_execution_failed',
                     errorMessage: message.slice(0, 300),
                 });
+                if (typeof window !== 'undefined') {
+                    window.setTimeout(() => {
+                        void executeVisualTaskInForeground(task.id).catch(retryError => {
+                            console.warn('[VisualCompanion] foreground retry failed', { taskId: task.id, error: retryError });
+                        });
+                    }, 30_500);
+                }
             } else {
                 await visualCompanionRepository.transitionTask(task.id, 'failed', {
                     attempt,
