@@ -353,12 +353,12 @@ export async function saveCompanionSyncConnection(input: Omit<CompanionSyncConne
     if ((parsed.protocol !== 'https:' && !localHttp) || parsed.username || parsed.password || parsed.search || parsed.hash) {
         throw new Error('INVALID_SYNC_BASE_URL');
     }
-    const baseUrl = parsed.toString().replace(/\\/$/, '');
+    const baseUrl = parsed.toString().replace(/\/$/, '');
     if (!input.accountId.trim() || input.accountId.length > 128
         || !input.serverDeviceId.trim() || input.serverDeviceId.length > 128) {
         throw new Error('INVALID_SYNC_CONNECTION_IDENTITY');
     }
-    if (!input.label.trim() || input.label.length > 24 || /[\\u0000-\\u001f]/.test(input.label)) {
+    if (!input.label.trim() || input.label.length > 24 || /[\u0000-\u001f]/.test(input.label)) {
         throw new Error('INVALID_DEVICE_LABEL');
     }
     const now = Date.now();
