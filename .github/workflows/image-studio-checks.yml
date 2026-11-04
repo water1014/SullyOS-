@@ -48,6 +48,13 @@ jobs:
         run: pnpm check:android-installer
       - name: Check companion sync backend syntax
         run: pnpm check:companion-sync
+      - name: Validate companion sync Compose configuration
+        run: |
+          cp server/companion-sync/.env.example server/companion-sync/.env
+          docker compose --env-file server/companion-sync/.env -f server/companion-sync/compose.yaml config --quiet
+          rm server/companion-sync/.env
+      - name: Build companion sync production image
+        run: docker build -f server/companion-sync/Dockerfile -t sullyos-companion-sync:ci .
       - name: Run companion sync PostgreSQL integration test
         env:
           DATABASE_URL: postgresql://companion_test:companion_test_password@127.0.0.1:5432/companion_sync_test
