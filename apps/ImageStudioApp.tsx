@@ -118,8 +118,7 @@ const ImageStudioApp: React.FC = () => {
     const existing = prompt.split(',').map(value => value.trim()).filter(Boolean);
     if (existing.some(value => value.toLowerCase() === tag.toLowerCase())) return;
     const isSubject = NAI_TAGS['主体'].includes(tag);
-    const isQuality = NAI_TAGS['质量'].includes(tag);
-    const next = isSubject ? [tag, ...existing] : isQuality ? [...existing, tag] : [...existing, tag];
+    const next = isSubject ? [tag, ...existing] : [...existing, tag];
     setPrompt(next.join(', '));
   };
   const removeNaiTag = (tag: string) => {
