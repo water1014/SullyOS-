@@ -234,3 +234,19 @@ export async function suggestNaiTags(
       ...(typeof item.confidence === 'number' ? { confidence: item.confidence } : {}),
     }));
 }
+
+
+export function getNaiQualityTags(model: string, level: 'light' | 'standard'): string[] {
+  if (model.startsWith('nai-diffusion-5')) {
+    return level === 'light'
+      ? ['very aesthetic', 'amazing quality', 'no text']
+      : ['very aesthetic', 'masterpiece', 'no text'];
+  }
+  if (model === 'nai-diffusion-4-5-curated') {
+    return ['location', 'masterpiece', 'no text', '-0.8::feet::', 'rating:general'];
+  }
+  if (model.startsWith('nai-diffusion-4-5')) {
+    return ['location', 'very aesthetic', 'masterpiece', 'no text'];
+  }
+  return ['best quality', 'amazing quality', 'very aesthetic', 'absurdres'];
+}
