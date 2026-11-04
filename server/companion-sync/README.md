@@ -26,7 +26,7 @@ Start with `pnpm start:companion-sync`.
 
 ## First-time owner setup
 
-1. Apply migrations in order, `0001_initial.sql` then `0002_pairing_and_delivery.sql`, after a database backup and restore test.
+1. Apply migrations in order, `0001_initial.sql`, `0002_pairing_and_delivery.sql`, then `0003_account_sequence_watermark.sql`, after a database backup and restore test.
 2. Configure the environment variables through the server's secret manager. Never commit them.
 3. Call `POST /v1/admin/setup` with `X-Companion-Bootstrap-Token`. It creates the single owner account and returns a one-time pairing code. Save it immediately.
 4. A device redeems the code once using `POST /v1/devices/pair`. The returned device token is shown only once. Store it in an OS-protected credential store when the native Android client is implemented.
