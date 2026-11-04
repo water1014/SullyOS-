@@ -6,6 +6,7 @@ import {
     resolveRoomNoteSyncConflict,
     recoverStaleInFlightSyncEvents,
     getOrCreateLocalSyncDeviceIdentity,
+    updateLocalSyncDeviceLabel,
     setSyncPreference,
     type LocalSyncConflict,
     type SyncQueueSummary,
@@ -16,6 +17,8 @@ const SYNC_LABELS = [{ entityType: 'room_note' as const, label: '房间便签', 
 export default function LocalSyncSettingsPanel() {
     const [enabled, setEnabled] = useState(false);
     const [localDeviceId, setLocalDeviceId] = useState('');
+    const [deviceLabel, setDeviceLabel] = useState('这台手机');
+    const [savingDeviceLabel, setSavingDeviceLabel] = useState(false);
     const [queue, setQueue] = useState<SyncQueueSummary>({ pending: 0, inFlight: 0, blocked: 0 });
     const [conflicts, setConflicts] = useState<LocalSyncConflict[]>([]);
     const [resolving, setResolving] = useState<string | null>(null);
@@ -34,6 +37,7 @@ export default function LocalSyncSettingsPanel() {
             ]);
             setEnabled(preference.enabled && preference.mode === 'text');
             setLocalDeviceId(identity.deviceId);
+            setDeviceLabel(identity.label || '这台手机');
             setQueue(summary);
             setConflicts(unresolved);
             setError('');
@@ -70,9 +74,38 @@ export default function LocalSyncSettingsPanel() {
                 </div>
                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-700">本地阶段</span>
             </div>
-            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-white/80 px-3 py-2">
-                <span className="text-[10px] text-slate-500">本机设备编号 · 仅用于区分安装实例</span>
-                <code className="text-[10px] font-semibold tracking-wide text-slate-600">{localDeviceId ? localDeviceId.slice(0, 8) : '读取中'}</code>
+            <div className="space-y-2 rounded-xl border border-slate-100 bg-white/80 p-3">
+                <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-slate-500">本机设备编号 · 仅用于区分安装实例</span>
+                    <code className="text-[10px] font-semibold tracking-wide text-slate-600">{localDeviceId ? localDeviceId.slice(0, 8) : '读取中'}</code>
+                </div>
+                <div className="flex gap-2">
+                    <input
+                        value={deviceLabel}
+                        onChange={event => setDeviceLabel(event.target.value)}
+                        maxLength={24}
+                        placeholder="给这台设备起个名字"
+                        aria-label="本机设备名称"
+                        className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 outline-none focus:border-sky-300"
+                    />
+                    <button
+                        type="button"
+                        disabled={loading || savingDeviceLabel || !deviceLabel.trim()}
+                        onClick={async () => {
+                            setSavingDeviceLabel(true);
+                            try {
+                                const identity = await updateLocalSyncDeviceLabel(deviceLabel);
+                                setDeviceLabel(identity.label);
+                                setError('');
+                            } catch {
+                                setError('设备名称保存失败，请检查名称后重试。');
+                            } finally {
+                                setSavingDeviceLabel(false);
+                            }
+                        }}
+                        className="shrink-0 rounded-lg bg-sky-100 px-3 py-2 text-[10px] font-semibold text-sky-700 disabled:opacity-50"
+                    >{savingDeviceLabel ? '保存中' : '保存名称'}</button>
+                </div>
             </div>
             {SYNC_LABELS.map(item => (
                 <label key={item.entityType} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 bg-white/90 p-3">
