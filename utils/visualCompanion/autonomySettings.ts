@@ -30,16 +30,16 @@ function normalizeSettings(value: unknown, now: number): VisualAutonomySettings 
         allowSpontaneousShare: value.allowSpontaneousShare === true,
         allowPrivateCreation: value.allowPrivateCreation === true,
         requireApprovalForNewIdentity: value.requireApprovalForNewIdentity !== false,
-        dailyImageLimit: Number.isInteger(value.dailyImageLimit) && Number(value.dailyImageLimit) >= 0
+        dailyImageLimit: typeof value.dailyImageLimit === 'number' && Number.isInteger(value.dailyImageLimit) && value.dailyImageLimit >= 0
             ? Math.min(Number(value.dailyImageLimit), 100) : defaults.dailyImageLimit,
-        dailyCreditLimit: Number.isFinite(value.dailyCreditLimit) && Number(value.dailyCreditLimit) >= 0
-            ? Number(value.dailyCreditLimit) : undefined,
+        dailyCreditLimit: typeof value.dailyCreditLimit === 'number' && Number.isFinite(value.dailyCreditLimit) && value.dailyCreditLimit >= 0
+            ? value.dailyCreditLimit : undefined,
         quietHours: isRecord(value.quietHours)
             && typeof value.quietHours.start === 'string'
             && typeof value.quietHours.end === 'string'
             ? { start: value.quietHours.start, end: value.quietHours.end }
             : undefined,
-        updatedAt: Number.isFinite(value.updatedAt) ? Number(value.updatedAt) : now,
+        updatedAt: typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt) ? value.updatedAt : now,
     };
 }
 
