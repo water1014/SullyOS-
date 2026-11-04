@@ -1825,7 +1825,7 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
             try {
                 await clearLatestScreenFrame();
             } catch {
-                addToast('预览已关闭，但本机临时截图未能清理，请到屏幕感知设置中手动清除', 'warning');
+                addToast('预览已关闭，但本机临时截图未能清理，请到屏幕感知设置中手动清除', 'info');
             }
         }
     };
@@ -1846,7 +1846,7 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
                 try {
                     await clearLatestScreenFrame();
                 } catch {
-                    addToast('图片已发送，但本机临时截图未能清理，请到屏幕感知设置中手动清除', 'warning');
+                    addToast('图片已发送，但本机临时截图未能清理，请到屏幕感知设置中手动清除', 'info');
                 }
             }
             addToast(`已把这张屏幕画面发送给 ${char.name}`, 'success');
