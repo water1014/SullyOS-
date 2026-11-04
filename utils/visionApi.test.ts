@@ -60,6 +60,7 @@ describe('independent vision API', () => {
       baseUrl: 'https://opencode.ai/zen/go',
       apiKey: 'go-token',
       model: 'deepseek-v4-flash-vision-exp',
+      customHeaders: { 'X-Client-Tag': 'sullyos-vision-test' },
     });
 
     expect(description).toContain('猫');
@@ -69,6 +70,7 @@ describe('independent vision API', () => {
       headers: expect.objectContaining({
         authorization: 'Bearer go-token',
         'x-opencode-session': 'sullyos-vision',
+        'x-client-tag': 'sullyos-vision-test',
       }),
     });
   });
