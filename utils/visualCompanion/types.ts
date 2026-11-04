@@ -71,6 +71,10 @@ export interface VisualMemoryRecord {
     source: VisualMemorySource;
     /** 例如 hairstyle、outfit_preference、scar、visual_style。 */
     category: string;
+    /** Explicit visual timeline classification. Temporary changes never mutate the fixed identity anchor. */
+    visualChangeKind?: 'permanent' | 'temporary';
+    /** Temporary visual context expires at this timestamp; permanent changes omit it. */
+    activeUntil?: number;
     content: string;
     confidence?: number;
     evidenceAssetIds?: string[];
