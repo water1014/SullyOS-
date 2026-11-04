@@ -7,6 +7,7 @@ const { filesystemMocks, installerMocks } = vi.hoisted(() => ({
     addListener: vi.fn(),
     downloadFile: vi.fn(),
     getUri: vi.fn(),
+    stat: vi.fn(),
   },
   installerMocks: {
     getInstalledInfo: vi.fn(),
@@ -48,6 +49,7 @@ beforeEach(() => {
   filesystemMocks.deleteFile.mockResolvedValue(undefined);
   filesystemMocks.downloadFile.mockResolvedValue(undefined);
   filesystemMocks.getUri.mockResolvedValue({ uri: 'file:///cache/updates/SullyOS-update.apk' });
+  filesystemMocks.stat.mockResolvedValue({ size: validManifest.sizeBytes });
   installerMocks.verifyApk.mockResolvedValue({
     valid: true,
     packageName: 'com.aetheros.simulator',
@@ -184,6 +186,34 @@ describe('downloadAndVerifyAndroidUpdate', () => {
     await expect(downloadAndVerifyAndroidUpdate(manifest)).resolves.toBe('file:///cache/updates/SullyOS-update.apk');
     expect(installerMocks.verifyApk).toHaveBeenCalledTimes(2);
     expect(filesystemMocks.downloadFile).toHaveBeenCalledTimes(3);
+  });
+
+
+  it('rejects a downloaded APK whose byte size differs from the manifest', async () => {
+    filesystemMocks.stat.mockResolvedValueOnce({ size: manifest.sizeBytes - 1 });
+    await expect(downloadAndVerifyAndroidUpdate(manifest)).rejects.toThrow('安装包身份、签名或版本校验失败');
+  });
+
+  it('rejects candidates with a different signing certificate or package identity', async () => {
+    installerMocks.verifyApk.mockResolvedValueOnce({
+      valid: true, packageName: 'com.aetheros.simulator', versionCode: manifest.versionCode,
+      certificateSha256: 'c'.repeat(64),
+    });
+    await expect(downloadAndVerifyAndroidUpdate(manifest)).rejects.toThrow('安装包身份、签名或版本校验失败');
+    installerMocks.verifyApk.mockResolvedValueOnce({
+      valid: true, packageName: 'com.example.imposter', versionCode: manifest.versionCode,
+      certificateSha256: 'b'.repeat(64),
+    });
+    await expect(downloadAndVerifyAndroidUpdate(manifest)).rejects.toThrow('安装包身份、签名或版本校验失败');
+  });
+
+  it('rejects an APK that is not newer than the installed version', async () => {
+    installerMocks.getInstalledInfo.mockResolvedValueOnce({
+      packageName: 'com.aetheros.simulator', versionCode: manifest.versionCode,
+      versionName: manifest.versionName, certificateSha256: 'b'.repeat(64),
+      canRequestPackageInstalls: true,
+    });
+    await expect(downloadAndVerifyAndroidUpdate(manifest)).rejects.toThrow('安装包身份、签名或版本校验失败');
   });
 
   it('rejects an unverified or wrong-version APK', async () => {
