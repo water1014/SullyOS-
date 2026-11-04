@@ -403,6 +403,17 @@ describe('local-first sync outbox', () => {
         expect(localNotes).toEqual([note]);
     });
 
+    it('does not leave an event queued when opt-out races with a note save', async () => {
+        for (let index = 0; index < 20; index += 1) {
+            await setSyncPreference('room_note', true, 'text');
+            await Promise.all([
+                enqueueRoomNoteSyncEvent({ ...note, id: `race-note-${index}` }, 'create'),
+                setSyncPreference('room_note', false),
+            ]);
+            expect(await listPendingSyncEvents()).toHaveLength(0);
+        }
+    });
+
     it('uses an empty payload for delete events', async () => {
         await setSyncPreference('room_note', true, 'text');
         const event = await enqueueRoomNoteSyncEvent(note, 'delete');
