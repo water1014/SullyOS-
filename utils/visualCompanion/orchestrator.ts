@@ -58,7 +58,7 @@ export async function createVisualTask(
 export async function createAutonomousVisualTask(
     settings: VisualAutonomySettings,
     context: VisualAutonomyContext,
-    input: Omit<VisualTask, 'id' | 'status' | 'deliveryId' | 'attempt' | 'createdAt' | 'updatedAt' | 'resultAssetIds' | 'retryStage'>
+    input: Omit<VisualTask, 'id' | 'status' | 'deliveryId' | 'attempt' | 'createdAt' | 'updatedAt' | 'resultAssetIds' | 'retryStage'> & { deliveryId?: string }
 ): Promise<{ decision: ReturnType<typeof evaluateVisualAutonomy>; task?: VisualTask }> {
     if (input.kind !== 'spontaneous_share') {
         throw new Error('自主分享入口只接受 spontaneous_share 任务');
