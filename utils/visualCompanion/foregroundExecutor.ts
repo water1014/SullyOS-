@@ -65,7 +65,7 @@ async function generateForTask(task: VisualTask): Promise<Blob> {
  * Execute or resume a single visual task in the foreground.
  * Repeated calls are harmless: state transitions and chat delivery are idempotent.
  */
-export async function executeVisualTaskInForeground(taskId: string): Promise<VisualTask | null> {
+async function runVisualTaskInForeground(taskId: string): Promise<VisualTask | null> {
     let task = await visualCompanionRepository.getTask(taskId);
     if (!task) return null;
 
@@ -165,4 +165,25 @@ export async function executeVisualTaskInForeground(taskId: string): Promise<Vis
         console.warn('[VisualCompanion] foreground task failed', { taskId, error });
         return visualCompanionRepository.getTask(task.id);
     }
+}
+
+
+/**
+ * Deduplicate foreground execution inside one page session.
+ * A task can be resumed from the settings/history panel while its original
+ * trigger is still running; sharing one promise prevents duplicate provider calls.
+ */
+const inFlightVisualTasks = new Map<string, Promise<VisualTask | null>>();
+
+export function executeVisualTaskInForeground(taskId: string): Promise<VisualTask | null> {
+    const existing = inFlightVisualTasks.get(taskId);
+    if (existing) return existing;
+
+    const execution = runVisualTaskInForeground(taskId).finally(() => {
+        if (inFlightVisualTasks.get(taskId) === execution) {
+            inFlightVisualTasks.delete(taskId);
+        }
+    });
+    inFlightVisualTasks.set(taskId, execution);
+    return execution;
 }
