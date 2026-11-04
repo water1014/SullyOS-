@@ -9,7 +9,7 @@ export function buildCharacterAppearancePrompt(profile: CharacterVisualProfile |
     const legacyAttributes = (profile.identity || [])
         .filter(item => item.confirmed && item.value.trim())
         .map(item => item.value.trim());
-    const description = profile.anchorPrompt?.trim() || legacyAttributes.join(', ');
+    const description = [profile.anchorPrompt?.trim(), ...legacyAttributes].filter(Boolean).join(', ');
     if (!description) return '';
     return [
         '[Fixed character appearance]',
