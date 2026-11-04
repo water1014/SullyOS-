@@ -725,12 +725,13 @@ function parseRemoteRoomNote(event: LocalSyncInboxEvent): Record<string, unknown
 /** Apply remote note + inbox state atomically; never silently overwrite a local edit. */
 export async function applyPendingRoomNoteInboxEvent(eventId: string): Promise<InboxApplyResult> {
     const db = await openDB();
-    const tx = db.transaction([INBOX, 'room_notes', CONFLICTS, PREFERENCES], 'readwrite');
+    const tx = db.transaction([INBOX, 'room_notes', CONFLICTS, PREFERENCES, SYNC_STATE], 'readwrite');
     const done = transactionDone(tx);
     const inbox = tx.objectStore(INBOX);
     const notes = tx.objectStore('room_notes');
     const conflicts = tx.objectStore(CONFLICTS);
     const preferences = tx.objectStore(PREFERENCES);
+    const syncState = tx.objectStore(SYNC_STATE);
     const event = await requestResult(inbox.get(eventId)) as LocalSyncInboxEvent | undefined;
     if (!event) {
         await done;
@@ -763,6 +764,9 @@ export async function applyPendingRoomNoteInboxEvent(eventId: string): Promise<I
     }
 
     const local = await requestResult(notes.get(event.entityId)) as Record<string, unknown> | undefined;
+    const versionKey = getRoomNoteVersionKey(event.entityId);
+    const versionRecord = await requestResult(syncState.get(versionKey)) as { version?: number } | undefined;
+    const localServerVersion = Number.isSafeInteger(versionRecord?.version) ? Number(versionRecord?.version) : 0;
     const remote = parseRemoteRoomNote(event);
     if (event.operation !== 'delete' && !remote) {
         inbox.put({ ...event, applyState: 'blocked' });
@@ -773,10 +777,15 @@ export async function applyPendingRoomNoteInboxEvent(eventId: string): Promise<I
         && local.id === remote.id && local.charId === remote.charId
         && local.timestamp === remote.timestamp && local.content === remote.content
         && local.type === remote.type);
+    const staleAlreadyApplied = localServerVersion >= event.entityVersion;
+    const followsKnownBase = localServerVersion === event.entityVersion - 1;
 
-    if (!local || sameContent) {
-        if (event.operation === 'delete') notes.delete(event.entityId);
-        else if (remote) notes.put(remote);
+    if (!local || sameContent || staleAlreadyApplied || followsKnownBase) {
+        if (!staleAlreadyApplied) {
+            if (event.operation === 'delete') notes.delete(event.entityId);
+            else if (remote) notes.put(remote);
+            syncState.put({ id: versionKey, entityType: 'room_note', entityId: event.entityId, version: event.entityVersion, updatedAt: Date.now() });
+        }
         inbox.put({ ...event, applyState: 'applied', appliedAt: Date.now() });
         await done;
         return { status: 'applied' };
@@ -786,7 +795,7 @@ export async function applyPendingRoomNoteInboxEvent(eventId: string): Promise<I
         conflictId: event.eventId,
         entityType: 'room_note',
         entityId: event.entityId,
-        localVersion: 0,
+        localVersion: localServerVersion,
         remoteVersion: event.entityVersion,
         localSnapshot: {
             id: local.id, charId: local.charId, timestamp: local.timestamp,
