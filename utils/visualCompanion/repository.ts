@@ -179,6 +179,47 @@ async function saveCharacterVisualProfile(record: CharacterVisualProfile): Promi
     });
 }
 
+async function saveVisualMemory(record: VisualMemoryRecord): Promise<void> {
+    assertRecordId(record.id, STORE.memories);
+    assertRecordId(record.charId, 'charId');
+    const db = await openDB();
+    const tx = db.transaction(STORE.memories, 'readwrite');
+    const store = tx.objectStore(STORE.memories);
+    const current = await requestResult<VisualMemoryRecord | undefined>(store.get(record.id));
+    if (current && current.charId !== record.charId) {
+        tx.abort();
+        throw new Error('视觉记忆不能转移到其他角色');
+    }
+    if (current?.status === 'confirmed' && current.locked) {
+        tx.abort();
+        throw new Error('这条已确认并锁定的视觉记忆不可被自动覆盖，请先由用户解除锁定');
+    }
+    store.put(record);
+    await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error('视觉记忆保存失败'));
+        tx.onabort = () => reject(tx.error || new Error('视觉记忆保存已中止'));
+    });
+}
+
+async function deleteVisualMemory(id: string): Promise<void> {
+    assertRecordId(id, STORE.memories);
+    const db = await openDB();
+    const tx = db.transaction(STORE.memories, 'readwrite');
+    const store = tx.objectStore(STORE.memories);
+    const current = await requestResult<VisualMemoryRecord | undefined>(store.get(id));
+    if (current?.status === 'confirmed' && current.locked) {
+        tx.abort();
+        throw new Error('这条已确认并锁定的视觉记忆不可删除');
+    }
+    store.delete(id);
+    await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error('视觉记忆删除失败'));
+        tx.onabort = () => reject(tx.error || new Error('视觉记忆删除已中止'));
+    });
+}
+
 export const visualCompanionRepository = {
     getProfile: (id: string) => readOne<CharacterVisualProfile>(STORE.profiles, id),
     listProfiles: (charId: string) => readByCharacter<CharacterVisualProfile>(STORE.profiles, charId),
@@ -187,8 +228,8 @@ export const visualCompanionRepository = {
 
     getMemory: (id: string) => readOne<VisualMemoryRecord>(STORE.memories, id),
     listMemories: (charId: string) => readByCharacter<VisualMemoryRecord>(STORE.memories, charId),
-    saveMemory: (record: VisualMemoryRecord) => writeOne(STORE.memories, record),
-    deleteMemory: (id: string) => removeOne(STORE.memories, id),
+    saveMemory: saveVisualMemory,
+    deleteMemory: deleteVisualMemory,
 
     getProject: (id: string) => readOne<VisualPhotoProject>(STORE.projects, id),
     listProjects: (charId: string) => readByCharacter<VisualPhotoProject>(STORE.projects, charId),
