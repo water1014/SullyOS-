@@ -16,12 +16,15 @@ export function normalizeLlmBaseUrl(value: string, type?: LlmApiType): string {
         const url = new URL(base);
         let path = url.pathname.replace(/\/+$/, '');
         if (isZenGoPath(path)) {
-            path = path.replace(/\/v1\/messages$/i, '').replace(/\/messages$/i, '').replace(/\/v1$/i, '');
+            // Accept a pasted service root or a full endpoint without duplicating
+            // /v1 when the app appends /chat/completions or /messages later.
+            path = path.replace(/\/(?:chat\/completions|messages(?:\/chat\/completions|\/models)?|models|completions)$/i, '');
+            path = path.replace(/\/v1$/i, '');
             path += '/v1';
             if (type === 'anthropic') path += '/messages';
         } else if (isInferenceGoPath(path)) {
-            path = path.replace(/\/(?:openai|anthropic)(?:\/v1)?(?:\/messages)?$/, '');
-            path = path.replace(/\/v1$/, '');
+            path = path.replace(/\/(?:openai|anthropic)(?:\/v1)?(?:\/messages(?:\/chat\/completions|\/models)?|\/chat\/completions|\/models)?$/i, '');
+            path = path.replace(/\/v1$/i, '');
             path += type === 'anthropic' ? '/anthropic/v1/messages' : '/openai/v1';
         } else if (type === 'anthropic') {
             path = path.replace(/\/(?:messages(?:\/(?:chat\/completions|models))?|chat\/completions|models)\/?$/, '').replace(/\/+$/, '');
