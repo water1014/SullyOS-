@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateVisualAutonomy } from './autonomyPolicy';
+import { evaluateVisualAutonomy, hasPendingSpontaneousShare } from './autonomyPolicy';
 import type { VisualAutonomySettings } from './types';
 
 const settings: VisualAutonomySettings = {
@@ -87,5 +87,27 @@ describe('visual autonomous sharing policy', () => {
     it('rejects invalid random samples', () => {
         expect(evaluateVisualAutonomy(settings, context({ sample: 1 })))
             .toEqual({ allowed: false, reason: 'invalid_context' });
+    });
+});
+
+
+describe('spontaneous-share in-flight reservation', () => {
+    it('blocks another share while a spontaneous task is unfinished', () => {
+        for (const status of ['queued', 'planning', 'awaiting_approval', 'generating', 'persisting', 'delivery_pending', 'retry_wait']) {
+            expect(hasPendingSpontaneousShare([{ kind: 'spontaneous_share', status }])).toBe(true);
+        }
+    });
+
+    it('ignores completed, failed, cancelled, and manual tasks', () => {
+        expect(hasPendingSpontaneousShare([
+            { kind: 'spontaneous_share', status: 'delivered' },
+            { kind: 'spontaneous_share', status: 'failed' },
+            { kind: 'spontaneous_share', status: 'cancelled' },
+            { kind: 'chat_requested', status: 'generating' },
+        ])).toBe(false);
+    });
+
+    it('allows a new share when no spontaneous task is in flight', () => {
+        expect(hasPendingSpontaneousShare([])).toBe(false);
     });
 });
