@@ -10,6 +10,7 @@ import { createAutonomousVisualTask } from './orchestrator';
 import { executeVisualTaskInForeground } from './foregroundExecutor';
 import { visualCompanionRepository } from './repository';
 import type { VisualAutonomySettings, VisualProviderKind } from './types';
+import { hasPendingSpontaneousShare } from './autonomyPolicy';
 import type { VisualShareContextKind } from './autonomyPolicy';
 
 const IMAGE_CONFIG_KEY = 'sully-image-studio:config:v1';
@@ -110,6 +111,10 @@ async function queueVisualShareForActiveMessage(
     ]);
     // Count only assets produced by autonomous-share tasks. Manual Image Studio work
     // must not silently consume the companion's spontaneous-share quota.
+    // Cooldown begins after delivery. Reserve the slot while a task is still running,
+    // otherwise several scheduled messages can all pass before the first image finishes.
+    if (hasPendingSpontaneousShare(tasks)) return 'denied';
+
     const spontaneousTaskIds = new Set(tasks
         .filter(task => task.kind === 'spontaneous_share')
         .map(task => task.id));
