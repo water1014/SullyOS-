@@ -153,7 +153,7 @@ export type VisualAssetRecord = VisualAssetRecordBase & (
     }
     | {
         privacyScope: 'private';
-        storage: { kind: 'private_local' | 'private_remote'; ref: string };
+        storage: { kind: 'private_local'; ref: string };
         encryptionKeyVersion: number;
     }
 );
