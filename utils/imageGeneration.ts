@@ -11,6 +11,8 @@ export interface GptImageConfig {
 export interface NaiImageConfig {
   apiKey: string;
   model: string;
+  provider?: 'official' | 'thirdparty';
+  baseUrl?: string;
 }
 
 export interface NaiImageOptions {
@@ -126,6 +128,12 @@ export async function generateGptImage(
   return new Blob([bytes], { type: 'image/png' });
 }
 
+export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'official' | 'thirdparty' = 'official'): string {
+  const clean = (baseUrl.trim() || (provider === 'official' ? 'https://image.novelai.net' : '')).replace(/\\/+$/, '');
+  if (!clean) throw new Error('请填写 NAI 第三方 API Base URL');
+  return clean.endsWith('/ai/generate-image') ? clean : `${clean}/ai/generate-image`;
+}
+
 export async function generateNaiImage(
   config: NaiImageConfig,
   prompt: string,
@@ -142,7 +150,8 @@ export async function generateNaiImage(
     use_coords: false,
     use_order: true,
   });
-  const response = await fetch('https://image.novelai.net/ai/generate-image', {
+  const provider = config.provider || 'official';
+  const response = await fetch(normalizeNaiGenerateEndpoint(config.baseUrl || 'https://image.novelai.net', provider), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -205,6 +214,7 @@ export async function suggestNaiTags(
   prompt: string,
   signal?: AbortSignal,
 ): Promise<NaiTagSuggestion[]> {
+  if ((config.provider || 'official') !== 'official') throw new Error('官方标签联想仅适用于 NovelAI 官方接口');
   if (!config.apiKey.trim()) throw new Error('请先填写 NovelAI Persistent API Token');
   if (!prompt.trim()) throw new Error('先输入一个标签片段，例如 blue hair');
   const query = new URLSearchParams({
