@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowsClockwise, Check, Copy, DownloadSimple, GearSix, ImageSquare,
-  Images, MagicWand, Sparkle, Trash, X,
+  Images, MagicWand, Sparkle, Trash,
 } from '@phosphor-icons/react';
 import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
@@ -24,8 +24,13 @@ type SavedImage = {
 type DisplayImage = SavedImage & { url: string };
 
 const readConfig = (): StudioConfig => {
-  try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}') }; }
-  catch { return DEFAULT_CONFIG; }
+  try {
+    const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+    return {
+      gpt: { ...DEFAULT_CONFIG.gpt, ...(saved?.gpt || {}) },
+      nai: { ...DEFAULT_CONFIG.nai, ...(saved?.nai || {}) },
+    };
+  } catch { return DEFAULT_CONFIG; }
 };
 const readItems = (): SavedImage[] => {
   try {
@@ -51,6 +56,7 @@ const ImageStudioApp: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [images, setImages] = useState<DisplayImage[]>([]);
+  const imagesRef = useRef<DisplayImage[]>([]);
   const [selected, setSelected] = useState<DisplayImage | null>(null);
 
   useEffect(() => {
@@ -75,7 +81,8 @@ const ImageStudioApp: React.FC = () => {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
   }, [config]);
 
-  useEffect(() => () => images.forEach(item => URL.revokeObjectURL(item.url)), [images]);
+  useEffect(() => { imagesRef.current = images; }, [images]);
+  useEffect(() => () => imagesRef.current.forEach(item => URL.revokeObjectURL(item.url)), []);
 
   const updateGpt = (updates: Partial<GptImageConfig>) =>
     setConfig(current => ({ ...current, gpt: { ...current.gpt, ...updates } }));
