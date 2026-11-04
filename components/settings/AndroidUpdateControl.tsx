@@ -19,8 +19,10 @@ const AndroidUpdateControl: React.FC = () => {
         ? '正在打开安装器…'
         : phase === 'available'
           ? `下载并安装 ${manifest?.versionName || '新版本'}`
-          : phase === 'permission'
-            ? '打开安装权限设置'
+          : phase === 'installed'
+            ? '已更新，检查新版本'
+            : phase === 'permission'
+              ? '打开安装权限设置'
             : canContinue
               ? phase === 'ready' ? '再次打开安装器' : '继续安装'
               : '检查更新';
