@@ -136,7 +136,7 @@ export function normalizeOpenAIImageEditsEndpoint(baseUrl: string): string {
   return clean.endsWith('/images/edits') ? clean : `${clean}/images/edits`;
 }
 
-async function readGptImageResponse(response: Response, actionLabel: string): Promise<Blob> {
+async function readGptImageResponse(response: Response, actionLabel: string, signal?: AbortSignal): Promise<Blob> {
   if (!response.ok) {
     const payload = await response.json().catch(() => null);
     throw new Error(errorMessage(payload, `${actionLabel}失败（HTTP ${response.status}）`));
@@ -156,7 +156,7 @@ async function readGptImageResponse(response: Response, actionLabel: string): Pr
 
   const imageUrl = payload?.data?.[0]?.url;
   if (typeof imageUrl === 'string' && imageUrl) {
-    const imageResponse = await fetch(imageUrl);
+    const imageResponse = await fetch(imageUrl, { signal });
     if (!imageResponse.ok) throw new Error(`${actionLabel}返回了图片链接，但下载失败（HTTP ${imageResponse.status}）`);
     const blob = await imageResponse.blob();
     if (!blob.type.toLowerCase().startsWith('image/')) {
@@ -209,7 +209,7 @@ export async function editGptImage(
     }),
     signal: options.signal,
   });
-  return readGptImageResponse(response, 'GPT 图片编辑');
+  return readGptImageResponse(response, 'GPT 图片编辑', options.signal);
 }
 
 export async function generateGptImage(
@@ -235,7 +235,7 @@ export async function generateGptImage(
     }),
     signal: options.signal,
   });
-  return readGptImageResponse(response, 'GPT 生图');
+  return readGptImageResponse(response, 'GPT 生图', options.signal);
 }
 
 export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'official' | 'thirdparty' = 'official'): string {
