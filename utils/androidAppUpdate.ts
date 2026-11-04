@@ -185,9 +185,20 @@ const performDownload = async (
   }
 
   const { uri } = await Filesystem.getUri({ path: UPDATE_PATH, directory: Directory.Cache });
+  // SHA-256 pins the bytes to the manifest; package and signer must also match
+  // the installed app or Android cannot perform a safe in-place update.
+  const installed = await ApkInstaller.getInstalledInfo();
   const verified = await ApkInstaller.verifyApk({ path: uri, sha256: manifest.sha256 });
-  if (!verified.valid || verified.versionCode !== manifest.versionCode) {
-    throw new Error('下载的 APK 与更新清单版本不一致');
+  const fingerprint = (value: string) => value.replace(/[^a-f0-9]/gi, '').toLowerCase();
+  const sameSigner = fingerprint(verified.certificateSha256) === fingerprint(installed.certificateSha256);
+  if (
+    !verified.valid
+    || verified.packageName !== installed.packageName
+    || !sameSigner
+    || verified.versionCode !== manifest.versionCode
+    || verified.versionCode <= installed.versionCode
+  ) {
+    throw new Error('安装包身份、签名或版本校验失败，已阻止安装');
   }
   return uri;
 };
