@@ -409,6 +409,13 @@ async function handle(req, res) {
       );
       return json(res, 200, { devices: result.rows });
     }
+    if (url.pathname === '/v1/devices/current/revoke' && req.method === 'POST') {
+      await pool.query(
+        'UPDATE companion_devices SET revoked_at = now() WHERE account_id = $1 AND id = $2 AND revoked_at IS NULL',
+        [device.account_id, device.device_id],
+      );
+      return json(res, 200, { revoked: true });
+    }
     const revoke = /^\/v1\/devices\/([0-9a-f-]{36})$/.exec(url.pathname);
     if (revoke && req.method === 'DELETE') {
       if (revoke[1] === device.device_id) return json(res, 409, { error: 'CANNOT_REVOKE_CURRENT_DEVICE' });
