@@ -825,4 +825,23 @@ export async function resolveRoomNoteSyncConflict(
     conflicts.put({ ...conflict, resolutionState: resolution });
     inbox.put({ ...event, applyState: 'applied', appliedAt: Date.now() });
     await done;
+
+    // Choosing the local version is an explicit decision to publish it over the
+    // remote version. Queue a version-based update (or delete) instead of merely
+    // dismissing the conflict and leaving the two devices divergent.
+    if (resolution === 'keep_local') {
+        await setLocalRoomNoteServerVersion(conflict.entityId, conflict.remoteVersion);
+        const local = conflict.localSnapshot;
+        const note = {
+            id: conflict.entityId,
+            charId: typeof local?.charId === 'string' ? local.charId : '',
+            timestamp: typeof local?.timestamp === 'number' ? local.timestamp : Date.now(),
+            content: typeof local?.content === 'string' ? local.content : '',
+            type: (typeof local?.type === 'string' && ROOM_NOTE_TYPES.has(local.type) ? local.type : 'thought') as 'lyric' | 'doodle' | 'thought' | 'search' | 'gossip',
+        };
+        await enqueueRoomNoteSyncEvent(note, local ? 'update' : 'delete', {
+            baseVersion: conflict.remoteVersion,
+            clientVersion: conflict.remoteVersion + 1,
+        });
+    }
 }
