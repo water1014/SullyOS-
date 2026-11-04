@@ -656,22 +656,65 @@ const ImageStudioApp: React.FC = () => {
     const targets = images.filter(item => selectedIds.has(item.id));
     if (!targets.length || bulkBusy || !window.confirm('确定删除选中的 ' + targets.length + ' 张作品吗？此操作无法撤销。')) return;
     setBulkBusy(true);
+    const snapshots: Array<{ item: DisplayImage; blob: Blob }> = [];
+    const removed: DisplayImage[] = [];
     try {
-      const results = await Promise.all(targets.map(async item => {
-        try { await DB.deleteBlobAsset(item.blobId); return { item, ok: true as const }; }
-        catch { return { item, ok: false as const }; }
-      }));
-      const deleted = results.filter(result => result.ok).map(result => result.item);
-      const failed = results.length - deleted.length;
-      const removed = new Set(deleted.map(item => item.id));
-      if (removed.size) {
-        persistItems(readItems().filter(item => !removed.has(item.id)));
-        setImages(current => current.filter(item => !removed.has(item.id)));
-        setSelected(current => current && removed.has(current.id) ? null : current);
-        deleted.forEach(item => URL.revokeObjectURL(item.url));
+      // Snapshot every binary before deleting anything. A missing blob is treated
+      // as a failed item, never as permission to erase its metadata.
+      for (const item of targets) {
+        const blob = await DB.getBlobAsset(item.blobId).catch(() => null);
+        if (!blob) continue;
+        snapshots.push({ item, blob });
       }
+
+      for (const snapshot of snapshots) {
+        try {
+          await DB.deleteBlobAsset(snapshot.item.blobId);
+          removed.push(snapshot.item);
+        } catch {
+          // Keep this item in the gallery when its binary could not be deleted.
+        }
+      }
+
+      const removedIds = new Set(removed.map(item => item.id));
+      if (removedIds.size) {
+        try {
+          // Commit the metadata only after the binary deletions have completed.
+          persistItems(readItems().filter(item => !removedIds.has(item.id)));
+        } catch (error) {
+          // Restore every binary if the index commit fails, so the visible
+          // gallery and its metadata remain usable.
+          const restoreResults = await Promise.all(removed.map(async item => {
+            const snapshot = snapshots.find(entry => entry.item.id === item.id);
+            if (!snapshot) return false;
+            try { await DB.putBlobAsset(item.blobId, snapshot.blob); return true; }
+            catch { return false; }
+          }));
+          const restored = restoreResults.filter(Boolean).length;
+          addToast(
+            restored === removed.length
+              ? '批量删除未完成，图片文件已恢复，作品记录保持不变'
+              : `批量删除未完成，已恢复 ${restored}/${removed.length} 张图片，请立即导出备份并检查本地存储`,
+            'error',
+          );
+          return;
+        }
+
+        setImages(current => current.filter(item => !removedIds.has(item.id)));
+        setSelected(current => current && removedIds.has(current.id) ? null : current);
+        removed.forEach(item => URL.revokeObjectURL(item.url));
+      }
+
+      const failed = targets.length - removed.length;
       setSelectedIds(new Set());
-      addToast(failed ? `删除完成：成功 ${deleted.length} 张，失败 ${failed} 张，失败作品已保留` : '已删除 ' + deleted.length + ' 张作品', failed ? 'error' : 'success');
+      addToast(
+        failed
+          ? `删除完成：成功 ${removed.length} 张，失败 ${failed} 张，失败作品已保留`
+          : '已删除 ' + removed.length + ' 张作品',
+        failed ? 'error' : 'success',
+      );
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : '批量删除失败，作品记录已保留', 'error');
     } finally {
       setBulkBusy(false);
     }
