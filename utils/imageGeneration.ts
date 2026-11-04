@@ -279,7 +279,7 @@ export async function generateNaiImage(
         sampler: options.sampler,
         steps: options.steps,
         n_samples: 1,
-        seed: options.seed && options.seed > 0 ? options.seed : Math.floor(Math.random() * 4294967295),
+        seed: options.seed !== undefined ? options.seed : Math.floor(Math.random() * 4294967295),
         negative_prompt: negativePrompt.trim(),
         noise_schedule: 'karras',
         cfg_rescale: 0,
