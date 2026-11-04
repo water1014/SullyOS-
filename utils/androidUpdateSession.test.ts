@@ -19,6 +19,7 @@ const setup = () => {
     fetchManifest: vi.fn().mockResolvedValue(manifest),
     download: vi.fn().mockResolvedValue('file:///cache/updates/SullyOS-update.apk'),
     install: vi.fn().mockResolvedValue({ status: 'installer_opened' }),
+    openInstallPermissionSettings: vi.fn().mockResolvedValue(undefined),
     track: vi.fn(),
   };
   return { deps, session: createAndroidUpdateSession(deps) };
@@ -73,6 +74,21 @@ describe('Android update session survives page lifetimes', () => {
     check.resolve(manifest);
     await first;
     expect(session.getSnapshot().phase).toBe('available');
+  });
+
+  it('opens Android install permission settings separately from retrying the installer', async () => {
+    const { deps, session } = setup();
+    deps.install.mockResolvedValueOnce({ status: 'permission_required' });
+    await session.check();
+    await session.download();
+    expect(session.getSnapshot().phase).toBe('permission');
+    await session.openInstallPermissionSettings();
+    expect(deps.openInstallPermissionSettings).toHaveBeenCalledTimes(1);
+    expect(deps.install).toHaveBeenCalledTimes(1);
+    expect(session.getSnapshot().message).toContain('已打开系统授权页面');
+    await session.continueInstall();
+    expect(deps.install).toHaveBeenCalledTimes(2);
+    expect(session.getSnapshot().phase).toBe('ready');
   });
 
   it('retains the verified path across install permission settings and installer cancellation', async () => {
