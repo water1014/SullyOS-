@@ -6,17 +6,33 @@ export const config = {
     },
 };
 
-function readRawBody(req: any): Promise<Buffer> {
+function toBytes(chunk: any): Uint8Array {
+    if (chunk instanceof Uint8Array) return new Uint8Array(chunk);
+    if (chunk instanceof ArrayBuffer) return new Uint8Array(chunk);
+    if (typeof chunk === 'string') return new TextEncoder().encode(chunk);
+    return new Uint8Array(chunk);
+}
+
+function concatBytes(chunks: Uint8Array[]): Uint8Array {
+    const totalLength = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+        result.set(chunk, offset);
+        offset += chunk.byteLength;
+    }
+    return result;
+}
+
+function readRawBody(req: any): Promise<Uint8Array> {
     return new Promise((resolve, reject) => {
-        if (Buffer.isBuffer(req.body)) {
-            resolve(req.body);
+        if (req.body instanceof Uint8Array) {
+            resolve(toBytes(req.body));
             return;
         }
-        const chunks: Buffer[] = [];
-        req.on('data', (chunk: any) => {
-            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-        });
-        req.on('end', () => resolve(Buffer.concat(chunks)));
+        const chunks: Uint8Array[] = [];
+        req.on('data', (chunk: any) => chunks.push(toBytes(chunk)));
+        req.on('end', () => resolve(concatBytes(chunks)));
         req.on('error', reject);
     });
 }
@@ -59,7 +75,7 @@ export default async function handler(req: any, res: any) {
         const response = await fetch(targetUrl, {
             method: 'POST',
             headers,
-            body: new Uint8Array(rawBody),
+            body: rawBody as BodyInit,
         });
 
         const text = await response.text();
