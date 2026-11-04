@@ -8,7 +8,7 @@ The Android implementation is a user-started, consent-based MediaProjection sess
 2. Tap 授权并开启.
 3. Android displays its official screen-sharing consent dialog. If the user cancels, capture does not start.
 4. While active, a persistent foreground-service notification exposes 截取此刻 and 停止感知 actions.
-5. When the user is in another app, they tap 截取此刻 in the notification. The service saves the next frame and freezes capture, so returning to SullyOS does not overwrite the other app's screen with the chat UI.
+5. When the user is in another app, they tap 截取此刻 in the notification. The service saves the next frame and detaches the virtual-display output, pausing capture work so returning to SullyOS does not overwrite the other app's screen with the chat UI.
 6. In chat, the user opens ＋ → 分享屏幕, previews the frozen frame, and must explicitly confirm before it is sent as an ordinary image message.
 7. The user can resume capture from the notification or Settings. Stopping releases MediaProjection, VirtualDisplay and ImageReader, and deletes the cached frame.
 
