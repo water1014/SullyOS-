@@ -6,6 +6,7 @@ import {
 } from '@phosphor-icons/react';
 import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
+import { getBlobForRef } from '../utils/blobRef';
 import { visualCompanionRepository } from '../utils/visualCompanion/repository';
 import { mergeCharacterAppearancePrompt } from '../utils/visualCompanion/identityPrompt';
 import type { CharacterVisualProfile } from '../utils/visualCompanion/types';
@@ -373,6 +374,20 @@ const ImageStudioApp: React.FC = () => {
         ? await visualCompanionRepository.getProfile('visual_profile_' + encodeURIComponent(activeCharacterId))
         : appearanceProfile;
       const effectivePrompt = mergeCharacterAppearancePrompt(prompt, currentAppearanceProfile);
+      // GPT 生图优先使用用户本次上传的参考图；未上传时回退到角色档案的基础形象图。
+      // NAI 保持纯文生图，不把参考图悄悄发送给不支持该流程的接口。
+      let effectiveReferenceImage: Blob | File | null = engine === 'gpt' ? referenceImage : null;
+      if (engine === 'gpt' && !effectiveReferenceImage && currentAppearanceProfile?.baseAssetId) {
+        const baseAsset = await visualCompanionRepository.getAsset(currentAppearanceProfile.baseAssetId);
+        if (!baseAsset || baseAsset.charId !== activeCharacterId || baseAsset.status !== 'ready' || baseAsset.privacyScope !== 'standard' || baseAsset.storage.kind !== 'blobref') {
+          throw new Error('角色基础形象图片不可用，已停止生成以避免丢失形象锚点');
+        }
+        const baseBlob = await getBlobForRef(baseAsset.storage.ref);
+        if (!baseBlob || !baseBlob.type.startsWith('image/')) {
+          throw new Error('角色基础形象图片文件缺失或格式无效');
+        }
+        effectiveReferenceImage = baseBlob;
+      }
       if (engine === 'nai' && naiSeed.trim()) {
         const parsedSeed = Number(naiSeed);
         if (!Number.isSafeInteger(parsedSeed) || parsedSeed < 0 || parsedSeed > 4294967295) {
@@ -389,8 +404,8 @@ const ImageStudioApp: React.FC = () => {
         ...(effectiveNaiSeed !== undefined ? { seed: effectiveNaiSeed } : {}),
       };
       const blob = engine === 'gpt'
-        ? referenceImage
-          ? await editGptImage(config.gpt, referenceImage, effectivePrompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
+        ? effectiveReferenceImage
+          ? await editGptImage(config.gpt, effectiveReferenceImage, effectivePrompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
           : await generateGptImage(config.gpt, effectivePrompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
         : await generateNaiImage(config.nai, effectivePrompt, negativePrompt, naiOptions, controller.signal);
       await saveImage(blob, effectiveNaiSeed, currentAppearanceProfile?.status === 'active' ? currentAppearanceProfile.version : undefined);
