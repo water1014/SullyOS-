@@ -275,8 +275,8 @@ describe('视觉人格本地仓库', () => {
         await saveReadyAsset('asset_chat_1');
         await markVisualAssetsPersisted(created.id);
 
-        const first = await deliverVisualTaskToChat(created.id, 'blobref:b_visual_chat_1');
-        const second = await deliverVisualTaskToChat(created.id, 'blobref:b_visual_chat_1');
+        const first = await deliverVisualTaskToChat(created.id, 'blobref:asset_chat_1');
+        const second = await deliverVisualTaskToChat(created.id, 'blobref:asset_chat_1');
         expect(first.messageId).toBe(second.messageId);
         expect(second.task.status).toBe('delivered');
         expect(second.task.deliveredMessageId).toBe(first.messageId);
@@ -286,7 +286,7 @@ describe('视觉人格本地仓库', () => {
         expect(delivered).toHaveLength(1);
         expect(delivered[0].role).toBe('assistant');
         expect(delivered[0].type).toBe('image');
-        expect(delivered[0].content).toBe('blobref:b_visual_chat_1');
+        expect(delivered[0].content).toBe('blobref:asset_chat_1');
     });
 
     it('投递失败恢复时只回到 delivery_pending，不重新生成', async () => {
