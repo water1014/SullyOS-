@@ -350,7 +350,7 @@ async function ackEvents(device, body) {
       await client.query('ROLLBACK');
       return { status: 409, body: { error: 'ACK_EXCEEDS_DELIVERED_CURSOR', maxDeliveredSequence: maxDelivered } };
     }
-    await client.query(
+    const ackResult = await client.query(
       `INSERT INTO companion_device_cursors (account_id, device_id, last_acked_sequence)
        VALUES ($1,$2,$3)
        ON CONFLICT (account_id, device_id) DO UPDATE SET
@@ -360,7 +360,7 @@ async function ackEvents(device, body) {
       [device.account_id, device.device_id, sequence],
     );
     await client.query('COMMIT');
-    return { status: 200, body: { lastAckedSequence: Number(result.rows[0].last_acked_sequence) } };
+    return { status: 200, body: { lastAckedSequence: Number(ackResult.rows[0].last_acked_sequence) } };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
