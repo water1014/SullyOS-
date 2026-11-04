@@ -29,8 +29,10 @@ describe('API config normalization', () => {
     const headers = buildApiRequestHeaders('go-token', { 'X-OpenCode-Session': 'session-1' });
     expect(headers.get('authorization')).toBe('Bearer go-token');
     expect(headers.get('x-opencode-session')).toBe('session-1');
-    const goHeaders = buildApiRequestHeaders('go-token', {}, { baseUrl: 'https://opencode.ai/inference/openai/v1', sessionId: 'character-session-1' });
+    const goHeaders = buildApiRequestHeaders('go-token', {}, { baseUrl: 'https://opencode.ai/inference/go/openai/v1', sessionId: 'character-session-1' });
     expect(goHeaders.get('x-opencode-session')).toBe('character-session-1');
+    const paygoHeaders = buildApiRequestHeaders('key', {}, { baseUrl: 'https://opencode.ai/inference/openai/v1', sessionId: 'not-go' });
+    expect(paygoHeaders.has('x-opencode-session')).toBe(false);
     const overridden = buildApiRequestHeaders('go-token', { 'X-OpenCode-Session': 'manual-session' }, { baseUrl: 'https://opencode.ai/inference/go/openai/v1', sessionId: 'automatic-session' });
     expect(overridden.get('x-opencode-session')).toBe('manual-session');
   });
