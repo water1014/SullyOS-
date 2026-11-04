@@ -252,7 +252,6 @@ export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'officia
   parsed.pathname = hasGenerationPath
     ? `/${basePath}`
     : basePath ? `/${basePath}/ai/generate-image` : '/ai/generate-image';
-  }
   return parsed.toString().replace(/\/$/, '');
 }
 
