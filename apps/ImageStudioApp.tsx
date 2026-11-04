@@ -13,6 +13,7 @@ import {
 const CONFIG_KEY = 'sully-image-studio:config:v1';
 const ITEMS_KEY = 'sully-image-studio:items:v1';
 const TEMPLATES_KEY = 'sully-image-studio:nai-templates:v1';
+const IMAGE_CATEGORIES = ['未分类', '人物', '场景', '头像', '壁纸', '灵感草稿', '其他'];
 const DEFAULT_CONFIG = {
   gpt: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-image-2.5-flare' },
   nai: { apiKey: '', model: 'nai-diffusion-5-full' },
@@ -21,6 +22,7 @@ type StudioConfig = { gpt: GptImageConfig; nai: NaiImageConfig };
 type SavedImage = {
   id: string; blobId: string; engine: ImageEngine; prompt: string; negativePrompt: string;
   model: string; createdAt: number; mimeType: string;
+  note?: string; category?: string; favorite?: boolean;
 };
 type DisplayImage = SavedImage & { url: string };
 type NaiPromptTemplate = { id: string; name: string; prompt: string; negativePrompt: string; createdAt: number };
@@ -98,6 +100,8 @@ const ImageStudioApp: React.FC = () => {
   const [images, setImages] = useState<DisplayImage[]>([]);
   const imagesRef = useRef<DisplayImage[]>([]);
   const [selected, setSelected] = useState<DisplayImage | null>(null);
+  const [galleryCategory, setGalleryCategory] = useState('全部');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -267,6 +271,30 @@ const ImageStudioApp: React.FC = () => {
       setGenerating(false);
     }
   };
+
+  const updateImageMetadata = (id: string, updates: Partial<Pick<SavedImage, 'note' | 'category' | 'favorite'>>) => {
+    const next = readItems().map(item => item.id === id ? { ...item, ...updates } : item);
+    persistItems(next);
+    setImages(current => current.map(item => item.id === id ? { ...item, ...updates } : item));
+    setSelected(current => current?.id === id ? { ...current, ...updates } : current);
+  };
+
+  const restoreImagePrompt = (item: DisplayImage) => {
+    setEngine(item.engine);
+    setPrompt(item.prompt);
+    setNegativePrompt(item.negativePrompt || '');
+    if (item.engine === 'gpt') updateGpt({ model: item.model });
+    else updateNai({ model: item.model });
+    setReferenceImage(null);
+    setError('');
+    setTab('create');
+    addToast('已载入这张作品的提示词和模型', 'success');
+  };
+
+  const visibleImages = images.filter(item =>
+    (galleryCategory === '全部' || (item.category || '未分类') === galleryCategory) &&
+    (!showFavoritesOnly || !!item.favorite)
+  );
 
   const deleteImage = async (item: DisplayImage) => {
     if (!window.confirm('确定删除这张作品吗？')) return;
@@ -468,18 +496,36 @@ const ImageStudioApp: React.FC = () => {
               <div className="glass rounded-[24px] p-2"><img src={selected.url} className="w-full max-h-[58vh] object-contain rounded-[18px]" alt="生成作品"/></div>
               <div className="glass rounded-[20px] p-4 space-y-2">
                 <div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-700">{selected.engine === 'gpt' ? 'GPT Image' : 'NovelAI'} · {selected.model}</span><span className="text-[10px] text-slate-400">{new Date(selected.createdAt).toLocaleString()}</span></div>
-                <p className="text-xs leading-5 text-slate-600 whitespace-pre-wrap break-words">{selected.prompt}</p>
-                <div className="flex gap-2 pt-1">
-                  <button onClick={() => copyPrompt(selected.prompt)} className="soft flex-1 rounded-xl py-2.5 text-xs flex items-center justify-center gap-1"><Copy size={14}/>复制提示词</button>
-                  <button onClick={() => downloadImage(selected)} className="soft flex-1 rounded-xl py-2.5 text-xs flex items-center justify-center gap-1"><DownloadSimple size={14}/>下载图片</button>
-                  <button onClick={() => deleteImage(selected)} className="soft rounded-xl px-3 py-2.5 text-rose-500"><Trash size={14}/></button>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-semibold text-slate-600">作品分类</label>
+                  <select className="field max-w-[170px] py-2" value={selected.category || '未分类'} onChange={event => updateImageMetadata(selected.id, { category: event.target.value })}>{IMAGE_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select>
+                </div>
+                <label className="block text-xs font-semibold text-slate-600">作品备注</label>
+                <textarea className="field min-h-[70px] resize-y" value={selected.note || ''} onChange={event => updateImageMetadata(selected.id, { note: event.target.value })} placeholder="记录创作想法、修改方向或灵感来源……"/>
+                <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">正向提示词</label><button onClick={() => copyPrompt(selected.prompt)} className="text-[10px] text-sky-700">复制</button></div>
+                <p className="text-xs leading-5 text-slate-600 whitespace-pre-wrap break-words rounded-xl bg-white/55 p-3">{selected.prompt}</p>
+                {selected.negativePrompt && <>
+                  <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">反向提示词</label><button onClick={() => copyPrompt(selected.negativePrompt)} className="text-[10px] text-sky-700">复制</button></div>
+                  <p className="text-xs leading-5 text-slate-500 whitespace-pre-wrap break-words rounded-xl bg-white/45 p-3">{selected.negativePrompt}</p>
+                </>}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button onClick={() => restoreImagePrompt(selected)} className="primary rounded-xl py-2.5 text-xs font-semibold">载入提示词继续创作</button>
+                  <button onClick={() => updateImageMetadata(selected.id, { favorite: !selected.favorite })} className="soft rounded-xl py-2.5 text-xs">{selected.favorite ? '★ 已收藏' : '☆ 收藏作品'}</button>
+                  <button onClick={() => downloadImage(selected)} className="soft rounded-xl py-2.5 text-xs flex items-center justify-center gap-1"><DownloadSimple size={14}/>下载图片</button>
+                  <button onClick={() => deleteImage(selected)} className="soft rounded-xl py-2.5 text-rose-500 flex items-center justify-center gap-1"><Trash size={14}/>删除作品</button>
                 </div>
               </div>
             </div>
           ) : images.length ? (
-            <div className="grid grid-cols-2 gap-3">
-              {images.map(item => <button key={item.id} onClick={() => setSelected(item)} className="art-tile rounded-[18px] p-1.5 text-left overflow-hidden"><img src={item.url} alt="生成作品" loading="lazy" className="w-full aspect-[3/4] object-cover rounded-[13px]"/><div className="px-1.5 py-2"><div className="text-[10px] font-semibold text-slate-600 truncate">{item.engine === 'gpt' ? 'GPT Image' : 'NovelAI'}</div><div className="text-[9px] text-slate-400 mt-1">{new Date(item.createdAt).toLocaleDateString()}</div></div></button>)}
-            </div>
+            <>
+              <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
+                {['全部', ...IMAGE_CATEGORIES].map(category => <button key={category} onClick={() => setGalleryCategory(category)} className={`shrink-0 rounded-full px-3 py-2 text-[10px] font-semibold ${galleryCategory === category ? 'primary' : 'soft'}`}>{category}</button>)}
+                <button onClick={() => setShowFavoritesOnly(value => !value)} className={`shrink-0 rounded-full px-3 py-2 text-[10px] font-semibold ${showFavoritesOnly ? 'primary' : 'soft'}`}>{showFavoritesOnly ? '★ 仅收藏' : '☆ 收藏'}</button>
+              </div>
+              {visibleImages.length ? <div className="grid grid-cols-2 gap-3">
+                {visibleImages.map(item => <button key={item.id} onClick={() => setSelected(item)} className="art-tile rounded-[18px] p-1.5 text-left overflow-hidden relative"><img src={item.url} alt="生成作品" loading="lazy" className="w-full aspect-[3/4] object-cover rounded-[13px]"/>{item.favorite && <span className="absolute top-3 right-3 rounded-full bg-white/90 px-2 py-1 text-[10px] text-amber-600">★</span>}<div className="px-1.5 py-2"><div className="text-[10px] font-semibold text-slate-600 truncate">{item.engine === 'gpt' ? 'GPT Image' : 'NovelAI'} · {item.category || '未分类'}</div><div className="text-[9px] text-slate-400 mt-1">{new Date(item.createdAt).toLocaleDateString()}</div>{item.note && <div className="text-[9px] text-slate-500 mt-1 truncate">{item.note}</div>}</div></button>)}
+              </div> : <div className="glass rounded-2xl p-6 text-center text-xs text-slate-400">这个筛选条件下还没有作品。</div>}
+            </>
           ) : (
             <div className="glass rounded-[26px] min-h-[300px] flex flex-col items-center justify-center text-center p-7">
               <div className="w-16 h-16 rounded-[22px] bg-sky-100/80 flex items-center justify-center text-sky-600 mb-4"><ImageSquare size={30}/></div>
