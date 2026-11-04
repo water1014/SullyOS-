@@ -2665,7 +2665,7 @@ const Settings: React.FC = () => {
                         try {
                             const res = await fetchLlm(`${normalizeLlmBaseUrl(localUrl, localApiType)}/chat/completions`, {
                                 method: 'POST',
-                                headers: buildApiRequestHeaders(localKey.trim(), localCustomHeaders),
+                                headers: buildApiRequestHeaders(localKey.trim(), localCustomHeaders, { baseUrl: normalizeLlmBaseUrl(localUrl, localApiType), sessionId: 'sullyos-settings-test' }),
                                 body: JSON.stringify({
                                     model: localModel.trim(),
                                     messages: [{ role: 'user', content: 'Hi' }],
