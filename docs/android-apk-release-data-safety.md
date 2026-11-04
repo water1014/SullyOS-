@@ -58,10 +58,27 @@ Before publishing an update, set the configured manifest URL to the release mani
 
 - The TypeScript updater and a native Capacitor `ApkInstaller` source implementation are now tracked under `native/android/apk-installer/`. The native source has not yet been compiled against the actual wrapper project or verified on a device.
 - The Android wrapper project remains external to this repository. `scripts/install-apk-installer.ps1` now copies the native source, registers the plugin and FileProvider with guarded checks; `scripts/sync-tiao-capacitor.ps1` invokes it before `cap sync`. The wrapper directory and its exact Android project structure still need validation.
-- The checked-in public update manifest is a historical release manifest, not a release target for this feature branch.
+- The inherited upstream update manifest has been neutralized: public/sullyos-update.json is explicitly disabled and contains no usable APK URL, hash, or version. The Capacitor build update URL is blank until this fork publishes its own signed release.
 - Physical-device in-place upgrade and same-signer update tests have not been run in this repository session.
 
 Therefore the current state is **web updater plus native installer source implemented, wrapper integration and APK release not yet verified**. Before the APK milestone, bring the native installer plugin and wrapper integration under a reproducible, version-controlled release workflow, then complete the smoke test above.
+
+
+## Fork-specific release publication checklist
+
+Do not enable in-app updates until all of these are true:
+
+1. Build the Android release from the reviewed feature/image-studio source and the actual wrapper project.
+2. Confirm the final applicationId is exactly com.aetheros.simulator.
+3. Sign with the same long-lived production keystore as the already-installed release. Debug signing is not interchangeable with production signing.
+4. Confirm the candidate signing certificate SHA-256 matches the installed production app.
+5. Increase Android versionCode; record the human-readable versionName.
+6. Compute SHA-256 and exact byte size from the final signed APK, after all signing/alignment steps.
+7. Publish that exact APK to a fork-controlled HTTPS release URL and create a manifest containing only those verified values.
+8. Configure VITE_APK_UPDATE_MANIFEST_URL for the Capacitor build to the fork-controlled manifest. Keep it blank for builds without a verified release channel.
+9. Run the physical-device smoke test above before announcing the update.
+
+Never commit the keystore, passwords, signing properties, or private release tokens. A debug APK is suitable for local installation testing only; it is not evidence that an installed production build can update in place.
 
 ## User backup guidance
 
