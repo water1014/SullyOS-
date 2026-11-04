@@ -2639,9 +2639,9 @@ const Settings: React.FC = () => {
                     }}
                     fetchModels={fetchModels} isLoadingModels={isLoadingModels} openModelPicker={openModelPicker}
                 />
-                {Object.keys(normalizeApiHeaders(localCustomHeaders)).length > 0 && (
+                {(Object.keys(normalizeApiHeaders(localCustomHeaders)).length > 0 || isOpenCodeGoEndpoint(normalizeLlmBaseUrl(localUrl, localApiType))) && (
                     <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-relaxed text-amber-800">
-                        自定义请求头已启用：前台聊天、模型列表和连接测试会携带这些请求头。当前云端主动消息 2.0 协议还不支持自定义请求头，因此不会把这份配置同步到云端；云端排程仍保留此前已同步的凭据。
+                        自定义请求头或 OpenCode Go 已启用：前台聊天、模型列表和连接测试会使用本机请求头（Go 会自动附带 x-opencode-session）。当前云端主动消息 2.0 尚不支持自定义请求头 / Go 会话标识，因此不会把这份配置同步到云端；云端排程仍保留此前已同步的凭据。
                     </p>
                 )}
                 <p className="text-xs text-slate-500 leading-relaxed break-words">
