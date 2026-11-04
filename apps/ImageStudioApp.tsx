@@ -8,7 +8,8 @@ import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
 import {
   generateGptImage, editGptImage, generateNaiImage,
-  suggestNaiTags, getNaiQualityTags, type GptImageConfig, type NaiImageConfig, type ImageEngine,
+  suggestNaiTags, getNaiQualityTags, testGptImageConnection, testNaiImageConnection,
+  type GptImageConfig, type NaiImageConfig, type ImageEngine, ImageConnectionTestResult,
 } from '../utils/imageGeneration';
 
 const CONFIG_KEY = 'sully-image-studio:config:v1';
@@ -135,6 +136,8 @@ const ImageStudioApp: React.FC = () => {
   const [bulkCategory, setBulkCategory] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
   const [importProgress, setImportProgress] = useState('');
+  const [testingConnection, setTestingConnection] = useState<'gpt' | 'nai' | null>(null);
+  const [connectionResult, setConnectionResult] = useState<{ target: 'gpt' | 'nai'; result: ImageConnectionTestResult | null; error?: string } | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -172,6 +175,25 @@ const ImageStudioApp: React.FC = () => {
 
   useEffect(() => { imagesRef.current = images; }, [images]);
   useEffect(() => () => imagesRef.current.forEach(item => URL.revokeObjectURL(item.url)), []);
+
+  const testConnection = async (target: 'gpt' | 'nai') => {
+    if (testingConnection) return;
+    setTestingConnection(target);
+    setConnectionResult(null);
+    try {
+      const result = target === 'gpt'
+        ? await testGptImageConnection(config.gpt)
+        : await testNaiImageConnection(config.nai);
+      setConnectionResult({ target, result });
+      addToast(result.ok ? '接口检查完成' : '接口检查发现问题', result.ok ? 'success' : 'error');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '连接检查失败';
+      setConnectionResult({ target, result: null, error: message });
+      addToast(message.slice(0, 80), 'error');
+    } finally {
+      setTestingConnection(null);
+    }
+  };
 
   const updateGpt = (updates: Partial<GptImageConfig>) =>
     setConfig(current => ({ ...current, gpt: { ...current.gpt, ...updates } }));
@@ -801,7 +823,11 @@ const ImageStudioApp: React.FC = () => {
             <input className="field" type="password" autoComplete="off" value={config.gpt.apiKey} onChange={event => updateGpt({apiKey:event.target.value})} placeholder="sk-..."/>
             <label className="block text-xs font-semibold text-slate-600">图片模型名称</label>
             <input className="field" value={config.gpt.model} onChange={event => updateGpt({model:event.target.value})} placeholder="填写服务商支持的图片模型，例如 gpt-image-1"/>
-            <p className="text-[10px] text-slate-400 leading-5">GPT API Key 保存在当前设备浏览器的本地存储中，不会上传到糯米机服务器。请勿在公共设备上保存密钥。</p>
+            <label className="block text-xs font-semibold text-slate-600">自定义请求头 · JSON（可选）</label>
+            <textarea className="field min-h-[76px] resize-y font-mono text-[11px]" value={config.gpt.customHeaders || ''} onChange={event => updateGpt({customHeaders:event.target.value})} placeholder={'{"x-api-key":"自定义值","x-provider":"provider-name"}'}/>
+            <p className="text-[10px] text-slate-400 leading-5">GPT API Key 与自定义请求头保存在当前设备浏览器的本地存储中，不会上传到糯米机服务器。请勿在公共设备上保存密钥。</p>
+            <button type="button" onClick={() => void testConnection('gpt')} disabled={testingConnection !== null} className="soft w-full rounded-xl py-2.5 text-xs font-semibold disabled:opacity-50">{testingConnection === 'gpt' ? '正在检查接口…' : '测试 GPT 接口'}</button>
+            {connectionResult?.target === 'gpt' && <div className={`rounded-xl p-3 text-[10px] leading-5 ${connectionResult.result?.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700'}`}>{connectionResult.result?.message || connectionResult.error}{connectionResult.result?.status ? ` · HTTP ${connectionResult.result.status}` : ''}{connectionResult.result ? ` · ${connectionResult.result.durationMs} ms` : ''}</div>}
           </section>
           <section className="glass rounded-[24px] p-4 space-y-3">
             <div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">ENGINE 02 / 03</div><div className="text-base font-semibold mt-1">NovelAI 接口配置</div></div>
@@ -824,7 +850,11 @@ const ImageStudioApp: React.FC = () => {
             ) : (
               <input className="field" value={config.nai.model} onChange={event => updateNai({model:event.target.value})} placeholder="填写第三方服务支持的模型 ID"/>
             )}
-            <p className="text-[10px] text-slate-400 leading-5">Token 保存在当前设备浏览器本地存储中，不会写入作品记录。第三方服务的模型名称和参数以服务商实际支持为准。</p>
+            <label className="block text-xs font-semibold text-slate-600">自定义请求头 · JSON（可选）</label>
+            <textarea className="field min-h-[76px] resize-y font-mono text-[11px]" value={config.nai.customHeaders || ''} onChange={event => updateNai({customHeaders:event.target.value})} placeholder={'{"x-api-key":"自定义值","x-provider":"provider-name"}'}/>
+            <p className="text-[10px] text-slate-400 leading-5">Token 与自定义请求头保存在当前设备浏览器本地存储中，不会写入作品记录。第三方服务的模型名称和参数以服务商实际支持为准。</p>
+            <button type="button" onClick={() => void testConnection('nai')} disabled={testingConnection !== null} className="soft w-full rounded-xl py-2.5 text-xs font-semibold disabled:opacity-50">{testingConnection === 'nai' ? '正在检查接口…' : config.nai.provider === 'official' ? '验证 NovelAI Token' : '检查第三方地址'}</button>
+            {connectionResult?.target === 'nai' && <div className={`rounded-xl p-3 text-[10px] leading-5 ${connectionResult.result?.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-700'}`}>{connectionResult.result?.message || connectionResult.error}{connectionResult.result?.status ? ` · HTTP ${connectionResult.result.status}` : ''}{connectionResult.result ? ` · ${connectionResult.result.durationMs} ms` : ''}</div>}
           </section>
           <div className="rounded-2xl bg-sky-50/80 border border-sky-100 p-3 text-[10px] text-sky-800 leading-5">接口说明：OpenAI 兼容服务需要支持 /images/generations（参考图编辑还需 /images/edits）；NAI 第三方当前按 NovelAI 原生请求协议接入；NAI 官方使用 image.novelai.net。第三方服务是否支持浏览器跨域访问，取决于服务商设置。</div>
           <button onClick={() => { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); addToast('生图引擎配置已保存', 'success'); }} className="primary w-full rounded-2xl py-3 text-sm font-bold">保存配置</button>
