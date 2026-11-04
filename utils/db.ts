@@ -3895,6 +3895,14 @@ export const DB = {
       };
 
       const mediaOnly = data.collaborationBackupMode === 'media_only';
+      // A standard/text restore replaces local business data. Invalidate stale
+      // sync transport copies before the first write so old queued events cannot
+      // replay over restored records. Keep this device identity and local opt-in
+      // preferences; media-only imports do not touch sync cursors or queues.
+      if (!mediaOnly) {
+          const { resetLocalSyncTransportStateAfterRestore } = await import('./localSyncStore');
+          await resetLocalSyncTransportStateAfterRestore();
+      }
       // Older media archives included entire text records from assets. Recover
       // their pictures only; never roll a user's current history back with them.
       if (mediaOnly && !data.friendFeedMedia) {
