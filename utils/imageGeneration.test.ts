@@ -168,7 +168,7 @@ describe('image generation clients', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(archive, { status: 200 })));
 
     const blob = await generateNaiImage(
-      { apiKey: 'thirdparty-token', model: 'nai-diffusion-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      { apiKey: 'thirdparty-token', model: 'nai-diffusion-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example', customHeaders: '{"x-provider":"studio-test"}' },
       '1girl, blue hair',
       'blurry',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 0 },
@@ -178,6 +178,7 @@ describe('image generation clients', () => {
     const [url, request] = vi.mocked(fetch).mock.calls[0];
     expect(url).toBe('https://nai-proxy.example/ai/generate-image');
     expect(request.headers.get('Authorization')).toBe('Bearer thirdparty-token');
+    expect(request.headers.get('x-provider')).toBe('studio-test');
     expect(JSON.parse(String(request.body))).toMatchObject({
       action: 'generate',
       model: 'nai-diffusion-5-full',
