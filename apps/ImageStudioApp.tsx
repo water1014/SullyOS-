@@ -12,6 +12,7 @@ import {
 
 const CONFIG_KEY = 'sully-image-studio:config:v1';
 const ITEMS_KEY = 'sully-image-studio:items:v1';
+const TEMPLATES_KEY = 'sully-image-studio:nai-templates:v1';
 const DEFAULT_CONFIG = {
   gpt: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-image-2.5-flare' },
   nai: { apiKey: '', model: 'nai-diffusion-5-full' },
@@ -22,6 +23,7 @@ type SavedImage = {
   model: string; createdAt: number; mimeType: string;
 };
 type DisplayImage = SavedImage & { url: string };
+type NaiPromptTemplate = { id: string; name: string; prompt: string; negativePrompt: string; createdAt: number };
 
 const readConfig = (): StudioConfig => {
   try {
@@ -39,6 +41,21 @@ const readItems = (): SavedImage[] => {
   } catch { return []; }
 };
 const persistItems = (items: SavedImage[]) => localStorage.setItem(ITEMS_KEY, JSON.stringify(items));
+const readTemplates = (): NaiPromptTemplate[] => {
+  try {
+    const value = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch { return []; }
+};
+
+const getNaiQualityTags = (model: string, level: 'light' | 'standard'): string[] => {
+  if (model.startsWith('nai-diffusion-5')) return level === 'light'
+    ? ['very aesthetic', 'amazing quality', 'no text']
+    : ['very aesthetic', 'masterpiece', 'no text'];
+  if (model === 'nai-diffusion-4-5-curated') return ['location', 'masterpiece', 'no text', '-0.8::feet::', 'rating:general'];
+  if (model.startsWith('nai-diffusion-4-5')) return ['location', 'very aesthetic', 'masterpiece', 'no text'];
+  return ['best quality', 'amazing quality', 'very aesthetic', 'absurdres'];
+};
 
 type TagCategory = '主体' | '发型' | '眼睛' | '表情' | '服装' | '动作' | '构图' | '场景' | '画风' | '质量';
 const NAI_TAGS: Record<TagCategory, string[]> = {
@@ -75,6 +92,8 @@ const ImageStudioApp: React.FC = () => {
   const [tagSearch, setTagSearch] = useState('');
   const [tagSuggestions, setTagSuggestions] = useState<{ tag: string; count?: number; confidence?: number }[]>([]);
   const [suggestingTags, setSuggestingTags] = useState(false);
+  const [naiTemplates, setNaiTemplates] = useState<NaiPromptTemplate[]>(readTemplates);
+  const [templateName, setTemplateName] = useState('');
   const [gptSize, setGptSize] = useState('1024x1024');
   const [gptQuality, setGptQuality] = useState('high');
   const [naiSize, setNaiSize] = useState('832x1216');
@@ -108,6 +127,10 @@ const ImageStudioApp: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
   }, [config]);
+
+  useEffect(() => {
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(naiTemplates));
+  }, [naiTemplates]);
 
   useEffect(() => {
     if (!referenceImage) { setReferencePreview(''); return; }
@@ -160,6 +183,32 @@ const ImageStudioApp: React.FC = () => {
     setNegativePrompt([...existing, ...additions].join(', '));
   };
 
+  const addNaiQualityPreset = (level: 'light' | 'standard') => {
+    appendPromptTags(getNaiQualityTags(config.nai.model, level));
+    addToast(level === 'light' ? '已追加轻量质量标签' : '已追加标准质量标签', 'success');
+  };
+
+  const saveNaiTemplate = () => {
+    if (!prompt.trim()) { addToast('先写好提示词，再收藏模板', 'error'); return; }
+    const name = templateName.trim() || '灵感模板 ' + (naiTemplates.length + 1);
+    const template: NaiPromptTemplate = {
+      id: 'template_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      name, prompt: prompt.trim(), negativePrompt: negativePrompt.trim(), createdAt: Date.now(),
+    };
+    setNaiTemplates(current => [template, ...current]);
+    setTemplateName('');
+    addToast('提示词模板已收藏', 'success');
+  };
+
+  const applyNaiTemplate = (template: NaiPromptTemplate) => {
+    setPrompt(template.prompt);
+    setNegativePrompt(template.negativePrompt);
+    addToast('已载入「' + template.name + '」', 'success');
+  };
+
+  const deleteNaiTemplate = (id: string) => {
+    setNaiTemplates(current => current.filter(template => template.id !== id));
+  };
   const generateRandomIdea = () => {
     const pick = (items: string[]) => items[Math.floor(Math.random() * items.length)];
     const categories: TagCategory[] = ['主体', '发型', '眼睛', '表情', '服装', '动作', '构图', '场景', '画风'];
