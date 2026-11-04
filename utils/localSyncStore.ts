@@ -326,7 +326,7 @@ export async function getOrCreateLocalSyncDeviceIdentity(): Promise<LocalSyncDev
 
 export async function updateLocalSyncDeviceLabel(label: string): Promise<LocalSyncDeviceIdentity> {
     const normalized = label.trim();
-    if (!normalized || normalized.length > 24 || /[\\u0000-\\u001f]/.test(normalized)) {
+    if (!normalized || normalized.length > 24 || /[\u0000-\u001f]/.test(normalized)) {
         throw new Error('INVALID_DEVICE_LABEL');
     }
     const db = await openDB();
