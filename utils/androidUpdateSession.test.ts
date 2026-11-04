@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('./analytics', () => ({ trackEvent: vi.fn() }));
+vi.mock('@capacitor/app', () => ({ App: { addListener: vi.fn().mockResolvedValue({ remove: vi.fn() }) } }));
 import { createAndroidUpdateSession } from './androidUpdateSession';
 
 const manifest = {
@@ -60,6 +61,40 @@ describe('Android update session survives page lifetimes', () => {
     expect(newPage).toHaveBeenCalled();
     expect(deps.install).toHaveBeenCalledTimes(1);
     detach();
+  });
+
+  it('persists only the target version and confirms installation after the WebView is recreated', async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    const first = setup();
+    first.deps.storage = storage;
+    await first.session.check();
+    await first.session.download();
+    expect(first.session.getSnapshot().phase).toBe('ready');
+    expect(JSON.parse(values.get('sullyos.android.pending-install.v1') || '{}')).toEqual({
+      versionCode: manifest.versionCode, versionName: manifest.versionName,
+    });
+
+    const restarted = setup();
+    restarted.deps.storage = storage;
+    expect(restarted.session.getSnapshot()).toMatchObject({
+      phase: 'ready', downloadedPath: '', message: expect.stringContaining(manifest.versionName),
+    });
+    await restarted.session.verifyInstallCompletion();
+    expect(restarted.session.getSnapshot()).toMatchObject({
+      phase: 'ready', message: expect.stringContaining('尚未检测到'),
+    });
+
+    restarted.deps.getInstalled.mockResolvedValue({ versionCode: manifest.versionCode, versionName: manifest.versionName });
+    await restarted.session.verifyInstallCompletion();
+    expect(restarted.session.getSnapshot()).toMatchObject({
+      phase: 'installed', progress: 1, message: expect.stringContaining('更新已安装成功'),
+    });
+    expect(values.has('sullyos.android.pending-install.v1')).toBe(false);
   });
 
   it('blocks double checks and download while a manifest check is pending', async () => {
