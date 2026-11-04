@@ -56,6 +56,13 @@ beforeEach(() => {
     certificateSha256: 'b'.repeat(64),
     canRequestPackageInstalls: true,
   });
+  installerMocks.getInstalledInfo.mockResolvedValue({
+    packageName: 'com.aetheros.simulator',
+    versionCode: validManifest.versionCode - 1,
+    versionName: '3.4.1',
+    certificateSha256: 'b'.repeat(64),
+    canRequestPackageInstalls: true,
+  });
 });
 
 describe('parseAndroidUpdateManifest', () => {

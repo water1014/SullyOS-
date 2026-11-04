@@ -188,13 +188,21 @@ const performDownload = async (
   // SHA-256 pins the bytes to the manifest; package and signer must also match
   // the installed app or Android cannot perform a safe in-place update.
   const installed = await ApkInstaller.getInstalledInfo();
-  const verified = await ApkInstaller.verifyApk({ path: uri, sha256: manifest.sha256 });
+  const [verified, fileInfo] = await Promise.all([
+    ApkInstaller.verifyApk({ path: uri, sha256: manifest.sha256 }),
+    Filesystem.stat({ path: UPDATE_PATH, directory: Directory.Cache }),
+  ]);
   const fingerprint = (value: string) => value.replace(/[^a-f0-9]/gi, '').toLowerCase();
-  const sameSigner = fingerprint(verified.certificateSha256) === fingerprint(installed.certificateSha256);
+  const installedFingerprint = fingerprint(installed.certificateSha256);
+  const candidateFingerprint = fingerprint(verified.certificateSha256);
+  const sameSigner = /^[a-f0-9]{64}$/.test(installedFingerprint)
+    && installedFingerprint === candidateFingerprint;
+  const exactSize = Number(fileInfo.size) === manifest.sizeBytes;
   if (
     !verified.valid
     || verified.packageName !== installed.packageName
     || !sameSigner
+    || !exactSize
     || verified.versionCode !== manifest.versionCode
     || verified.versionCode <= installed.versionCode
   ) {
