@@ -3649,7 +3649,7 @@ export const DB = {
           });
       };
 
-      const [characters, characterGroups, messages, themes, emojis, emojiCategories, assets, galleryImages, userProfiles, diaries, tasks, anniversaries, roomTodos, roomNotes, groups, journalStickers, socialPosts, courses, games, worldbooks, storyTheaters, storyTheaterPresets, storyTheaterMasks, novels, bankTx, bankData, xhsActivities, xhsOwnedPosts, xhsStockImages, songs, quizzes, guidebookSessions, scheduledMessages, lifeSimStates, handbooks, trackers, trackerEntries, hotNewsSnapshots, vrNovels, vrAnnotations, customCreatorParts, vrMusic, vrGuestbook, vrScripts, vrStagedPlays, vrPresets, vrLetters, vrSettings, worlds, worldEpisodes, lifeRecords, medPlans, lifeRecordSettings] = await Promise.all([
+      const [characters, characterGroups, messages, themes, emojis, emojiCategories, assets, galleryImages, userProfiles, diaries, tasks, anniversaries, roomTodos, roomNotes, groups, journalStickers, socialPosts, courses, games, worldbooks, storyTheaters, storyTheaterPresets, storyTheaterMasks, novels, bankTx, bankData, xhsActivities, xhsOwnedPosts, xhsStockImages, songs, quizzes, guidebookSessions, scheduledMessages, lifeSimStates, handbooks, trackers, trackerEntries, hotNewsSnapshots, vrNovels, vrAnnotations, customCreatorParts, vrMusic, vrGuestbook, vrScripts, vrStagedPlays, vrPresets, vrLetters, vrSettings, worlds, worldEpisodes, lifeRecords, medPlans, lifeRecordSettings, visualProfiles, visualMemories, visualProjects, visualTaskMirror, visualAssets] = await Promise.all([
           getAllFromStore(STORE_CHARACTERS),
           getAllFromStore(STORE_CHAR_GROUPS),
           getAllFromStore(STORE_MESSAGES),
@@ -3703,6 +3703,11 @@ export const DB = {
           getAllFromStore(STORE_LIFE_RECORDS),
           getAllFromStore(STORE_MED_PLANS),
           getAllFromStore(STORE_LIFE_SETTINGS),
+          getAllFromStore('visual_profiles'),
+          getAllFromStore('visual_memories'),
+          getAllFromStore('visual_projects'),
+          getAllFromStore('visual_task_mirror'),
+          getAllFromStore('visual_assets'),
       ]);
 
       // Personal backups retain the whole profile, including Chibi/3D slots.
@@ -3756,6 +3761,12 @@ export const DB = {
           beautyAuthorLocal: exportBeautyAuthorBackup(),
           beautyPreferences: exportBeautyPreferences(),
           desktopSkinLocal: await exportDesktopSkinLocal(), // 桌面皮肤：界面配色 + 看板 banner（看板图令牌解析为 data URL）
+          visualProfiles,
+          visualMemories: visualMemories.filter((item: any) => item?.privacyScope !== 'private'),
+          visualProjects: visualProjects.filter((item: any) => item?.privacyScope !== 'private'),
+          visualTaskMirror: visualTaskMirror.filter((item: any) => item?.privacyScope !== 'private'),
+          visualAssets: visualAssets.filter((item: any) => item?.privacyScope === 'standard'),
+          // private_visual_blobs 故意不进入标准备份，后续由独立私密保险库处理。
       };
   },
 
@@ -3804,7 +3815,8 @@ export const DB = {
           STORE_WORLDS, STORE_WORLD_EPISODES,
           'memory_nodes', 'memory_vectors', 'memory_links', 'topic_boxes', 'anticipations', 'event_boxes',
           'room_plates', 'digest_reports',
-          'memory_batches', 'pixel_home_assets', 'pixel_home_layouts'
+          'memory_batches', 'pixel_home_assets', 'pixel_home_layouts',
+          'visual_profiles', 'visual_memories', 'visual_projects', 'visual_task_mirror', 'visual_assets'
       ].filter(name => db.objectStoreNames.contains(name));
 
       const hasStore = (storeName: string) => availableStores.includes(storeName);
@@ -3919,6 +3931,11 @@ export const DB = {
           (data as any).mcdLocal !== undefined,
           data.pixelHomeAssets !== undefined,
           data.pixelHomeLayouts !== undefined,
+          data.visualProfiles !== undefined,
+          data.visualMemories !== undefined,
+          data.visualProjects !== undefined,
+          data.visualTaskMirror !== undefined,
+          data.visualAssets !== undefined,
           data.userProfile !== undefined,
           data.bankState !== undefined || data.bankDollhouse !== undefined,
       ];
@@ -4468,6 +4485,42 @@ export const DB = {
           await clearAndAdd('pixel_home_layouts', data.pixelHomeLayouts, '像素小屋布局', false);
           data.pixelHomeLayouts = undefined as any;
       }, data.pixelHomeLayouts?.length || 0);
+
+      // 视觉人格系统：标准备份不得覆盖本机私密记录；私密二进制完全不参与此流程。
+      await runSection('视觉身份档案', data.visualProfiles !== undefined, async () => {
+          await clearAndAdd('visual_profiles', data.visualProfiles, '视觉身份档案', false);
+          data.visualProfiles = undefined as any;
+      }, data.visualProfiles?.length || 0);
+
+      const restoreVisualStandardScope = async (storeName: string, incoming: any[] | undefined, label: string) => {
+          if (incoming === undefined || !hasStore(storeName)) return;
+          const current = await getAllFromStore<any>(storeName);
+          const preservedPrivate = current.filter(item => item?.privacyScope === 'private');
+          const incomingStandard = incoming.filter(item => item?.privacyScope !== 'private');
+          await withStore(storeName, store => {
+              store.clear();
+              preservedPrivate.forEach(item => store.put(item));
+              incomingStandard.forEach(item => store.put(item));
+          });
+          report(label, 'items', incomingStandard.length, incomingStandard.length);
+      };
+
+      await runSection('视觉记忆', data.visualMemories !== undefined, async () => {
+          await restoreVisualStandardScope('visual_memories', data.visualMemories, '视觉记忆');
+          data.visualMemories = undefined as any;
+      }, data.visualMemories?.length || 0);
+      await runSection('写真企划', data.visualProjects !== undefined, async () => {
+          await restoreVisualStandardScope('visual_projects', data.visualProjects, '写真企划');
+          data.visualProjects = undefined as any;
+      }, data.visualProjects?.length || 0);
+      await runSection('视觉任务记录', data.visualTaskMirror !== undefined, async () => {
+          await restoreVisualStandardScope('visual_task_mirror', data.visualTaskMirror, '视觉任务记录');
+          data.visualTaskMirror = undefined as any;
+      }, data.visualTaskMirror?.length || 0);
+      await runSection('视觉图片索引', data.visualAssets !== undefined, async () => {
+          await restoreVisualStandardScope('visual_assets', data.visualAssets, '视觉图片索引');
+          data.visualAssets = undefined as any;
+      }, data.visualAssets?.length || 0);
 
       await runSection('用户资料', data.userProfile !== undefined, async () => {
           if (!hasStore(STORE_USER)) return;
