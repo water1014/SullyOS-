@@ -17,7 +17,7 @@ const TEMPLATES_KEY = 'sully-image-studio:nai-templates:v1';
 const IMAGE_CATEGORIES = ['未分类', '人物', '场景', '头像', '壁纸', '灵感草稿', '其他'];
 const DEFAULT_CONFIG = {
   gpt: { baseUrl: 'https://api.openai.com/v1', apiKey: '', model: 'gpt-image-2.5-flare' },
-  nai: { apiKey: '', model: 'nai-diffusion-5-full' },
+  nai: { provider: 'official' as const, baseUrl: 'https://image.novelai.net', apiKey: '', model: 'nai-diffusion-5-full' },
 };
 type StudioConfig = { gpt: GptImageConfig; nai: NaiImageConfig };
 type SavedImage = {
@@ -412,8 +412,8 @@ const ImageStudioApp: React.FC = () => {
     catch { addToast('复制失败，请长按文字手动复制', 'error'); }
   };
 
-  const engineLabel = engine === 'gpt' ? 'GPT Image' : 'NovelAI';
-  const configured = engine === 'gpt' ? !!config.gpt.apiKey.trim() : !!config.nai.apiKey.trim();
+  const engineLabel = engine === 'gpt' ? 'OpenAI 兼容生图' : config.nai.provider === 'official' ? 'NovelAI 官方' : 'NAI 第三方';
+  const configured = engine === 'gpt' ? !!config.gpt.apiKey.trim() : !!config.nai.apiKey.trim() && (config.nai.provider === 'official' || !!config.nai.baseUrl.trim());
 
   return (
     <div className="sully-image-studio h-full w-full overflow-hidden flex flex-col text-slate-800">
@@ -456,14 +456,18 @@ const ImageStudioApp: React.FC = () => {
               <div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">CHOOSE ENGINE</div><div className="text-sm font-semibold text-slate-700 mt-1">选择创作引擎</div></div>
               <Sparkle size={21} className="text-sky-500"/>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setEngine('gpt')} className={`rounded-2xl p-3 text-left border ${engine === 'gpt' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
-                <div className="flex items-center justify-between"><span className="text-sm font-bold text-slate-700">GPT 生图</span>{engine === 'gpt' && <Check size={15} className="text-sky-600"/>}</div>
-                <div className="text-[10px] text-slate-500 mt-1">自然语言 · 精细画面</div>
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={() => setEngine('gpt')} className={`rounded-2xl p-2.5 text-left border ${engine === 'gpt' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
+                <div className="flex items-center justify-between gap-1"><span className="text-xs font-bold text-slate-700">OpenAI 兼容</span>{engine === 'gpt' && <Check size={13} className="text-sky-600"/>}</div>
+                <div className="text-[9px] text-slate-500 mt-1">第三方兼容接口</div>
               </button>
-              <button onClick={() => setEngine('nai')} className={`rounded-2xl p-3 text-left border ${engine === 'nai' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
-                <div className="flex items-center justify-between"><span className="text-sm font-bold text-slate-700">NAI 生图</span>{engine === 'nai' && <Check size={15} className="text-sky-600"/>}</div>
-                <div className="text-[10px] text-slate-500 mt-1">二次元 · 标签控制</div>
+              <button onClick={() => { setEngine('nai'); updateNai({ provider: 'thirdparty' }); }} className={`rounded-2xl p-2.5 text-left border ${engine === 'nai' && config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
+                <div className="flex items-center justify-between gap-1"><span className="text-xs font-bold text-slate-700">NAI 第三方</span>{engine === 'nai' && config.nai.provider === 'thirdparty' && <Check size={13} className="text-sky-600"/>}</div>
+                <div className="text-[9px] text-slate-500 mt-1">自定义代理地址</div>
+              </button>
+              <button onClick={() => { setEngine('nai'); updateNai({ provider: 'official' }); }} className={`rounded-2xl p-2.5 text-left border ${engine === 'nai' && config.nai.provider === 'official' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
+                <div className="flex items-center justify-between gap-1"><span className="text-xs font-bold text-slate-700">NAI 官方</span>{engine === 'nai' && config.nai.provider === 'official' && <Check size={13} className="text-sky-600"/>}</div>
+                <div className="text-[9px] text-slate-500 mt-1">官方原生接口</div>
               </button>
             </div>
             <div className="flex items-center gap-2 mt-3 text-[10px] text-slate-500"><span className={`w-1.5 h-1.5 rounded-full ${configured ? 'bg-emerald-400' : 'bg-amber-400'}`}/>{configured ? `${engineLabel} 已填写 API Key` : `${engineLabel} 尚未配置密钥`}<button onClick={() => setTab('settings')} className="ml-auto text-sky-700 font-semibold">去配置 →</button></div>
@@ -660,14 +664,24 @@ const ImageStudioApp: React.FC = () => {
             <p className="text-[10px] text-slate-400 leading-5">GPT API Key 保存在当前设备浏览器的本地存储中，不会上传到糯米机服务器。请勿在公共设备上保存密钥。</p>
           </section>
           <section className="glass rounded-[24px] p-4 space-y-3">
-            <div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">ENGINE 02</div><div className="text-base font-semibold mt-1">NovelAI 生图接口</div></div>
-            <label className="block text-xs font-semibold text-slate-600">Persistent API Token</label>
-            <input className="field" type="password" autoComplete="off" value={config.nai.apiKey} onChange={event => updateNai({apiKey:event.target.value})} placeholder="pst-..."/>
+            <div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">ENGINE 02 / 03</div><div className="text-base font-semibold mt-1">NovelAI 接口配置</div></div>
+            <label className="block text-xs font-semibold text-slate-600">NAI 接口类型</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => updateNai({provider:'official',baseUrl:'https://image.novelai.net'})} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'official' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>官方接口</button>
+              <button type="button" onClick={() => updateNai({provider:'thirdparty'})} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>第三方 / 代理</button>
+            </div>
+            {config.nai.provider === 'thirdparty' && <>
+              <label className="block text-xs font-semibold text-slate-600">第三方 API Base URL</label>
+              <input className="field" value={config.nai.baseUrl} onChange={event => updateNai({baseUrl:event.target.value})} placeholder="https://your-provider.example"/>
+              <p className="text-[10px] text-slate-400 leading-5">填写支持 NovelAI 原生生图协议的第三方地址。系统会在地址后补全 /ai/generate-image；若服务协议不同，需另外开发适配器。</p>
+            </>}
+            <label className="block text-xs font-semibold text-slate-600">{config.nai.provider === 'official' ? 'NovelAI Persistent Token' : '第三方 API Token'}</label>
+            <input className="field" type="password" autoComplete="off" value={config.nai.apiKey} onChange={event => updateNai({apiKey:event.target.value})} placeholder={config.nai.provider === 'official' ? 'pst-...' : '填写服务商提供的 Token'}/>
             <label className="block text-xs font-semibold text-slate-600">图片模型</label>
             <select className="field" value={config.nai.model} onChange={event => updateNai({model:event.target.value})}><option value="nai-diffusion-5-full">NovelAI Diffusion V5 Full</option><option value="nai-diffusion-5-curated">NovelAI Diffusion V5 Curated</option><option value="nai-diffusion-4-5-full">NovelAI Diffusion V4.5 Full</option><option value="nai-diffusion-4-5-curated">NovelAI Diffusion V4.5 Curated</option></select>
-            <p className="text-[10px] text-slate-400 leading-5">使用 NovelAI 的 Persistent API Token。密钥保存在当前设备浏览器本地存储中，不会写入作品记录；请勿在公共设备上保存密钥。</p>
+            <p className="text-[10px] text-slate-400 leading-5">Token 保存在当前设备浏览器本地存储中，不会写入作品记录。第三方服务的模型名称和参数以服务商实际支持为准。</p>
           </section>
-          <div className="rounded-2xl bg-sky-50/80 border border-sky-100 p-3 text-[10px] text-sky-800 leading-5">提示：部分 API 中转站不开放图片生成接口；如果出现 CORS 或 404，需要使用支持 Images API 的服务地址。NAI 需要浏览器能直接访问 image.novelai.net。</div>
+          <div className="rounded-2xl bg-sky-50/80 border border-sky-100 p-3 text-[10px] text-sky-800 leading-5">接口说明：OpenAI 兼容服务需要支持 /images/generations（参考图编辑还需 /images/edits）；NAI 第三方当前按 NovelAI 原生请求协议接入；NAI 官方使用 image.novelai.net。第三方服务是否支持浏览器跨域访问，取决于服务商设置。</div>
           <button onClick={() => { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); addToast('生图引擎配置已保存', 'success'); }} className="primary w-full rounded-2xl py-3 text-sm font-bold">保存配置</button>
         </main>
       )}
