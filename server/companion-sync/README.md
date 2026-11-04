@@ -52,19 +52,17 @@ Set `COMPANION_DOMAIN` to the DNS name and `ACME_EMAIL` to an address for certif
 
 The filled `.env` is ignored by Git. Never paste its contents into chat, commit it, or include it in logs. Keep a secure offline copy of `COMPANION_TOKEN_PEPPER`; rotating it invalidates all existing device tokens and pairing codes.
 
-### 3. Start PostgreSQL and apply migrations
+### 3. Deploy the stack
 
 ```sh
-docker compose up -d db
-docker compose run --rm --entrypoint node api server/companion-sync/migrate.mjs
+bash deploy.sh
 ```
 
-The migration runner applies the numbered SQL files in order and records successful migrations. The SQL files are idempotent, so an interrupted migration run can safely be retried.
+The guarded deployment script validates the environment, starts the private database, builds the API image, applies numbered SQL migrations, starts the API and Caddy, then checks the HTTPS health endpoint. It never deletes Docker volumes. The migration runner serializes concurrent runs and safely skips migrations already recorded as applied.
 
-### 4. Start the API and HTTPS proxy
+### 4. Verify service health
 
 ```sh
-docker compose up -d --build api caddy
 docker compose ps
 curl -fsS https://YOUR_SYNC_DOMAIN/v1/health
 ```
