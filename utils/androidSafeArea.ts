@@ -20,6 +20,7 @@ export async function refreshAndroidSafeArea(): Promise<void> {
     const insets = await AndroidSafeArea.getInsets();
     if (!Number.isFinite(insets.topInsetDp) || insets.topInsetDp < 0) return;
     document.documentElement.style.setProperty('--android-safe-area-top', `${insets.topInsetDp}px`);
+    document.documentElement.style.setProperty('--safe-top', `${insets.topInsetDp}px`);
     document.documentElement.classList.add('sully-android-native');
     document.documentElement.classList.add('sully-statusbar-compact');
   } catch (error) {
