@@ -337,7 +337,7 @@ const ImageStudioApp: React.FC = () => {
     setImages(current => [display, ...current]);
     setSelected(display);
     setTab('gallery');
-  }, [engine, prompt, negativePrompt, config]);
+  }, [engine, prompt, negativePrompt, config, naiSize, naiSteps, naiScale, naiSampler, naiSeed]);
 
   const handleGenerate = async () => {
     if (generating) return;
@@ -346,6 +346,12 @@ const ImageStudioApp: React.FC = () => {
     setGenerating(true);
     setError('');
     try {
+      if (engine === 'nai' && naiSeed.trim()) {
+        const parsedSeed = Number(naiSeed);
+        if (!Number.isSafeInteger(parsedSeed) || parsedSeed < 0 || parsedSeed > 4294967295) {
+          throw new Error('Seed 必须是 0 到 4294967295 之间的整数，或留空使用随机种子');
+        }
+      }
       const naiOptions = {
         width: Number(naiSize.split('x')[0]), height: Number(naiSize.split('x')[1]),
         steps: naiSteps, scale: naiScale, sampler: naiSampler,
