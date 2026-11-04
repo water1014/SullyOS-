@@ -82,7 +82,9 @@ async function main() {
       + manifest.slice(applicationIndex);
   }
 
-  if (!manifest.includes('androidx.core.content.FileProvider')) {
+  let xmlResourceName = 'apk_installer_paths';
+  const providerMarker = 'android:name="androidx.core.content.FileProvider"';
+  if (!manifest.includes(providerMarker)) {
     const provider = [
       '        <provider',
       '            android:name="androidx.core.content.FileProvider"',
@@ -93,23 +95,54 @@ async function main() {
       '                android:name="android.support.FILE_PROVIDER_PATHS"',
       '                android:resource="@xml/apk_installer_paths" />',
       '        </provider>',
-    ].join('\n');
+    ].join('\\n');
     const applicationClose = manifest.lastIndexOf('</application>');
     if (applicationClose < 0) throw new Error('AndroidManifest.xml has no application closing tag');
-    manifest = manifest.slice(0, applicationClose) + provider + '\n' + manifest.slice(applicationClose);
+    manifest = manifest.slice(0, applicationClose) + provider + '\\n' + manifest.slice(applicationClose);
   } else {
-    const providerStart = manifest.indexOf('<provider');
-    const providerEnd = providerStart < 0 ? -1 : manifest.indexOf('</provider>', providerStart);
-    const provider = providerEnd < 0 ? '' : manifest.slice(providerStart, providerEnd + '</provider>'.length);
-    if (!provider.includes('android:name="androidx.core.content.FileProvider"')
-      || !provider.includes('android:exported="false"')
+    const markerIndex = manifest.indexOf(providerMarker);
+    const providerStart = manifest.lastIndexOf('<provider', markerIndex);
+    const providerEnd = manifest.indexOf('</provider>', markerIndex);
+    const provider = providerStart < 0 || providerEnd < 0
+      ? ''
+      : manifest.slice(providerStart, providerEnd + '</provider>'.length);
+    if (!provider.includes('android:exported="false"')
       || !provider.includes('android:grantUriPermissions="true"')
-      || !provider.includes('android:authorities="${applicationId}.fileprovider"')
-      || !provider.includes('android:resource="@xml/apk_installer_paths"')) {
-      throw new Error('Existing FileProvider configuration conflicts with the APK installer requirements');
+      || !provider.includes('android:authorities="${applicationId}.fileprovider"')) {
+      throw new Error('Existing FileProvider must be non-exported, use the app authority, and grant URI access');
+    }
+    const resourceMarker = 'android:resource="@xml/';
+    const resourceStart = provider.indexOf(resourceMarker);
+    const resourceEnd = resourceStart < 0 ? -1 : provider.indexOf('"', resourceStart + resourceMarker.length);
+    if (resourceEnd < 0) throw new Error('Existing FileProvider has no XML paths resource');
+    xmlResourceName = provider.slice(resourceStart + resourceMarker.length, resourceEnd);
+    if (!/^[a-z][a-z0-9_]*$/.test(xmlResourceName)) {
+      throw new Error('Existing FileProvider XML resource name is invalid');
     }
   }
   await writeFile(manifestPath, manifest, 'utf8');
+
+  const xmlDirectory = join(appRoot, 'src', 'main', 'res', 'xml');
+  await mkdir(xmlDirectory, { recursive: true });
+  const xmlPath = join(xmlDirectory, `${xmlResourceName}.xml`);
+  const sourceXmlPath = join(pluginRoot, 'apk-installer', 'apk_installer_paths.xml');
+  let pathsXml;
+  try {
+    pathsXml = await readFile(xmlPath, 'utf8');
+  } catch {
+    pathsXml = await readFile(sourceXmlPath, 'utf8');
+  }
+  const requiredCachePath = '<cache-path name="verified_updates" path="verified-updates/" />';
+  if (pathsXml.includes('name="verified_updates"') && !pathsXml.includes(requiredCachePath)) {
+    throw new Error('Existing FileProvider already defines verified_updates with a different path');
+  }
+  if (!pathsXml.includes(requiredCachePath)) {
+    const pathsClose = pathsXml.lastIndexOf('</paths>');
+    if (pathsClose < 0) throw new Error('FileProvider XML resource has no paths closing tag');
+    pathsXml = pathsXml.slice(0, pathsClose) + '    ' + requiredCachePath + '\\n' + pathsXml.slice(pathsClose);
+  }
+  await writeFile(xmlPath, pathsXml, 'utf8');
+
 
   const xmlDirectory = join(appRoot, 'src', 'main', 'res', 'xml');
   await mkdir(xmlDirectory, { recursive: true });
