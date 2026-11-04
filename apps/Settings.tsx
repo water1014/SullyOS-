@@ -2632,14 +2632,14 @@ const Settings: React.FC = () => {
                         if (patch.apiType !== undefined) setLocalApiType(patch.apiType);
                         if (patch.baseUrl !== undefined) setLocalUrl(patch.baseUrl);
                         if (patch.apiKey !== undefined) setLocalKey(patch.apiKey);
-                        if (patch.customHeaders !== undefined) setLocalCustomHeaders(normalizeApiHeaders(patch.customHeaders));
+                        if (patch.customHeaders !== undefined) setLocalCustomHeaders(patch.customHeaders);
                         if (patch.stream !== undefined) setLocalStream(patch.stream);
                         if (patch.temperature !== undefined) setLocalTemperature(patch.temperature);
                         if ('maxTokens' in patch) setLocalMaxTokens(patch.maxTokens ?? 8000);
                     }}
                     fetchModels={fetchModels} isLoadingModels={isLoadingModels} openModelPicker={openModelPicker}
                 />
-                {Object.keys(localCustomHeaders).length > 0 && (
+                {Object.keys(normalizeApiHeaders(localCustomHeaders)).length > 0 && (
                     <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[10px] leading-relaxed text-amber-800">
                         自定义请求头已启用：前台聊天、模型列表和连接测试会携带这些请求头。当前云端主动消息 2.0 协议还不支持自定义请求头，因此不会把这份配置同步到云端；云端排程仍保留此前已同步的凭据。
                     </p>
