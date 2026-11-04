@@ -247,9 +247,11 @@ export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'officia
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     throw new Error('NAI API Base URL 只支持 HTTP 或 HTTPS 地址');
   }
-  parsed.pathname = parsed.pathname.replace(/\/+$/, '');
-  if (!parsed.pathname.endsWith('/ai/generate-image')) {
-    parsed.pathname = `${parsed.pathname}/ai/generate-image`;
+  const basePath = parsed.pathname.replace(/^\/+|\/+$/g, '');
+  const hasGenerationPath = basePath === 'ai/generate-image' || basePath.endsWith('/ai/generate-image');
+  parsed.pathname = hasGenerationPath
+    ? `/${basePath}`
+    : basePath ? `/${basePath}/ai/generate-image` : '/ai/generate-image';
   }
   return parsed.toString().replace(/\/$/, '');
 }
