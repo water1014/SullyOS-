@@ -107,7 +107,7 @@ export async function setSyncPreference(
         // server watermark instead of skipping events created after the opt-out.
         const syncState = tx.objectStore(SYNC_STATE);
         const stateRecords = await requestResult(syncState.getAll()) as Array<{ id?: string }>;
-        stateRecords.filter(record => record.id !== LOCAL_DEVICE_IDENTITY_KEY)
+        stateRecords.filter(record => !isPreservedSyncStateRecord(record))
             .forEach(record => { if (record.id) syncState.delete(record.id); });
     }
     await done;
@@ -159,13 +159,20 @@ export async function enqueueRoomNoteSyncEvent(
     // with a note save, IndexedDB serializes both transactions: either the event is
     // enqueued first and then purged, or opt-out wins and no event is created.
     const db = await openDB();
-    const tx = db.transaction([PREFERENCES, OUTBOX], 'readwrite');
+    const tx = db.transaction([PREFERENCES, OUTBOX, SYNC_STATE], 'readwrite');
     const done = transactionDone(tx);
     const preference = await requestResult(tx.objectStore(PREFERENCES).get('room_note')) as SyncPreference | undefined;
     if (!preference?.enabled || preference.mode !== 'text') {
         await done;
         return null;
     }
+    const syncState = tx.objectStore(SYNC_STATE);
+    const storedVersion = await requestResult(syncState.get(getRoomNoteVersionKey(note.id))) as { version?: number } | undefined;
+    const baseVersion = options.baseVersion !== undefined
+        ? options.baseVersion
+        : (operation === 'create' ? null : (Number.isSafeInteger(storedVersion?.version) ? Number(storedVersion?.version) : null));
+    event.baseVersion = baseVersion;
+    event.clientVersion = Math.max(1, options.clientVersion ?? ((baseVersion ?? 0) + 1));
     tx.objectStore(OUTBOX).add(event);
     await done;
     return event;
@@ -304,6 +311,16 @@ export interface SyncCursorState {
     updatedAt: number;
 }
 
+export interface CompanionSyncConnection {
+    id: 'companion_sync_connection';
+    baseUrl: string;
+    accountId: string;
+    serverDeviceId: string;
+    label: string;
+    connectedAt: number;
+    updatedAt: number;
+}
+
 export interface LocalSyncDeviceIdentity {
     id: 'local_device_identity';
     deviceId: string;
@@ -314,6 +331,86 @@ export interface LocalSyncDeviceIdentity {
 }
 
 const LOCAL_DEVICE_IDENTITY_KEY = 'local_device_identity';
+const COMPANION_SYNC_CONNECTION_KEY = 'companion_sync_connection';
+
+function isPreservedSyncStateRecord(record: { id?: string }): boolean {
+    return record.id === LOCAL_DEVICE_IDENTITY_KEY || record.id === COMPANION_SYNC_CONNECTION_KEY;
+}
+
+export async function getCompanionSyncConnection(): Promise<CompanionSyncConnection | null> {
+    const db = await openDB();
+    const tx = db.transaction(SYNC_STATE, 'readonly');
+    const done = transactionDone(tx);
+    const record = await requestResult(tx.objectStore(SYNC_STATE).get(COMPANION_SYNC_CONNECTION_KEY)) as CompanionSyncConnection | undefined;
+    await done;
+    return record ?? null;
+}
+
+export async function saveCompanionSyncConnection(input: Omit<CompanionSyncConnection, 'id' | 'connectedAt' | 'updatedAt'>): Promise<CompanionSyncConnection> {
+    let parsed: URL;
+    try { parsed = new URL(input.baseUrl); } catch { throw new Error('INVALID_SYNC_BASE_URL'); }
+    const localHttp = parsed.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname);
+    if ((parsed.protocol !== 'https:' && !localHttp) || parsed.username || parsed.password || parsed.search || parsed.hash) {
+        throw new Error('INVALID_SYNC_BASE_URL');
+    }
+    const baseUrl = parsed.toString().replace(/\\/$/, '');
+    if (!input.accountId.trim() || input.accountId.length > 128
+        || !input.serverDeviceId.trim() || input.serverDeviceId.length > 128) {
+        throw new Error('INVALID_SYNC_CONNECTION_IDENTITY');
+    }
+    if (!input.label.trim() || input.label.length > 24 || /[\\u0000-\\u001f]/.test(input.label)) {
+        throw new Error('INVALID_DEVICE_LABEL');
+    }
+    const now = Date.now();
+    const existing = await getCompanionSyncConnection();
+    const connection: CompanionSyncConnection = {
+        id: COMPANION_SYNC_CONNECTION_KEY,
+        baseUrl,
+        accountId: input.accountId,
+        serverDeviceId: input.serverDeviceId,
+        label: input.label.trim(),
+        connectedAt: existing?.connectedAt ?? now,
+        updatedAt: now,
+    };
+    const db = await openDB();
+    const tx = db.transaction(SYNC_STATE, 'readwrite');
+    const done = transactionDone(tx);
+    tx.objectStore(SYNC_STATE).put(connection);
+    await done;
+    return connection;
+}
+
+export async function removeCompanionSyncConnection(): Promise<void> {
+    const db = await openDB();
+    const tx = db.transaction(SYNC_STATE, 'readwrite');
+    const done = transactionDone(tx);
+    tx.objectStore(SYNC_STATE).delete(COMPANION_SYNC_CONNECTION_KEY);
+    await done;
+}
+
+function getRoomNoteVersionKey(entityId: string): string {
+    return `entity_version:room_note:${entityId}`;
+}
+
+export async function getLocalRoomNoteServerVersion(entityId: string): Promise<number | null> {
+    const db = await openDB();
+    const tx = db.transaction(SYNC_STATE, 'readonly');
+    const done = transactionDone(tx);
+    const record = await requestResult(tx.objectStore(SYNC_STATE).get(getRoomNoteVersionKey(entityId))) as { version?: number } | undefined;
+    await done;
+    return Number.isSafeInteger(record?.version) && Number(record?.version) > 0 ? Number(record?.version) : null;
+}
+
+export async function setLocalRoomNoteServerVersion(entityId: string, version: number): Promise<void> {
+    if (!entityId.trim() || entityId.length > 256 || !Number.isSafeInteger(version) || version < 1) {
+        throw new Error('INVALID_SYNC_ENTITY_VERSION');
+    }
+    const db = await openDB();
+    const tx = db.transaction(SYNC_STATE, 'readwrite');
+    const done = transactionDone(tx);
+    tx.objectStore(SYNC_STATE).put({ id: getRoomNoteVersionKey(entityId), entityType: 'room_note', entityId, version, updatedAt: Date.now() });
+    await done;
+}
 
 function createLocalDeviceId(): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
