@@ -8,6 +8,21 @@ export default function DialogueApiFields({ value, onChange, fetchModels, isLoad
 }) {
  const { baseUrl: localUrl, apiKey: localKey, model: localModel, stream: localStream = false, temperature: localTemperature = 0.85 } = value;
  const [showApiAdvanced, setShowApiAdvanced] = useState(false);
+ const customHeaders = value.customHeaders || {};
+ const updateHeaderName = (oldName: string, nextName: string) => {
+  const next = { ...customHeaders };
+  const headerValue = next[oldName] || '';
+  delete next[oldName];
+  if (nextName.trim()) next[nextName.trim()] = headerValue;
+  onChange({ customHeaders: next });
+ };
+ const updateHeaderValue = (name: string, headerValue: string) => onChange({ customHeaders: { ...customHeaders, [name]: headerValue } });
+ const addHeader = () => {
+  let index = Object.keys(customHeaders).length + 1;
+  let name = `X-Custom-Header-${index}`;
+  while (name in customHeaders) name = `X-Custom-Header-${++index}`;
+  onChange({ customHeaders: { ...customHeaders, [name]: '' } });
+ };
  const setLocalUrl = (baseUrl: string) => onChange({ baseUrl });
  const setLocalKey = (apiKey: string) => onChange({ apiKey });
  const setLocalTemperature = (temperature: number) => onChange({ temperature });
@@ -26,6 +41,28 @@ export default function DialogueApiFields({ value, onChange, fetchModels, isLoad
                 <div className="group">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Key</label>
                     <input type="password" value={localKey} onChange={(e) => setLocalKey(e.target.value)} placeholder="sk-..." className="w-full bg-white/50 border border-slate-200/60 rounded-xl px-4 py-2.5 text-sm font-mono focus:bg-white transition-all" />
+                </div>
+
+                <div className="rounded-xl border border-slate-200/70 bg-white/60 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                        <div>
+                            <div className="text-[11px] font-semibold text-slate-600">自定义请求头</div>
+                            <p className="text-[9px] text-slate-400 mt-0.5">每次模型请求都会附带，可用于 OpenCode Go 或特殊网关。</p>
+                        </div>
+                        <button type="button" onClick={addHeader} className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[10px] font-semibold text-slate-600">+ 添加</button>
+                    </div>
+                    {Object.entries(customHeaders).map(([name, headerValue], index) => (
+                        <div key={index} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-1.5">
+                            <input aria-label={`请求头名称 ${index + 1}`} value={name} onChange={e => updateHeaderName(name, e.target.value)} placeholder="Header-Name" className="min-w-0 rounded-lg border border-slate-200 px-2 py-2 text-[10px] font-mono" />
+                            <input aria-label={`请求头值 ${index + 1}`} value={headerValue} onChange={e => updateHeaderValue(name, e.target.value)} placeholder="Header value" className="min-w-0 rounded-lg border border-slate-200 px-2 py-2 text-[10px] font-mono" />
+                            <button type="button" aria-label={`删除请求头 ${name}`} onClick={() => { const next = { ...customHeaders }; delete next[name]; onChange({ customHeaders: next }); }} className="rounded-lg px-2 text-slate-400 hover:bg-rose-50 hover:text-rose-500">×</button>
+                        </div>
+                    ))}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                        <button type="button" onClick={() => onChange({ baseUrl: 'https://opencode.ai/inference/go/openai/v1', apiType: 'openai' })} className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[10px] font-semibold text-sky-700">填入 OpenCode Go · OpenAI</button>
+                        <button type="button" onClick={() => onChange({ baseUrl: 'https://opencode.ai/inference/go/anthropic/v1', apiType: 'anthropic' })} className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[10px] font-semibold text-sky-700">填入 OpenCode Go · Anthropic</button>
+                    </div>
+                    <p className="text-[9px] leading-relaxed text-slate-400">Go 订阅密钥填在上方 Key。OpenAI 模型使用 Chat Completions；Anthropic 模型使用 Messages。模型 ID 请以 Go 控制台当前列表为准。自定义请求头保存在本机 API 配置中。</p>
                 </div>
 
                 {/* 高级（流式 / 温度）— 默认折叠，灰色低调，明确写"不建议修改" */}
