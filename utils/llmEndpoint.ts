@@ -1,24 +1,35 @@
 export type LlmApiType = 'openai' | 'anthropic';
 
-/** Native endpoints are self-describing, including in the legacy three-field amsg credential. */
 export function isAnthropicEndpoint(value: string): boolean {
     try { return /\/messages(?:\/(?:chat\/completions|models))?\/?$/.test(new URL(value).pathname); }
     catch { return false; }
 }
 
+const isZenGoPath = (path: string) => path.includes('/zen/go');
+const isInferenceGoPath = (path: string) => path.includes('/inference/go');
+
 export function normalizeLlmBaseUrl(value: string, type?: LlmApiType): string {
     const base = value.trim().replace(/\/+$/, '');
-    if (!base) return base;
-    if (!type) return base;
+    if (!base || !type) return base;
     try {
         const url = new URL(base);
-        if (type === 'anthropic') {
-            url.pathname = url.pathname.replace(/\/(?:messages(?:\/chat\/completions)?|chat\/completions|models)\/?$/, '').replace(/\/+$/, '');
-            if (!url.pathname || url.pathname === '/') url.pathname = '/v1';
-            url.pathname += '/messages';
+        let path = url.pathname.replace(/\/+$/, '');
+        if (isZenGoPath(path)) {
+            path = path.replace(/\/v1$/, '');
+            path += '/v1';
+            if (type === 'anthropic') path += '/messages';
+        } else if (isInferenceGoPath(path)) {
+            path = path.replace(/\/(?:openai|anthropic)(?:\/v1)?(?:\/messages)?$/, '');
+            path = path.replace(/\/v1$/, '');
+            path += type === 'anthropic' ? '/anthropic/v1/messages' : '/openai/v1';
+        } else if (type === 'anthropic') {
+            path = path.replace(/\/(?:messages(?:\/(?:chat\/completions|models))?|chat\/completions|models)\/?$/, '').replace(/\/+$/, '');
+            if (!path || path === '/') path = '/v1';
+            path += '/messages';
         } else {
-            url.pathname = url.pathname.replace(/\/messages(?:\/chat\/completions)?\/?$/, '');
+            path = path.replace(/\/messages(?:\/(?:chat\/completions|models))?\/?$/, '');
         }
+        url.pathname = path || '/';
         return url.href.replace(/\/$/, '');
     } catch { return base; }
 }
