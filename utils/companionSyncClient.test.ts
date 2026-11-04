@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
 }));
 const store = vi.hoisted(() => ({
     getCompanionSyncConnection: vi.fn(async () => state.connection),
+    getSyncPreference: vi.fn(async () => ({ enabled: false, mode: 'local_only' })),
     saveCompanionSyncConnection: vi.fn(async (value: unknown) => { state.saved.push(value); state.connection = value as typeof state.connection; }),
     removeCompanionSyncConnection: vi.fn(async () => { state.connection = null; }),
     getSyncCursorState: vi.fn(),
@@ -32,7 +33,7 @@ const secure = vi.hoisted(() => ({
 vi.mock('./localSyncStore', () => store);
 vi.mock('./androidSecureStorage', () => secure);
 
-import { pairCompanionDevice, disconnectCompanionDevice, setCompanionRemoteSyncPolicy } from './companionSyncClient';
+import { pairCompanionDevice, syncCompanionOnce, setCompanionRemoteSyncPolicy } from './companionSyncClient';
 
 describe('companion sync client pairing', () => {
     beforeEach(() => {
@@ -92,6 +93,11 @@ describe('companion sync client pairing', () => {
             pairingCode: ' ',
             label: '主手机',
         })).rejects.toThrow('INVALID_PAIRING_CODE');
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('refuses to contact the server unless local text sync consent is enabled', async () => {
+        await expect(syncCompanionOnce()).rejects.toThrow('LOCAL_SYNC_CONSENT_REQUIRED');
         expect(fetch).not.toHaveBeenCalled();
     });
 
