@@ -6,6 +6,8 @@
  */
 import { visualCompanionRepository } from './repository';
 import type { VisualTask, VisualTaskStatus } from './types';
+import { evaluateVisualAutonomy, type VisualAutonomyContext } from './autonomyPolicy';
+import type { VisualAutonomySettings } from './types';
 
 function createId(prefix: string): string {
     const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -50,6 +52,21 @@ export async function createVisualTask(
         if (existing && existing.deliveryId === deliveryId && existing.charId === input.charId) return existing;
         throw error;
     }
+}
+
+/** Apply the autonomy policy before a spontaneous-share task can enter the queue. */
+export async function createAutonomousVisualTask(
+    settings: VisualAutonomySettings,
+    context: VisualAutonomyContext,
+    input: Omit<VisualTask, 'id' | 'status' | 'deliveryId' | 'attempt' | 'createdAt' | 'updatedAt' | 'resultAssetIds' | 'retryStage'>
+): Promise<{ decision: ReturnType<typeof evaluateVisualAutonomy>; task?: VisualTask }> {
+    if (input.kind !== 'spontaneous_share') {
+        throw new Error('自主分享入口只接受 spontaneous_share 任务');
+    }
+    const decision = evaluateVisualAutonomy(settings, context);
+    if (!decision.allowed) return { decision };
+    const task = await createVisualTask(input);
+    return { decision, task };
 }
 
 /** 抢占一个排队任务。IndexedDB 写事务中的状态检查可避免同一任务被重复认领。 */
