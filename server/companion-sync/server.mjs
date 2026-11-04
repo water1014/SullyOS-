@@ -255,7 +255,7 @@ async function pushEvents(device, events) {
       const inserted = await client.query(
         `INSERT INTO companion_sync_events
           (event_id, account_id, device_id, entity_type, entity_id, operation, base_version, entity_version, payload, client_created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,to_timestamp($10 / 1000.0))
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,to_timestamp($10::double precision / 1000.0))
          RETURNING server_sequence`,
         [event.eventId, device.account_id, device.device_id, event.entityType, event.entityId, event.operation,
           event.baseVersion ?? 0, entityVersion, JSON.stringify(event.payload), event.clientCreatedAt],
@@ -296,7 +296,7 @@ async function pullEvents(device, url) {
   const cursor = parsePositiveInteger(url.searchParams.get('cursor'), 0, Number.MAX_SAFE_INTEGER);
   const limit = Math.min(100, Math.max(1, parsePositiveInteger(url.searchParams.get('limit'), 50, 100)));
   const highest = await pool.query(
-    'SELECT COALESCE(last_server_sequence, 0) AS max_sequence FROM companion_sync_account_state WHERE account_id = $1',
+    'SELECT COALESCE((SELECT last_server_sequence FROM companion_sync_account_state WHERE account_id = $1), 0) AS max_sequence',
     [device.account_id],
   );
   const maxSequence = Number(highest.rows[0].max_sequence);
@@ -323,7 +323,7 @@ async function pullEvents(device, url) {
     entityVersion: Number(row.entity_version),
     payload: row.payload,
   }));
-  const maxDelivered = events.reduce((max, event) => Math.max(max, event.serverSequence), cursor);
+  const maxDelivered = events.reduce((max, event) => Math.max(max, event.serverSequence), 0);
   await pool.query(
     `INSERT INTO companion_device_deliveries (account_id, device_id, max_delivered_sequence)
      VALUES ($1,$2,$3)
@@ -355,11 +355,12 @@ async function ackEvents(device, body) {
        VALUES ($1,$2,$3)
        ON CONFLICT (account_id, device_id) DO UPDATE SET
          last_acked_sequence = GREATEST(companion_device_cursors.last_acked_sequence, EXCLUDED.last_acked_sequence),
-         updated_at = now()`,
+         updated_at = now()
+       RETURNING last_acked_sequence`,
       [device.account_id, device.device_id, sequence],
     );
     await client.query('COMMIT');
-    return { status: 200, body: { lastAckedSequence: sequence } };
+    return { status: 200, body: { lastAckedSequence: Number(result.rows[0].last_acked_sequence) } };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
