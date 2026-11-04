@@ -110,9 +110,25 @@ public class ScreenAwarenessPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void resumeSession(PluginCall call) {
+        try {
+            Intent service = new Intent(getContext(), ScreenAwarenessService.class);
+            service.setAction(ScreenAwarenessService.ACTION_RESUME);
+            getContext().startService(service);
+            JSObject result = new JSObject();
+            result.put("active", true);
+            result.put("frozen", false);
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("无法恢复屏幕感知", error);
+        }
+    }
+
+    @PluginMethod
     public void getStatus(PluginCall call) {
         JSObject result = new JSObject();
         result.put("active", ScreenAwarenessService.isRunning());
+        result.put("frozen", ScreenAwarenessService.isFrozen());
         result.put("latestFrameAt", ScreenAwarenessService.getLatestFrameAt());
         call.resolve(result);
     }
