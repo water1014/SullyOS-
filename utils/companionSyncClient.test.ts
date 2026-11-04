@@ -76,6 +76,15 @@ describe('companion sync client pairing', () => {
         expect(JSON.stringify(state.connection)).not.toContain('one-time-device-token');
     });
 
+    it('rejects insecure non-local pairing endpoints before transmitting the one-time code', async () => {
+        await expect(pairCompanionDevice({
+            baseUrl: 'http://untrusted.example.test',
+            pairingCode: 'one-time-code-123456789',
+            label: '主手机',
+        })).rejects.toThrow('INVALID_SYNC_BASE_URL');
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
     it('removes the newly issued token if saving local connection metadata fails', async () => {
         store.saveCompanionSyncConnection.mockRejectedValueOnce(new Error('IndexedDB unavailable'));
         await expect(pairCompanionDevice({
