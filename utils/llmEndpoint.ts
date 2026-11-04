@@ -10,7 +10,8 @@ const isInferenceGoPath = (path: string) => path.includes('/inference/go');
 
 export function normalizeLlmBaseUrl(value: string, type?: LlmApiType): string {
     const base = value.trim().replace(/\/+$/, '');
-    if (!base || !type) return base;
+    if (!base) return base;
+    if (!type) return base;
     try {
         const url = new URL(base);
         let path = url.pathname.replace(/\/+$/, '');
