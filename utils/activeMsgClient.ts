@@ -580,6 +580,9 @@ const initializeClient = (config: ActiveMsg2GlobalConfig) => {
 const resolveApiConfig = (char: CharacterProfile, _config: ActiveMsg2CharacterConfig, apiConfig: APIConfig) => {
   const source = resolveDialogueApi(apiConfig, char);
 
+  if (Object.keys(source.customHeaders || {}).length > 0) {
+    throw new Error('当前 API 配置含自定义请求头，主动消息 2.0 云端执行暂不支持；请清空自定义请求头后再使用云端排程。');
+  }
   if (!source.baseUrl || !source.apiKey || !source.model) {
     throw new Error('主动消息 2.0 缺少可用的 API URL / Key / Model。');
   }
