@@ -247,11 +247,11 @@ export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'officia
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     throw new Error('NAI API Base URL 只支持 HTTP 或 HTTPS 地址');
   }
-  parsed.pathname = parsed.pathname.replace(/\\/+$/, '');
+  parsed.pathname = parsed.pathname.replace(/\/+$/, '');
   if (!parsed.pathname.endsWith('/ai/generate-image')) {
-    parsed.pathname = `${parsed.pathname}/ai/generate-image`.replace(/^\\/\\//, '/');
+    parsed.pathname = `${parsed.pathname}/ai/generate-image`;
   }
-  return parsed.toString().replace(/\\/$/, '');
+  return parsed.toString().replace(/\/$/, '');
 }
 
 async function readNaiImageResponse(response: Response): Promise<Blob> {
@@ -272,7 +272,7 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
     catch { throw new Error(`NAI 服务返回了无法识别的文本：${raw.slice(0, 180)}`); }
     const encoded = payload?.image || payload?.image_base64 || payload?.data?.[0]?.b64_json;
     if (typeof encoded === 'string' && encoded) {
-      const normalized = encoded.replace(/^data:image\\/[^;]+;base64,/i, '');
+      const normalized = encoded.replace(/^data:image\/[^;]+;base64,/i, '');
       try {
         const binary = atob(normalized);
         const bytes = new Uint8Array(binary.length);
@@ -288,7 +288,7 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
   try {
     const archive = await JSZip.loadAsync(buffer);
     const imageFile = Object.values(archive.files).find(file =>
-      !file.dir && /\\.(png|webp|jpe?g)$/i.test(file.name),
+      !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
     );
     if (!imageFile) throw new Error('NAI 返回成功，但压缩包中没有找到图片文件');
     const bytes = await imageFile.async('uint8array');
