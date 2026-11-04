@@ -692,7 +692,7 @@ const ImageStudioApp: React.FC = () => {
       {tab === 'settings' && (
         <main className="studio-scroll flex-1 px-4 pb-6 space-y-4">
           <section className="glass rounded-[24px] p-4 space-y-3">
-            <div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">ENGINE 01</div><div className="text-base font-semibold mt-1">GPT 生图接口</div></div>
+            <div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">ENGINE 01</div><div className="text-base font-semibold mt-1">OpenAI 兼容生图接口</div></div>
             <label className="block text-xs font-semibold text-slate-600">API Base URL</label>
             <input className="field" value={config.gpt.baseUrl} onChange={event => updateGpt({baseUrl:event.target.value})} placeholder="https://api.openai.com/v1"/>
             <label className="block text-xs font-semibold text-slate-600">API Key</label>
@@ -704,6 +704,7 @@ const ImageStudioApp: React.FC = () => {
           <section className="glass rounded-[24px] p-4 space-y-3">
             <div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">ENGINE 02 / 03</div><div className="text-base font-semibold mt-1">NovelAI 接口配置</div></div>
             <label className="block text-xs font-semibold text-slate-600">NAI 接口类型</label>
+            <p className="text-[10px] text-slate-400 leading-5">官方与第三方分别保存各自的 Token、模型和地址，切换接口不会覆盖另一套配置。</p>
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => switchNaiProvider('official')} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'official' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>官方接口</button>
               <button type="button" onClick={() => switchNaiProvider('thirdparty')} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>第三方 / 代理</button>
