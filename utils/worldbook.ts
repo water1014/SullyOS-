@@ -325,32 +325,46 @@ export const parseStandardWorldbook = (
     category: string,
     now = Date.now(),
 ): Worldbook[] => {
-    const parsed = JSON.parse(rawText);
-    if (!parsed || typeof parsed !== 'object' || !parsed.entries || typeof parsed.entries !== 'object') {
-        throw new Error('不是受支持的标准世界书文件：缺少 entries');
+    let parsed: any;
+    try {
+        parsed = JSON.parse(rawText);
+    } catch {
+        throw new Error('JSON 文件无法解析，请确认文件没有损坏');
     }
-    const rawEntries = Array.isArray(parsed.entries)
-        ? parsed.entries
-        : Object.values(parsed.entries);
 
+    // SillyTavern 通常直接导出 { entries: {...} }。
+    // 同时兼容常见的 world_info / worldbook 包装层，以及纯条目数组。
+    const container = Array.isArray(parsed)
+        ? parsed
+        : parsed?.entries ?? parsed?.world_info?.entries ?? parsed?.worldbook?.entries ?? parsed?.worldBook?.entries;
+    if (!Array.isArray(container) && (!container || typeof container !== 'object')) {
+        throw new Error('不是受支持的世界书 JSON：未找到 entries 条目列表');
+    }
+
+    const rawEntries = Array.isArray(container) ? container : Object.values(container);
     const books = rawEntries.flatMap((value: any, index: number): Worldbook[] => {
-        if (!value || typeof value !== 'object' || typeof value.content !== 'string') return [];
-        const uid = Number.isFinite(Number(value.uid)) ? Number(value.uid) : index;
+        if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.content !== 'string') return [];
+        const hasUid = value.uid !== undefined && value.uid !== null && value.uid !== '';
+        const parsedUid = hasUid ? Number(value.uid) : NaN;
+        const uid = Number.isFinite(parsedUid) ? parsedUid : index;
+        const primary = asStringArray(value.key);
+        const secondary = asStringArray(value.keysecondary);
         const position = clamp(value.position, 0, 6, 1) as WorldbookPosition;
         const rawRole = value.role == null ? null : clamp(value.role, 0, 2, 0) as WorldbookDepthRole;
+        const rawOrder = value.order == null || value.order === '' ? NaN : Number(value.order);
         return [{
             id: `wb-${now}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-            title: String(value.comment || value.name || `条目 ${uid + 1}`),
+            title: String(value.comment || value.name || value.title || `条目 ${uid + 1}`).trim() || `条目 ${uid + 1}`,
             content: value.content,
             category,
             createdAt: now,
             updatedAt: now,
-            key: asStringArray(value.key),
-            keysecondary: asStringArray(value.keysecondary),
+            key: primary,
+            keysecondary: secondary,
             constant: value.constant === true,
-            selective: value.selective === true,
+            selective: value.selective === true || (value.selective == null && secondary.length > 0),
             selectiveLogic: clamp(value.selectiveLogic, 0, 3, 0) as WorldbookSelectiveLogic,
-            order: Number.isFinite(Number(value.order)) ? Number(value.order) : 100,
+            order: Number.isFinite(rawOrder) ? rawOrder : 100,
             position,
             disable: value.disable === true,
             probability: clamp(value.probability, 0, 100, 100),
@@ -364,6 +378,6 @@ export const parseStandardWorldbook = (
         }];
     });
 
-    if (books.length === 0) throw new Error('世界书里没有可导入的有效条目');
+    if (books.length === 0) throw new Error('世界书里没有可导入的有效条目，请检查 JSON 是否包含 content 字段');
     return books;
 };
