@@ -1,0 +1,46 @@
+import { describe, expect, it } from 'vitest';
+import { isTavernPromptPreset, parseTavernPromptPreset } from './tavernPromptPreset';
+
+describe('SillyTavern prompt preset import', () => {
+    const sample = {
+        extensions: {},
+        temperature: 2,
+        wi_format: '{0}',
+        prompts: [
+            { name: '系统', identifier: 'main', role: 'system', system_prompt: true, content: '系统规则', injection_position: 0, injection_depth: 4, injection_order: 100, injection_trigger: [], forbid_overrides: false },
+            { name: 'Auxiliary Prompt', identifier: 'nsfw', role: 'system', system_prompt: true, content: '' },
+            { name: 'Chat Examples', identifier: 'dialogueExamples', system_prompt: true, marker: true },
+        ],
+        prompt_order: [
+            { character_id: 100000, order: [{ identifier: 'main', enabled: true }, { identifier: 'nsfw', enabled: true }, { identifier: 'dialogueExamples', enabled: false }] },
+        ],
+    };
+
+    it('recognizes a preset by its prompts array, not as a worldbook', () => {
+        expect(isTavernPromptPreset(sample)).toBe(true);
+        expect(isTavernPromptPreset({ entries: [] })).toBe(false);
+    });
+
+    it('preserves prompt definitions, prompt order, and unknown top-level settings', () => {
+        const imported = parseTavernPromptPreset(JSON.stringify(sample), 'deepseek v4 纯破限 0.1.json');
+        expect(imported.name).toBe('deepseek v4 纯破限 0.1');
+        expect(imported.prompts).toHaveLength(3);
+        expect(imported.prompts[0]).toMatchObject({
+            identifier: 'main',
+            content: '系统规则',
+            injection_position: 0,
+            injection_depth: 4,
+            injection_order: 100,
+        });
+        expect(imported.prompt_order[0].order).toEqual([
+            { identifier: 'main', enabled: true },
+            { identifier: 'nsfw', enabled: true },
+            { identifier: 'dialogueExamples', enabled: false },
+        ]);
+        expect(imported.raw).toMatchObject({ temperature: 2, wi_format: '{0}', extensions: {} });
+    });
+
+    it('gives a clear message when a worldbook is passed to the preset importer', () => {
+        expect(() => parseTavernPromptPreset(JSON.stringify({ entries: [] }))).toThrow(/prompts/);
+    });
+});
