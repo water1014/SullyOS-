@@ -3,6 +3,7 @@ import type { CharacterProfile, Message, UserProfile, VisionApiConfig } from '..
 import { ChatPrompts } from './chatPrompts';
 import { DB } from './db';
 import { describeImageWithVisionApi, materializeVisionDescriptions, visionApiConfigFromPreset } from './visionApi';
+import { configureOpenCodeGoNativeTransport } from './openCodeGoTransport';
 
 const config: VisionApiConfig = {
   enabled: true,
@@ -25,6 +26,7 @@ const message = (id: number): Message => ({
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  configureOpenCodeGoNativeTransport(false);
 });
 
 describe('independent vision API', () => {
@@ -43,10 +45,15 @@ describe('independent vision API', () => {
   });
 
   it('uses the OpenCode Go zen endpoint and session header for vision recognition', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      choices: [{ message: { content: '一只猫坐在窗台上。' } }],
-    }), { status: 200, headers: { 'content-type': 'application/json' } }));
-    vi.stubGlobal('fetch', fetchMock);
+    let nativeOptions: Record<string, unknown> | undefined;
+    configureOpenCodeGoNativeTransport(true, async options => {
+      nativeOptions = options;
+      return {
+        status: 200,
+        data: JSON.stringify({ choices: [{ message: { content: '一只猫坐在窗台上。' } }] }),
+        headers: { 'content-type': 'application/json' },
+      };
+    });
 
     const description = await describeImageWithVisionApi(image, {
       enabled: true,
@@ -56,11 +63,14 @@ describe('independent vision API', () => {
     });
 
     expect(description).toContain('猫');
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [url, options] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://opencode.ai/zen/go/v1/chat/completions');
-    expect(new Headers(options.headers).get('authorization')).toBe('Bearer go-token');
-    expect(new Headers(options.headers).get('x-opencode-session')).toBe('sullyos-vision');
+    expect(nativeOptions).toMatchObject({
+      url: 'https://opencode.ai/zen/go/v1/chat/completions',
+      method: 'POST',
+      headers: expect.objectContaining({
+        authorization: 'Bearer go-token',
+        'x-opencode-session': 'sullyos-vision',
+      }),
+    });
   });
 
   it('recognizes identical image data once, writes both message caches, then reuses them', async () => {
