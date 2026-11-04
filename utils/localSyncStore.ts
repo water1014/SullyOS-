@@ -81,7 +81,7 @@ export async function setSyncPreference(
         updatedAt: Date.now(),
     };
     const db = await openDB();
-    const stores = enabled ? [PREFERENCES] : [PREFERENCES, OUTBOX];
+    const stores = enabled ? [PREFERENCES] : [PREFERENCES, OUTBOX, INBOX];
     const tx = db.transaction(stores, 'readwrite');
     const done = transactionDone(tx);
     tx.objectStore(PREFERENCES).put(preference);
@@ -89,6 +89,11 @@ export async function setSyncPreference(
         const outbox = tx.objectStore(OUTBOX);
         const queued = await requestResult(outbox.getAll()) as LocalSyncEvent[];
         queued.filter(event => event.entityType === entityType).forEach(event => outbox.delete(event.eventId));
+        const inbox = tx.objectStore(INBOX);
+        const incoming = await requestResult(inbox.getAll()) as LocalSyncInboxEvent[];
+        incoming
+            .filter(event => event.entityType === entityType && event.applyState !== 'applied')
+            .forEach(event => inbox.delete(event.eventId));
     }
     await done;
     return preference;

@@ -118,7 +118,7 @@ export default function LocalSyncSettingsPanel() {
                 <div className="rounded-xl bg-white p-2 text-center"><strong className="block text-base text-slate-700">{queue.blocked}</strong><span className="text-[10px] text-slate-400">已阻止</span></div>
             </div>
             {error && <p role="alert" className="text-[11px] text-rose-600">{error}</p>}
-            <p className="text-[10px] leading-relaxed text-slate-400">关闭开关会清除该类别尚未发送的队列事件，但不会删除原始便签。正式云同步、设备配对和云端清理入口尚未开放。</p>
+            <p className="text-[10px] leading-relaxed text-slate-400">关闭开关会清除该类别未应用的收发队列事件，但不会删除原始便签。正式云同步、设备配对和云端清理入口尚未开放。</p>
         </section>
     );
 }

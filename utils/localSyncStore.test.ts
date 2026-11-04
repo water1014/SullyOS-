@@ -113,6 +113,26 @@ describe('local-first sync outbox', () => {
     });
 
 
+
+    it('does not apply inbound note data without opt-in and purges pending inbound data when disabled', async () => {
+        const remote = {
+            eventId: 'remote-opt-in', serverSequence: 9, entityType: 'room_note' as const,
+            entityId: 'remote-opt-in-note', operation: 'create' as const, entityVersion: 1,
+            payload: { id: 'remote-opt-in-note', charId: 'char-1', timestamp: 10, content: '不得自动落地', type: 'thought' },
+        };
+        await persistInboxEvents([remote]);
+        expect(await applyPendingRoomNoteInboxEvent(remote.eventId)).toEqual({
+            status: 'blocked', reason: 'SYNC_DISABLED',
+        });
+        expect(await listPendingInboxEvents()).toHaveLength(0);
+
+        await setSyncPreference('room_note', true, 'text');
+        await persistInboxEvents([{ ...remote, eventId: 'remote-opt-in-2', serverSequence: 10 }]);
+        expect(await listPendingInboxEvents()).toHaveLength(1);
+        await setSyncPreference('room_note', false, 'local_only');
+        expect(await listPendingInboxEvents()).toHaveLength(0);
+    });
+
     it('applies a remote note when no local note exists', async () => {
         await persistInboxEvents([{
             eventId: 'remote-create', serverSequence: 1, entityType: 'room_note',
