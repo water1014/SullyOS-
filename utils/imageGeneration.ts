@@ -40,7 +40,7 @@ function validateProviderUrl(value: string, label: string): string {
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
     throw new Error(`${label} 只支持 HTTP 或 HTTPS 地址`);
   }
-  return parsed.toString().replace(/\\/$/, '');
+  return parsed.toString().replace(/\/$/, '');
 }
 
 async function responseError(response: Response, fallback: string): Promise<string> {
