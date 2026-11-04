@@ -28,6 +28,7 @@ export async function createVisualTask(
     }
 ): Promise<VisualTask> {
     const deliveryId = input.deliveryId || createId('visual_delivery');
+    const now = Date.now();
     const taskId = input.id || 'visual_task_' + encodeURIComponent(deliveryId);
     const task: VisualTask = {
         ...input,
