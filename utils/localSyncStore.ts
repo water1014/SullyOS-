@@ -132,9 +132,6 @@ export async function enqueueRoomNoteSyncEvent(
     operation: SyncOperation,
     options: { baseVersion?: number | null; clientVersion?: number } = {}
 ): Promise<LocalSyncEvent | null> {
-    const preference = await getSyncPreference('room_note');
-    if (!preference.enabled || preference.mode !== 'text') return null;
-
     const payload = operation === 'delete' ? {} : serializeRoomNoteForSync(note);
     const event: LocalSyncEvent = {
         eventId: createEventId(),
@@ -151,10 +148,19 @@ export async function enqueueRoomNoteSyncEvent(
         attemptCount: 0,
     };
 
+    // Check consent and enqueue in the same readwrite transaction. If opt-out races
+    // with a note save, IndexedDB serializes both transactions: either the event is
+    // enqueued first and then purged, or opt-out wins and no event is created.
     const db = await openDB();
-    const tx = db.transaction(OUTBOX, 'readwrite');
+    const tx = db.transaction([PREFERENCES, OUTBOX], 'readwrite');
+    const done = transactionDone(tx);
+    const preference = await requestResult(tx.objectStore(PREFERENCES).get('room_note')) as SyncPreference | undefined;
+    if (!preference?.enabled || preference.mode !== 'text') {
+        await done;
+        return null;
+    }
     tx.objectStore(OUTBOX).add(event);
-    await transactionDone(tx);
+    await done;
     return event;
 }
 
