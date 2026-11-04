@@ -16,7 +16,7 @@ export function normalizeLlmBaseUrl(value: string, type?: LlmApiType): string {
         const url = new URL(base);
         let path = url.pathname.replace(/\/+$/, '');
         if (isZenGoPath(path)) {
-            path = path.replace(/\/v1$/, '');
+            path = path.replace(/\/v1\/messages$/i, '').replace(/\/messages$/i, '').replace(/\/v1$/i, '');
             path += '/v1';
             if (type === 'anthropic') path += '/messages';
         } else if (isInferenceGoPath(path)) {
