@@ -1,0 +1,132 @@
+/**
+ * Foreground executor for visual companion tasks.
+ *
+ * Uses the existing Image Studio provider settings in this browser session.
+ * Credentials/custom headers are read locally and are never copied into VisualTask records.
+ * This is deliberately not a background/cloud executor: it runs only while the page is alive.
+ */
+import { generateGptImage, generateNaiImage, type GptImageConfig, type NaiImageConfig } from '../imageGeneration';
+import { putImageBlob } from '../blobRef';
+import {
+    markVisualAssetsPersisted,
+    recordGeneratedVisualAssets,
+    startVisualGeneration,
+} from './orchestrator';
+import { visualCompanionRepository } from './repository';
+import { deliverVisualTaskToChat } from './delivery';
+import type { VisualTask } from './types';
+
+const IMAGE_CONFIG_KEY = 'sully-image-studio:config:v1';
+
+function readImageStudioConfig(): any {
+    try {
+        return JSON.parse(localStorage.getItem(IMAGE_CONFIG_KEY) || '{}');
+    } catch {
+        throw new Error('读取生图室配置失败，请重新打开生图室检查设置');
+    }
+}
+
+function getProviderConfig(task: VisualTask): GptImageConfig | NaiImageConfig {
+    const saved = readImageStudioConfig();
+    if (task.provider === 'openai' || task.provider === 'openai_compatible') {
+        const config = saved.gpt;
+        if (!config?.apiKey?.trim()) throw new Error('GPT 生图尚未配置 API Key');
+        return config as GptImageConfig;
+    }
+    if (task.provider === 'novelai_official') {
+        const config = saved.naiOfficial || (saved.nai?.provider !== 'thirdparty' ? saved.nai : null);
+        if (!config?.apiKey?.trim()) throw new Error('NovelAI 官方接口尚未配置 Token');
+        return { ...config, provider: 'official' } as NaiImageConfig;
+    }
+    const config = saved.naiThirdParty || (saved.nai?.provider === 'thirdparty' ? saved.nai : null);
+    if (!config?.apiKey?.trim()) throw new Error('NAI 第三方接口尚未配置 Token');
+    return { ...config, provider: 'thirdparty' } as NaiImageConfig;
+}
+
+async function generateForTask(task: VisualTask): Promise<Blob> {
+    const config = getProviderConfig(task);
+    if (task.provider === 'openai' || task.provider === 'openai_compatible') {
+        return generateGptImage(config as GptImageConfig, task.prompt, {
+            size: '1024x1024',
+            quality: 'high',
+        });
+    }
+    return generateNaiImage(config as NaiImageConfig, task.prompt, task.negativePrompt || 'low quality, worst quality, blurry, bad anatomy', {
+        width: 832,
+        height: 1216,
+        steps: 28,
+        scale: 5,
+        sampler: 'k_euler_ancestral',
+    });
+}
+
+/**
+ * Execute a single queued task in the foreground.
+ * Repeated calls are harmless: only a task that can be claimed from queued is started.
+ */
+export async function executeVisualTaskInForeground(taskId: string): Promise<VisualTask | null> {
+    const initial = await visualCompanionRepository.getTask(taskId);
+    if (!initial || initial.status !== 'queued') return initial;
+
+    let task: VisualTask;
+    try {
+        task = await visualCompanionRepository.transitionTask(taskId, 'planning');
+    } catch {
+        return visualCompanionRepository.getTask(taskId);
+    }
+
+    try {
+        await startVisualGeneration(task.id);
+        const image = await generateForTask(task);
+        const blobRef = await putImageBlob(image);
+        const assetId = `visual_asset_${encodeURIComponent(task.id)}`;
+        const asset = {
+            id: assetId,
+            charId: task.charId,
+            status: 'ready' as const,
+            privacyScope: 'standard' as const,
+            storage: { kind: 'blobref' as const, ref: blobRef },
+            mimeType: image.type || 'image/png',
+            byteSize: image.size,
+            taskId: task.id,
+            createdAt: Date.now(),
+        };
+        await visualCompanionRepository.saveAsset(asset);
+        await recordGeneratedVisualAssets(task.id, [assetId]);
+        await markVisualAssetsPersisted(task.id);
+        const delivered = await deliverVisualTaskToChat(task.id, blobRef);
+        window.dispatchEvent(new CustomEvent('active-msg-progress', {
+            detail: { charId: task.charId },
+        }));
+        return delivered.task;
+    } catch (error) {
+        const latest = await visualCompanionRepository.getTask(task.id);
+        const message = error instanceof Error ? error.message : String(error);
+        if (latest && ['generating', 'persisting', 'delivery_pending'].includes(latest.status)) {
+            const retryStage = latest.status;
+            const attempt = latest.attempt + 1;
+            if (attempt < latest.maxAttempts) {
+                await visualCompanionRepository.transitionTask(task.id, 'retry_wait', {
+                    attempt,
+                    retryStage: retryStage as 'generating' | 'persisting' | 'delivery_pending',
+                    nextAttemptAt: Date.now() + 30_000,
+                    errorCode: 'foreground_execution_failed',
+                    errorMessage: message.slice(0, 300),
+                });
+            } else {
+                await visualCompanionRepository.transitionTask(task.id, 'failed', {
+                    attempt,
+                    errorCode: 'foreground_execution_failed',
+                    errorMessage: message.slice(0, 300),
+                });
+            }
+        } else if (latest?.status === 'planning') {
+            await visualCompanionRepository.transitionTask(task.id, 'failed', {
+                errorCode: 'foreground_setup_failed',
+                errorMessage: message.slice(0, 300),
+            });
+        }
+        console.warn('[VisualCompanion] foreground task failed', { taskId, error });
+        return visualCompanionRepository.getTask(task.id);
+    }
+}
