@@ -37,4 +37,14 @@ describe('OpenCode Go URL normalization', () => {
       .toBe('https://opencode.ai/inference/go/anthropic/v1/messages');
   });
 
+
+  it('normalizes pasted OpenCode Go endpoint suffixes without duplicating routes', () => {
+    expect(normalizeLlmBaseUrl('https://opencode.ai/zen/go/v1/chat/completions', 'openai'))
+      .toBe('https://opencode.ai/zen/go/v1');
+    expect(normalizeLlmBaseUrl('https://opencode.ai/zen/go/v1/messages/chat/completions', 'anthropic'))
+      .toBe('https://opencode.ai/zen/go/v1/messages');
+    expect(normalizeLlmBaseUrl('https://opencode.ai/inference/go/openai/v1/chat/completions', 'openai'))
+      .toBe('https://opencode.ai/inference/go/openai/v1');
+  });
+
 });
