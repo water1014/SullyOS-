@@ -36,8 +36,11 @@ The debug APK is written to `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 - `ApkInstallerPlugin`: validates the package ID, version, SHA-256 and installed signing certificate before handing a verified cached APK to Android's system installer.
 - `SecureStoragePlugin`: encrypts small secret values with AES-GCM and an Android Keystore key.
+- `ScreenAwarenessPlugin` + `ScreenAwarenessService`: starts an Android MediaProjection session only after the system consent dialog, shows an ongoing notification with a stop action, and retains only the latest local JPEG frame.
 
-The installer integrates its `verified-updates/` cache path into the existing Capacitor FileProvider XML resource instead of adding a duplicate provider. The preparation script is safe to run repeatedly.
+The installer integrates its `verified-updates/` cache path into the existing Capacitor FileProvider XML resource instead of adding a duplicate provider. It also declares the MediaProjection foreground-service permissions and service. The preparation script is safe to run repeatedly.
+
+Screen awareness is local-only in this phase. It does not upload frames, sync them to the server, or attach them to chat. See `docs/android-screen-awareness.md` for the consent flow and remaining device tests.
 
 ## Release safeguards
 
