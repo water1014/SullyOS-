@@ -6,6 +6,9 @@ import {
 } from '@phosphor-icons/react';
 import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
+import { visualCompanionRepository } from '../utils/visualCompanion/repository';
+import { mergeCharacterAppearancePrompt } from '../utils/visualCompanion/identityPrompt';
+import type { CharacterVisualProfile } from '../utils/visualCompanion/types';
 import {
   generateGptImage, editGptImage, generateNaiImage,
   suggestNaiTags, getNaiQualityTags, testGptImageConnection, testNaiImageConnection,
@@ -31,7 +34,7 @@ type StudioConfig = {
 };
 type SavedImage = {
   id: string; blobId: string; engine: ImageEngine; prompt: string; negativePrompt: string;
-  model: string; createdAt: number; mimeType: string;
+  model: string; createdAt: number; mimeType: string; appearanceProfileVersion?: number;
   naiSettings?: { size: string; steps: number; scale: number; sampler: string; seed?: number };
   note?: string; category?: string; favorite?: boolean; backupSourceId?: string;
 };
@@ -118,11 +121,13 @@ const NAI_NEGATIVE_PACKS = [
 ];
 
 const ImageStudioApp: React.FC = () => {
-  const { closeApp, addToast } = useOS();
+  const { closeApp, addToast, activeCharacterId, characters } = useOS();
   const [tab, setTab] = useState<'create' | 'gallery' | 'settings'>('create');
   const [engine, setEngine] = useState<ImageEngine>('gpt');
   const [config, setConfig] = useState<StudioConfig>(readConfig);
   const [prompt, setPrompt] = useState('');
+  const [appearanceProfile, setAppearanceProfile] = useState<CharacterVisualProfile | null>(null);
+  const [appearanceLoading, setAppearanceLoading] = useState(false);
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('low quality, worst quality, blurry, bad anatomy');
@@ -173,6 +178,21 @@ const ImageStudioApp: React.FC = () => {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    if (!activeCharacterId) {
+      setAppearanceProfile(null);
+      setAppearanceLoading(false);
+      return;
+    }
+    setAppearanceLoading(true);
+    void visualCompanionRepository.getProfile('visual_profile_' + encodeURIComponent(activeCharacterId))
+      .then(profile => { if (alive) setAppearanceProfile(profile); })
+      .catch(() => { if (alive) setAppearanceProfile(null); })
+      .finally(() => { if (alive) setAppearanceLoading(false); });
+    return () => { alive = false; };
+  }, [activeCharacterId]);
 
   useEffect(() => {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
@@ -323,13 +343,14 @@ const ImageStudioApp: React.FC = () => {
     }
   };
 
-  const saveImage = useCallback(async (blob: Blob, generatedSeed?: number) => {
+  const saveImage = useCallback(async (blob: Blob, generatedSeed?: number, profileVersion?: number) => {
     const id = `studio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const blobId = `image-studio:${id}`;
     await DB.putBlobAsset(blobId, blob);
     const item: SavedImage = {
       id, blobId, engine, prompt: prompt.trim(), negativePrompt: engine === 'nai' ? negativePrompt.trim() : '',
       model: engine === 'gpt' ? config.gpt.model : config.nai.model,
+      ...(profileVersion !== undefined ? { appearanceProfileVersion: profileVersion } : {}),
       ...(engine === 'nai' ? { naiSettings: { size: naiSize, steps: naiSteps, scale: naiScale, sampler: naiSampler, ...(generatedSeed !== undefined ? { seed: generatedSeed } : {}) } } : {}),
       createdAt: Date.now(), mimeType: blob.type || 'image/png',
     };
@@ -339,7 +360,7 @@ const ImageStudioApp: React.FC = () => {
     setImages(current => [display, ...current]);
     setSelected(display);
     setTab('gallery');
-  }, [engine, prompt, negativePrompt, config, naiSize, naiSteps, naiScale, naiSampler, naiSeed]);
+  }, [engine, prompt, negativePrompt, config, naiSize, naiSteps, naiScale, naiSampler, naiSeed, activeCharacterId, appearanceProfile]);
 
   const handleGenerate = async () => {
     if (generating) return;
@@ -348,6 +369,10 @@ const ImageStudioApp: React.FC = () => {
     setGenerating(true);
     setError('');
     try {
+      const currentAppearanceProfile = activeCharacterId
+        ? await visualCompanionRepository.getProfile('visual_profile_' + encodeURIComponent(activeCharacterId))
+        : appearanceProfile;
+      const effectivePrompt = mergeCharacterAppearancePrompt(prompt, currentAppearanceProfile);
       if (engine === 'nai' && naiSeed.trim()) {
         const parsedSeed = Number(naiSeed);
         if (!Number.isSafeInteger(parsedSeed) || parsedSeed < 0 || parsedSeed > 4294967295) {
@@ -365,10 +390,10 @@ const ImageStudioApp: React.FC = () => {
       };
       const blob = engine === 'gpt'
         ? referenceImage
-          ? await editGptImage(config.gpt, referenceImage, prompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
-          : await generateGptImage(config.gpt, prompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
-        : await generateNaiImage(config.nai, prompt, negativePrompt, naiOptions, controller.signal);
-      await saveImage(blob, effectiveNaiSeed);
+          ? await editGptImage(config.gpt, referenceImage, effectivePrompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
+          : await generateGptImage(config.gpt, effectivePrompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
+        : await generateNaiImage(config.nai, effectivePrompt, negativePrompt, naiOptions, controller.signal);
+      await saveImage(blob, effectiveNaiSeed, currentAppearanceProfile?.status === 'active' ? currentAppearanceProfile.version : undefined);
       addToast('图片已生成并保存到我的画廊', 'success');
     } catch (cause) {
       if (cause instanceof Error && cause.name === 'AbortError') {
@@ -695,6 +720,12 @@ const ImageStudioApp: React.FC = () => {
           <section className="glass rounded-[24px] p-4 space-y-3">
             <div className="flex items-center justify-between"><div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">YOUR IMAGINATION</div><div className="text-sm font-semibold mt-1">描述你想要的画面</div></div><span className="text-[10px] text-slate-400">PROMPT</span></div>
             <textarea className="field min-h-[132px] resize-y leading-6" value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={engine === 'gpt' ? (referenceImage ? '描述你希望如何修改这张参考图……' : '例如：雨后的玻璃花房，蓝色月光落在白色花瓣上，电影感构图……') : 'masterpiece, best quality, 1girl, ...'} />
+            {activeCharacterId && (
+              <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-[11px] text-sky-800 flex items-center gap-2">
+                <Sparkle size={14}/>
+                <span className="min-w-0 flex-1">{appearanceLoading ? '正在读取人物外貌档案…' : appearanceProfile?.status === 'active' ? `已连接 ${characters.find(character => character.id === activeCharacterId)?.name || '当前角色'} 的人物外貌，生图时自动注入` : '当前角色尚未启用人物外貌档案，可在记忆宫殿「人物外貌」中设置'}</span>
+              </div>
+            )}
             {engine === 'gpt' && (
               <div className="rounded-2xl border border-dashed border-sky-200 bg-sky-50/55 p-3">
                 <div className="flex items-center justify-between gap-2 mb-2">
