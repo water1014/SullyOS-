@@ -97,6 +97,8 @@ describe('Android update session survives page lifetimes', () => {
     await session.check();
     await session.download();
     expect(session.getSnapshot().phase).toBe('permission');
+    await session.openInstallPermissionSettings();
+    expect(deps.openInstallPermissionSettings).toHaveBeenCalledTimes(1);
     await session.continueInstall();
     expect(session.getSnapshot().phase).toBe('ready');
     await session.continueInstall();
