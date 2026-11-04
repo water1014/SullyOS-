@@ -153,7 +153,9 @@ P1：本地同步基础（本地底座已实现，端到端仍未完成）
 - [x] room_notes 文字白名单、显式 opt-in、稳定 eventId、断点恢复、游标单调合并。
 - [x] 关闭同步时清理传输副本；标准备份恢复前清空旧队列/Inbox/冲突/游标，保留本机设备身份和本地授权偏好。
 - [x] 每次安装稳定设备 ID、本机设备命名。
-- [ ] 真实网络 push / pull / ack、服务端幂等和设备撤销。
+- [x] 云端 API 源码第一版：一次性配对码、独立设备令牌、设备列表/撤销、同步策略、push / pull / ack、服务端幂等与版本冲突响应。
+- [x] PostgreSQL schema 源码：账户、设备、配对码、事件、版本头、设备投递/确认游标、账号序列水位。
+- [ ] 前端配对界面、安全令牌存储、Outbox/Inbox 网络 transport 与完整 PostgreSQL 集成测试。
 - [ ] 多设备断网/重连与端到端验收。
 
 P2：VPS 同步与设备服务
@@ -188,8 +190,10 @@ P7：最终整合与 APK
 
 - 本地同步代码：utils/localSyncStore.ts、utils/localSyncStore.test.ts、components/settings/LocalSyncSettingsPanel.tsx。
 - 备份恢复钩子：标准数据恢复开始前清空旧传输状态；媒体补充导入不影响同步状态。
-- PostgreSQL 初始结构：server/companion-sync/migrations/0001_initial.sql，包含账户、独立设备令牌哈希、同步策略、事件日志、实体版本头、设备游标、持久任务和加密凭据表。
-- SQL migration 只是尚未执行的源文件；没有数据库连接、API 服务、设备配对或真实网络同步。
+- PostgreSQL 结构：server/companion-sync/migrations/0001_initial.sql、0002_pairing_and_delivery.sql、0003_account_sequence_watermark.sql。
+- API 源码：server/companion-sync/server.mjs、protocol.mjs；支持一次性配对、每设备独立令牌、设备撤销、显式同步策略、push/pull/ack。
+- 协议单测：server/companion-sync/protocol.test.ts；CI 增加 Node 语法检查和协议测试。
+- 以上均为源代码，不代表真实数据库集成或云端部署。迁移尚未执行，API 尚未运行，前端尚未连接。
 - 阿里云仍未部署；不创建资源、不写入真实凭据。
 
 ## 9. 本轮执行边界
