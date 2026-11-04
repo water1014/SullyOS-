@@ -21,6 +21,12 @@ describe('dialogue routing', () => {
     expect(resolveDialogueApi(globalApi, char, app)).toMatchObject(app);
     expect(globalApi.model).toBe('global');
   });
+  it('preserves custom headers on the selected dialogue endpoint', () => {
+    const withHeaders = { ...globalApi, customHeaders: { 'X-OpenCode-Session': 'session-1' } };
+    expect(resolveDialogueApi(withHeaders).customHeaders).toEqual({ 'X-OpenCode-Session': 'session-1' });
+    expect(resolveDialogueApi(withHeaders, { dialogueApi: { ...personal, customHeaders: { 'X-Role': 'role-1' } } as any }).customHeaders)
+      .toEqual({ 'X-Role': 'role-1' });
+  });
   it('keeps two independent members separate; a director explicitly omits the character', () => {
     expect([char, { id: 'b', dialogueApi: app }, { id: 'c' }].map(c => resolveDialogueApi(globalApi, c).model))
       .toEqual(['role', 'app', 'global']);
