@@ -64,22 +64,50 @@ async function main() {
     throw new Error('MainActivity must extend Capacitor BridgeActivity');
   }
 
-  for (const className of ['ApkInstallerPlugin', 'SecureStoragePlugin']) {
-    const source = join(pluginRoot, className === 'ApkInstallerPlugin' ? 'apk-installer' : 'secure-storage', `${className}.java`);
-    await copyFile(source, join(javaRoot, packageName.split('.').join('/'), `${className}.java`));
-    activity = addImport(activity, `import ${packageName}.${className};`);
-    activity = registerPlugin(activity, className);
+  const plugins = [
+    { className: 'ApkInstallerPlugin', directory: 'apk-installer' },
+    { className: 'SecureStoragePlugin', directory: 'secure-storage' },
+    { className: 'ScreenAwarenessPlugin', directory: 'screen-awareness' },
+  ];
+  for (const plugin of plugins) {
+    const source = join(pluginRoot, plugin.directory, `${plugin.className}.java`);
+    await copyFile(source, join(javaRoot, packageName.split('.').join('/'), `${plugin.className}.java`));
+    activity = addImport(activity, `import ${packageName}.${plugin.className};`);
+    activity = registerPlugin(activity, plugin.className);
   }
+  const serviceSource = join(pluginRoot, 'screen-awareness', 'ScreenAwarenessService.java');
+  await copyFile(serviceSource, join(javaRoot, packageName.split('.').join('/'), 'ScreenAwarenessService.java'));
   activity = addImport(activity, 'import android.os.Bundle;');
   await writeFile(activityPath, activity, 'utf8');
 
   let manifest = await readFile(manifestPath, 'utf8');
-  if (!manifest.includes('android.permission.REQUEST_INSTALL_PACKAGES')) {
+  const requiredPermissions = [
+    'android.permission.REQUEST_INSTALL_PACKAGES',
+    'android.permission.FOREGROUND_SERVICE',
+    'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
+  ];
+  const missingPermissions = requiredPermissions.filter(permission =>
+    !manifest.includes(`android:name="${permission}"`)
+  );
+  if (missingPermissions.length > 0) {
     const applicationIndex = manifest.indexOf('<application');
     if (applicationIndex < 0) throw new Error('AndroidManifest.xml has no application element');
-    manifest = manifest.slice(0, applicationIndex)
-      + '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n'
-      + manifest.slice(applicationIndex);
+    const declarations = missingPermissions
+      .map(permission => `    <uses-permission android:name="${permission}" />`)
+      .join('\\n');
+    manifest = manifest.slice(0, applicationIndex) + declarations + '\\n' + manifest.slice(applicationIndex);
+  }
+  const serviceName = 'android:name=".ScreenAwarenessService"';
+  if (!manifest.includes(serviceName)) {
+    const service = [
+      '        <service',
+      '            android:name=".ScreenAwarenessService"',
+      '            android:exported="false"',
+      '            android:foregroundServiceType="mediaProjection" />',
+    ].join('\\n');
+    const applicationClose = manifest.lastIndexOf('</application>');
+    if (applicationClose < 0) throw new Error('AndroidManifest.xml has no application closing tag');
+    manifest = manifest.slice(0, applicationClose) + service + '\\n' + manifest.slice(applicationClose);
   }
 
   let xmlResourceName = 'apk_installer_paths';
