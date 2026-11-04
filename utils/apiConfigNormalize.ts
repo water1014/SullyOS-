@@ -32,6 +32,12 @@ export const normalizeApiHeaders = (value: unknown): Record<string, string> => {
   return result;
 };
 
+export const buildApiRequestHeaders = (apiKey: string, customHeaders?: unknown): Headers => {
+  const headers = new Headers({ 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey || 'sk-none'}` });
+  for (const [name, value] of Object.entries(normalizeApiHeaders(customHeaders))) headers.set(name, value);
+  return headers;
+};
+
 export function normalizeApiConfig(config: APIConfig): APIConfig {
   const visionApi = config.visionApi;
   return {
