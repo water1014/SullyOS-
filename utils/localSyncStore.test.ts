@@ -100,6 +100,42 @@ describe('local-first sync outbox', () => {
     });
 
 
+    it('clears stale sync queues and cursors after a text/full restore, while retaining the user opt-in', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        await enqueueRoomNoteSyncEvent(note, 'create');
+        await persistInboxEvents([{
+            eventId: 'restore-stale-inbox', serverSequence: 12, entityType: 'room_note',
+            entityId: 'remote-note', operation: 'create', entityVersion: 1,
+            payload: { id: 'remote-note', charId: 'char-1', timestamp: 10, content: '旧待同步内容', type: 'thought' },
+        }]);
+        await updateSyncCursorState('account-restore', 'device-restore', {
+            lastPulledSequence: 12, lastAckedSequence: 10,
+        });
+        await recordSyncConflict({
+            conflictId: 'restore-stale-conflict', entityType: 'room_note',
+            entityId: 'note-1', localVersion: 1, remoteVersion: 2,
+        });
+
+        await DB.importFullData({ characters: [], messages: [] } as any);
+
+        expect(await listPendingSyncEvents()).toHaveLength(0);
+        expect(await listPendingInboxEvents()).toHaveLength(0);
+        expect(await listUnresolvedSyncConflicts()).toHaveLength(0);
+        expect(await getSyncCursorState('account-restore', 'device-restore')).toMatchObject({
+            lastPulledSequence: 0, lastAckedSequence: 0,
+        });
+        expect(await getSyncPreference('room_note')).toMatchObject({
+            enabled: true, mode: 'text',
+        });
+    });
+
+    it('leaves sync metadata untouched for media-only restores', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        await enqueueRoomNoteSyncEvent(note, 'create');
+        await DB.importFullData({ collaborationBackupMode: 'media_only', mediaAssets: [] } as any);
+        expect(await listPendingSyncEvents()).toHaveLength(1);
+    });
+
     it('persists inbox events idempotently and orders them by server sequence', async () => {
         const incoming = [
             { eventId: 'remote-2', serverSequence: 2, entityType: 'room_note' as const, entityId: 'n2', operation: 'create' as const, entityVersion: 1, payload: { content: 'second' } },
