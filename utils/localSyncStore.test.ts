@@ -22,6 +22,7 @@ import {
     recoverStaleInFlightSyncEvents,
     getOrCreateLocalSyncDeviceIdentity,
     updateLocalSyncDeviceLabel,
+    resetLocalSyncTransportStateAfterRestore,
 } from './localSyncStore';
 
 const note = {
@@ -267,6 +268,46 @@ describe('local-first sync outbox', () => {
         });
         expect(after.content).toBe('另一台设备修改的版本');
         expect(await listPendingInboxEvents()).toHaveLength(0);
+    });
+
+    it('clears stale sync transport state on restore but preserves device identity and local consent', async () => {
+        await setSyncPreference('room_note', true, 'text');
+        const identity = await getOrCreateLocalSyncDeviceIdentity();
+        await enqueueRoomNoteSyncEvent(note, 'create');
+        await persistInboxEvents([{
+            eventId: 'remote-before-restore',
+            serverSequence: 1,
+            entityType: 'room_note',
+            entityId: 'remote-note',
+            operation: 'create',
+            entityVersion: 1,
+            payload: { id: 'remote-note', charId: 'char-1', timestamp: 1, content: '旧远端内容', type: 'thought' },
+        }]);
+        await recordSyncConflict({
+            conflictId: 'restore-conflict',
+            entityType: 'room_note',
+            entityId: 'note-1',
+            localVersion: 1,
+            remoteVersion: 2,
+            localSnapshot: { content: '本地旧内容' },
+            remoteSnapshot: { content: '远端旧内容' },
+        });
+        await updateSyncCursorState('account-restore', identity.deviceId, {
+            lastPulledSequence: 88,
+            lastAckedSequence: 77,
+        });
+
+        await resetLocalSyncTransportStateAfterRestore();
+
+        expect(await listPendingSyncEvents()).toHaveLength(0);
+        expect(await listPendingInboxEvents()).toHaveLength(0);
+        expect(await listUnresolvedSyncConflicts()).toHaveLength(0);
+        expect(await getSyncCursorState('account-restore', identity.deviceId)).toMatchObject({
+            lastPulledSequence: 0,
+            lastAckedSequence: 0,
+        });
+        expect((await getOrCreateLocalSyncDeviceIdentity()).deviceId).toBe(identity.deviceId);
+        expect(await getSyncPreference('room_note')).toMatchObject({ enabled: true, mode: 'text' });
     });
 
     it('creates one stable local device identity even when requested concurrently', async () => {
