@@ -3762,9 +3762,9 @@ export const DB = {
           beautyPreferences: exportBeautyPreferences(),
           desktopSkinLocal: await exportDesktopSkinLocal(), // 桌面皮肤：界面配色 + 看板 banner（看板图令牌解析为 data URL）
           visualProfiles,
-          visualMemories: visualMemories.filter((item: any) => item?.privacyScope !== 'private'),
-          visualProjects: visualProjects.filter((item: any) => item?.privacyScope !== 'private'),
-          visualTaskMirror: visualTaskMirror.filter((item: any) => item?.privacyScope !== 'private'),
+          visualMemories: visualMemories.filter((item: any) => item?.privacyScope === 'standard'),
+          visualProjects: visualProjects.filter((item: any) => item?.privacyScope === 'standard'),
+          visualTaskMirror: visualTaskMirror.filter((item: any) => item?.privacyScope === 'standard'),
           visualAssets: visualAssets.filter((item: any) => item?.privacyScope === 'standard'),
           // private_visual_blobs 故意不进入标准备份，后续由独立私密保险库处理。
       };
@@ -4496,7 +4496,7 @@ export const DB = {
           if (incoming === undefined || !hasStore(storeName)) return;
           const current = await getAllFromStore<any>(storeName);
           const preservedPrivate = current.filter(item => item?.privacyScope === 'private');
-          const incomingStandard = incoming.filter(item => item?.privacyScope !== 'private');
+          const incomingStandard = incoming.filter(item => item?.privacyScope === 'standard');
           await withStore(storeName, store => {
               store.clear();
               preservedPrivate.forEach(item => store.put(item));
