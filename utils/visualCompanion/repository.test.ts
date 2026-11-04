@@ -275,6 +275,7 @@ describe('视觉人格本地仓库', () => {
         await saveReadyAsset('asset_chat_1');
         await markVisualAssetsPersisted(created.id);
 
+        await expect(deliverVisualTaskToChat(created.id, 'blobref:another_tasks_image')).rejects.toThrow('必须属于当前任务已保存的视觉资产');
         const first = await deliverVisualTaskToChat(created.id, 'blobref:asset_chat_1');
         const second = await deliverVisualTaskToChat(created.id, 'blobref:asset_chat_1');
         expect(first.messageId).toBe(second.messageId);
