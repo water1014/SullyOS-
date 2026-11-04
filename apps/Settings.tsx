@@ -521,6 +521,7 @@ const Settings: React.FC = () => {
   const [localVisionUrl, setLocalVisionUrl] = useState(apiConfig.visionApi?.baseUrl || '');
   const [localVisionKey, setLocalVisionKey] = useState(apiConfig.visionApi?.apiKey || '');
   const [localVisionModel, setLocalVisionModel] = useState(apiConfig.visionApi?.model || '');
+  const [localVisionCustomHeaders, setLocalVisionCustomHeaders] = useState<Record<string, string>>(() => normalizeApiHeaders(apiConfig.visionApi?.customHeaders));
   const [availableVisionModels, setAvailableVisionModels] = useState<string[]>(readStoredVisionModels);
   const [selectedVisionPresetId, setSelectedVisionPresetId] = useState<string | null>(null);
   const [visionStatusMsg, setVisionStatusMsg] = useState('');
@@ -1249,9 +1250,10 @@ const Settings: React.FC = () => {
   const handleSaveVisionApi = (enabled = localVisionEnabled) => {
     const nextVisionApi = {
       enabled,
-      baseUrl: normalizeApiBaseUrl(localVisionUrl),
+      baseUrl: normalizeLlmBaseUrl(normalizeApiBaseUrl(localVisionUrl), 'openai'),
       apiKey: normalizeApiCredential(localVisionKey),
       model: normalizeApiModel(localVisionModel),
+      customHeaders: normalizeApiHeaders(localVisionCustomHeaders),
     };
     if (nextVisionApi.enabled && (!nextVisionApi.baseUrl || !nextVisionApi.apiKey || !nextVisionApi.model)) {
       addToast('开启识图 API 前，请填写完整的 URL、Key 和 Model', 'error');
@@ -1288,6 +1290,7 @@ const Settings: React.FC = () => {
     setLocalVisionUrl(next.baseUrl);
     setLocalVisionKey(next.apiKey);
     setLocalVisionModel(next.model);
+    setLocalVisionCustomHeaders(normalizeApiHeaders(next.customHeaders));
     setVisionTestResult(null);
     setVisionStatusMsg(`已载入预设：${preset.name}`);
     setTimeout(() => setVisionStatusMsg(''), 2200);
@@ -1295,16 +1298,20 @@ const Settings: React.FC = () => {
   };
 
   const fetchVisionModels = async () => {
-    const baseUrl = normalizeApiBaseUrl(localVisionUrl);
+    const baseUrl = normalizeLlmBaseUrl(normalizeApiBaseUrl(localVisionUrl), 'openai');
     const apiKey = normalizeApiCredential(localVisionKey);
     if (!baseUrl) { setVisionStatusMsg('请先填写识图 URL'); return; }
     setIsLoadingVisionModels(true);
     setVisionStatusMsg('正在拉取识图模型...');
     setVisionTestResult(null);
     try {
-      const response = await fetch(`${baseUrl}/models`, {
+      const isOpenCodeGo = isOpenCodeGoEndpoint(baseUrl);
+      const modelsUrl = isOpenCodeGo
+        ? (baseUrl.includes('/zen/go') ? 'https://opencode.ai/zen/go/v1/models' : 'https://opencode.ai/inference/go/v1/models')
+        : `${baseUrl}/models`;
+      const response = await (isOpenCodeGo ? fetchOpenCodeGo : fetchLlm)(modelsUrl, {
         method: 'GET',
-        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        headers: buildApiRequestHeaders(apiKey, localVisionCustomHeaders, { baseUrl, sessionId: 'sullyos-vision-model-list' }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const models = extractModelIds(await safeResponseJson(response));
@@ -1332,9 +1339,10 @@ const Settings: React.FC = () => {
   const handleTestVisionApi = async () => {
     const config = {
       enabled: true,
-      baseUrl: normalizeApiBaseUrl(localVisionUrl),
+      baseUrl: normalizeLlmBaseUrl(normalizeApiBaseUrl(localVisionUrl), 'openai'),
       apiKey: normalizeApiCredential(localVisionKey),
       model: normalizeApiModel(localVisionModel),
+      customHeaders: localVisionCustomHeaders,
     };
     if (!config.baseUrl || !config.apiKey || !config.model) {
       setVisionTestResult('❌ 请先填写完整的 URL、Key 和 Model');
