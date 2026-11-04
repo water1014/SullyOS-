@@ -6,7 +6,7 @@ import {
 } from '@phosphor-icons/react';
 import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
-import { getBlobForRef } from '../utils/blobRef';
+import { deleteBlobRef, getBlobForRef, putImageBlob } from '../utils/blobRef';
 import { visualCompanionRepository } from '../utils/visualCompanion/repository';
 import { mergeCharacterVisualContextPrompt } from '../utils/visualCompanion/identityPrompt';
 import type { CharacterVisualProfile, VisualTask } from '../utils/visualCompanion/types';
@@ -144,6 +144,7 @@ const ImageStudioApp: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [appearanceProfile, setAppearanceProfile] = useState<CharacterVisualProfile | null>(null);
   const [appearanceLoading, setAppearanceLoading] = useState(false);
+  const [savingBaseReference, setSavingBaseReference] = useState(false);
   const [referenceImage, setReferenceImage] = useState<File | null>(null);
   const [referencePreview, setReferencePreview] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('low quality, worst quality, blurry, bad anatomy');
@@ -763,6 +764,54 @@ const ImageStudioApp: React.FC = () => {
     }
   };
 
+  const setSelectedAsBaseReference = async (item: DisplayImage) => {
+    if (!activeCharacterId || savingBaseReference) return;
+    setSavingBaseReference(true);
+    let blobRef: string | null = null;
+    let assetId: string | null = null;
+    try {
+      const blob = await DB.getBlobAsset(item.blobId);
+      if (!blob || !blob.type.startsWith('image/')) throw new Error('这张作品的图片文件不可用，无法设为固定参考图');
+      blobRef = await putImageBlob(blob);
+      assetId = 'visual_asset_gallery_' + encodeURIComponent(activeCharacterId) + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      await visualCompanionRepository.saveAsset({
+        id: assetId,
+        charId: activeCharacterId,
+        status: 'ready',
+        privacyScope: 'standard',
+        storage: { kind: 'blobref', ref: blobRef },
+        mimeType: blob.type || item.mimeType || 'image/png',
+        byteSize: blob.size,
+        createdAt: Date.now(),
+      });
+
+      const profileId = 'visual_profile_' + encodeURIComponent(activeCharacterId);
+      const current = await visualCompanionRepository.getProfile(profileId);
+      const now = Date.now();
+      const next: CharacterVisualProfile = {
+        id: profileId,
+        charId: activeCharacterId,
+        version: current ? current.version + 1 : 1,
+        status: current?.status || 'draft',
+        identity: current?.identity || [],
+        anchorPrompt: current?.anchorPrompt || '',
+        baseAssetId: assetId,
+        ...(current?.confirmedAt ? { confirmedAt: current.confirmedAt } : {}),
+        createdAt: current?.createdAt || now,
+        updatedAt: now,
+      };
+      await visualCompanionRepository.saveProfile(next);
+      setAppearanceProfile(next);
+      addToast('已设为当前角色的固定参考图，GPT 生图会优先使用它', 'success');
+    } catch (cause) {
+      if (assetId) await visualCompanionRepository.deleteAsset(assetId).catch(() => undefined);
+      if (blobRef) await deleteBlobRef(blobRef).catch(() => undefined);
+      addToast(cause instanceof Error ? cause.message : '设置固定参考图失败', 'error');
+    } finally {
+      setSavingBaseReference(false);
+    }
+  };
+
   const deleteImage = async (item: DisplayImage) => {
     if (!window.confirm('确定删除这张作品吗？')) return;
     const originalBlob = await DB.getBlobAsset(item.blobId).catch(() => null);
@@ -999,6 +1048,7 @@ const ImageStudioApp: React.FC = () => {
                 <textarea className="field min-h-[70px] resize-y" value={selected.note || ''} onChange={event => updateImageMetadata(selected.id, { note: event.target.value })} placeholder="记录创作想法、修改方向或灵感来源……"/>
                 <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">正向提示词</label><button onClick={() => copyPrompt(selected.prompt)} className="text-[10px] text-sky-700">复制</button></div>
                 <p className="text-xs leading-5 text-slate-600 whitespace-pre-wrap break-words rounded-xl bg-white/55 p-3">{selected.prompt}</p>
+                {activeCharacterId && <p className="text-[10px] leading-4 text-sky-700 bg-sky-50/70 rounded-xl px-3 py-2">可将这张作品设为当前角色的固定参考图。该图片仅在 GPT / OpenAI 兼容图像编辑流程中作为图像参考，NAI 仍使用文字形象描述。</p>}
                 {selected.negativePrompt && <>
                   <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">反向提示词</label><button onClick={() => copyPrompt(selected.negativePrompt)} className="text-[10px] text-sky-700">复制</button></div>
                   <p className="text-xs leading-5 text-slate-500 whitespace-pre-wrap break-words rounded-xl bg-white/45 p-3">{selected.negativePrompt}</p>
@@ -1007,6 +1057,7 @@ const ImageStudioApp: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 pt-1">
                   <button onClick={() => restoreImagePrompt(selected)} className="primary rounded-xl py-2.5 text-xs font-semibold">载入提示词继续创作</button>
                   <button onClick={() => updateImageMetadata(selected.id, { favorite: !selected.favorite })} className="soft rounded-xl py-2.5 text-xs">{selected.favorite ? '★ 已收藏' : '☆ 收藏作品'}</button>
+                  {activeCharacterId && <button disabled={savingBaseReference} onClick={() => void setSelectedAsBaseReference(selected)} className="soft col-span-2 rounded-xl py-2.5 text-xs font-semibold disabled:opacity-50">{savingBaseReference ? '正在保存固定参考图…' : '✧ 设为当前角色的固定参考图'}</button>}
                   <button onClick={() => downloadImage(selected)} className="soft rounded-xl py-2.5 text-xs flex items-center justify-center gap-1"><DownloadSimple size={14}/>下载图片</button>
                   <button onClick={() => deleteImage(selected)} className="soft rounded-xl py-2.5 text-rose-500 flex items-center justify-center gap-1"><Trash size={14}/>删除作品</button>
                 </div>
