@@ -32,8 +32,8 @@ export const normalizeApiHeaders = (value: unknown): Record<string, string> => {
   return result;
 };
 
-export const isOpenCodeGoEndpoint = (baseUrl: string): boolean =>
-  /opencode\.ai\/inference\/go\/(?:openai|anthropic)\/v1(?:\/messages)?$/i.test(baseUrl.trim());
+export const isOpenCodeInferenceEndpoint = (baseUrl: string): boolean =>
+  /opencode\.ai\/inference\//i.test(baseUrl.trim());
 
 export const buildApiRequestHeaders = (
   apiKey: string,
