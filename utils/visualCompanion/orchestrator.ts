@@ -21,15 +21,16 @@ function retryStageFor(status: VisualTaskStatus): 'generating' | 'persisting' | 
 
 /** 创建任务。显式传入的 deliveryId 可用于调用方重试创建时保持幂等。 */
 export async function createVisualTask(
-    input: Omit<VisualTask, 'id' | 'status' | 'deliveryId' | 'attempt' | 'createdAt' | 'updatedAt' | 'resultAssetIds'> & {
-        id?: string;
+    input: Omit<VisualTask, 'id' | 'status' | 'deliveryId' | 'attempt' | 'createdAt' | 'updatedAt' | 'resultAssetIds' | 'retryStage'> & {
         deliveryId?: string;
         status?: never;
     }
 ): Promise<VisualTask> {
     const deliveryId = input.deliveryId || createId('visual_delivery');
     const now = Date.now();
-    const taskId = input.id || 'visual_task_' + encodeURIComponent(deliveryId);
+    if (!input.charId.trim()) throw new Error('charId 不能为空');
+    if (!Number.isInteger(input.maxAttempts) || input.maxAttempts < 1) throw new Error('maxAttempts 必须是正整数');
+    const taskId = 'visual_task_' + encodeURIComponent(deliveryId);
     const task: VisualTask = {
         ...input,
         id: taskId,
