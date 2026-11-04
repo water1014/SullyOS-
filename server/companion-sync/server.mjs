@@ -199,7 +199,7 @@ async function pushEvents(device, events) {
   try {
     await client.query('BEGIN');
     const policy = await client.query(
-      "SELECT enabled, mode FROM companion_sync_policies WHERE account_id = $1 AND entity_type = 'room_note'",
+      "SELECT enabled, mode FROM companion_sync_policies WHERE account_id = $1 AND entity_type = 'room_note' FOR SHARE",
       [device.account_id],
     );
     if (!policy.rows[0]?.enabled || policy.rows[0]?.mode !== 'text') {
@@ -214,6 +214,10 @@ async function pushEvents(device, events) {
         outcomes.push({ eventId: typeof raw?.eventId === 'string' ? raw.eventId.slice(0, 160) : null, status: 'rejected', error: error.message });
         continue;
       }
+      await client.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        [`${device.account_id}:event:${event.eventId}`],
+      );
       const existing = await client.query(
         'SELECT server_sequence, entity_version FROM companion_sync_events WHERE account_id = $1 AND event_id = $2',
         [device.account_id, event.eventId],
@@ -274,6 +278,12 @@ async function pushEvents(device, events) {
 async function pullEvents(device, url) {
   const cursor = parsePositiveInteger(url.searchParams.get('cursor'), 0, Number.MAX_SAFE_INTEGER);
   const limit = Math.min(100, Math.max(1, parsePositiveInteger(url.searchParams.get('limit'), 50, 100)));
+  const highest = await pool.query(
+    'SELECT COALESCE(MAX(server_sequence), 0) AS max_sequence FROM companion_sync_events WHERE account_id = $1',
+    [device.account_id],
+  );
+  const maxSequence = Number(highest.rows[0].max_sequence);
+  if (cursor > maxSequence) return { status: 409, body: { error: 'CURSOR_AHEAD_OF_SERVER', maxSequence } };
   const result = await pool.query(
     `SELECT e.event_id, e.server_sequence, e.entity_type, e.entity_id, e.operation,
             e.entity_version, e.payload, e.received_at
