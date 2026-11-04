@@ -21,6 +21,10 @@ const ScreenAwarenessSettingsPanel: React.FC = () => {
         try {
             const status = await getScreenAwarenessStatus();
             setActive(status.active);
+            if (!status.active) {
+                setPreview('');
+                setCapturedAt(0);
+            }
         } catch {
             setActive(false);
         }
