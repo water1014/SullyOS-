@@ -7,6 +7,7 @@
  */
 import { editGptImage, generateGptImage, generateNaiImage, type GptImageConfig, type NaiImageConfig } from '../imageGeneration';
 import { getBlobForRef, putImageBlob } from '../blobRef';
+import { mergeCharacterAppearancePrompt } from './identityPrompt';
 import {
     markVisualAssetsPersisted,
     recordGeneratedVisualAssets,
@@ -61,22 +62,24 @@ async function loadStandardReferenceImage(task: VisualTask): Promise<Blob | null
 
 async function generateForTask(task: VisualTask): Promise<Blob> {
     const config = getProviderConfig(task);
+    const appearanceProfile = await visualCompanionRepository.getProfile('visual_profile_' + encodeURIComponent(task.charId));
+    const effectivePrompt = mergeCharacterAppearancePrompt(task.prompt, appearanceProfile);
     if (task.provider === 'openai' || task.provider === 'openai_compatible') {
         const referenceImage = await loadStandardReferenceImage(task);
         if (referenceImage) {
-            return editGptImage(config as GptImageConfig, referenceImage, task.prompt, {
+            return editGptImage(config as GptImageConfig, referenceImage, effectivePrompt, {
                 size: '1024x1024',
                 quality: 'high',
             });
         }
-        return generateGptImage(config as GptImageConfig, task.prompt, {
+        return generateGptImage(config as GptImageConfig, effectivePrompt, {
             size: '1024x1024',
             quality: 'high',
         });
     }
     const naiConfig = config as NaiImageConfig;
     const negativePrompt = task.negativePrompt || 'low quality, worst quality, blurry, bad anatomy';
-    return generateNaiImage(naiConfig, task.prompt, negativePrompt, {
+    return generateNaiImage(naiConfig, effectivePrompt, negativePrompt, {
         width: 832,
         height: 1216,
         steps: 28,
