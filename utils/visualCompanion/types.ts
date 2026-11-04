@@ -24,7 +24,7 @@ export type VisualTaskKind =
     | 'chat_requested'
     | 'photo_project'
     | 'regenerate_shot'
-    | '补拍';
+    | 'additional_shot';
 
 export type VisualProviderKind =
     | 'openai'
