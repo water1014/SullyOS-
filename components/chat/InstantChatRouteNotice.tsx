@@ -24,7 +24,7 @@ const NOTICES: Record<string, { title: string; hint: string }> = {
     },
     'custom-headers-local-only': {
         title: '这一轮在本地生成',
-        hint: '当前 API 使用了自定义请求头，云端即时对话暂不支持，前台聊天仍可正常使用',
+        hint: '当前 API 使用自定义请求头或 OpenCode Go 会话标识，云端即时对话暂不支持，前台聊天仍可正常使用',
     },
     'worker-unreachable': {
         title: '这一轮在本地生成',
