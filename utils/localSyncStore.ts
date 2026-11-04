@@ -23,6 +23,7 @@ export interface LocalSyncEvent<TPayload = Record<string, unknown>> {
     state: 'pending' | 'in_flight' | 'blocked';
     createdAt: number;
     retryAt: number;
+    inFlightAt?: number;
     attemptCount: number;
     lastErrorCode?: string;
 }
@@ -188,14 +189,46 @@ export async function updateSyncEventState(
         await done;
         throw new Error('Sync event not found');
     }
+    const now = Date.now();
     store.put({
         ...current,
         state,
         attemptCount: state === 'in_flight' ? current.attemptCount + 1 : current.attemptCount,
-        retryAt: state === 'pending' ? Date.now() : current.retryAt,
+        retryAt: state === 'pending' ? now : current.retryAt,
+        inFlightAt: state === 'in_flight' ? now : undefined,
         lastErrorCode: errorCode ? errorCode.slice(0, 80) : undefined,
     });
     await done;
+}
+
+/**
+ * Recover leases left behind if Android killed the app during a sync request.
+ * Missing timestamps are treated as stale for compatibility with older queue rows.
+ */
+export async function recoverStaleInFlightSyncEvents(maxAgeMs = 2 * 60 * 1000): Promise<number> {
+    if (!Number.isSafeInteger(maxAgeMs) || maxAgeMs < 1000 || maxAgeMs > 24 * 60 * 60 * 1000) {
+        throw new Error('INVALID_SYNC_LEASE_AGE');
+    }
+    const cutoff = Date.now() - maxAgeMs;
+    const db = await openDB();
+    const tx = db.transaction(OUTBOX, 'readwrite');
+    const done = transactionDone(tx);
+    const store = tx.objectStore(OUTBOX);
+    const inFlight = await requestResult(store.index('state').getAll('in_flight')) as LocalSyncEvent[];
+    let recovered = 0;
+    for (const event of inFlight) {
+        if (typeof event.inFlightAt === 'number' && event.inFlightAt > cutoff) continue;
+        store.put({
+            ...event,
+            state: 'pending',
+            retryAt: Date.now(),
+            inFlightAt: undefined,
+            lastErrorCode: 'INTERRUPTED_REQUEST',
+        });
+        recovered += 1;
+    }
+    await done;
+    return recovered;
 }
 
 export async function removeSyncEvent(eventId: string): Promise<void> {
