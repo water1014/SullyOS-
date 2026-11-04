@@ -157,6 +157,8 @@ export default function LocalSyncSettingsPanel() {
                                             </div>
                                             {isCurrent ? (
                                                 <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[9px] text-emerald-700">本机</span>
+                                            ) : device.revokedAt ? (
+                                                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[9px] text-slate-500">已撤销</span>
                                             ) : (
                                                 <button type="button" disabled={syncBusy || revokingDeviceId === device.id} onClick={async () => {
                                                     if (!window.confirm(`确定撤销设备“${device.label}”吗？撤销后该设备需要重新配对。`)) return;
