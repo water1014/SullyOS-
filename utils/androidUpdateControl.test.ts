@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   fetchAndroidUpdateManifest: vi.fn().mockResolvedValue({ versionCode: 30504, versionName: '3.5.4', releaseNotes: [] }),
   downloadAndVerifyAndroidUpdate: vi.fn(),
   installVerifiedAndroidUpdate: vi.fn().mockResolvedValue({ status: 'permission_required' }),
+  openInstallPermissionSettings: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('./androidAppUpdate', () => api);
 vi.mock('./analytics', () => ({ trackEvent: vi.fn() }));
@@ -38,12 +39,13 @@ it('remounts mid-download with the same progress and resumes install without dow
     await act(async () => { button().click(); });
     expect(api.downloadAndVerifyAndroidUpdate).toHaveBeenCalledTimes(1);
     await act(async () => { resolve('file:///verified.apk'); });
-    expect(button().textContent).toBe('继续安装');
+    expect(button().textContent).toBe('打开安装权限设置');
+    expect(container.querySelectorAll('button')[1]?.textContent).toBe('我已允许，继续安装');
     act(() => { root.unmount(); });
     root = createRoot(container);
     await act(async () => { root.render(React.createElement(AndroidUpdateControl)); });
     api.installVerifiedAndroidUpdate.mockResolvedValue({ status: 'installer_opened' });
-    await act(async () => { button().click(); });
+    await act(async () => { container.querySelectorAll('button')[1]?.click(); });
     expect(button().textContent).toBe('再次打开安装器');
     expect(button().disabled).toBe(false);
     expect(api.downloadAndVerifyAndroidUpdate).toHaveBeenCalledTimes(1);
