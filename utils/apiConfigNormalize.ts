@@ -37,7 +37,7 @@ export const isOpenCodeInferenceEndpoint = (baseUrl: string): boolean =>
 
 /** Go uses a distinct path and requires a stable x-opencode-session per conversation. */
 export const isOpenCodeGoEndpoint = (baseUrl: string): boolean =>
-  /opencode\.ai\/inference\/go\//i.test(baseUrl.trim());
+  /opencode\.ai\/(?:inference\/go|zen\/go)(?:\/|$)/i.test(baseUrl.trim());
 
 export const buildApiRequestHeaders = (
   apiKey: string,
