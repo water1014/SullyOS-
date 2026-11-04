@@ -175,7 +175,7 @@ const ImageStudioApp: React.FC = () => {
     try {
       const results = await suggestNaiTags(config.nai, tagSearch);
       setTagSuggestions(results.slice(0, 12));
-      if (!results.length) addToast('暂时没有找到相关标签', 'info');
+      if (!results.length) addToast('暂时没有找到相关标签', 'success');
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : '标签建议获取失败';
       setError(message);
