@@ -177,4 +177,17 @@ describe('companion sync device management', () => {
         await expect(revokeCompanionDevice('not-a-device')).rejects.toThrow('INVALID_DEVICE_ID');
         expect(fetchSpy).not.toHaveBeenCalled();
     });
+
+    it('never sends a stored device token to an insecure server URL', async () => {
+        state.connection = {
+            baseUrl: 'http://attacker.example.test',
+            accountId: 'account-1',
+            serverDeviceId: '11111111-1111-4111-8111-111111111111',
+            label: '主手机',
+        };
+        const fetchSpy = vi.fn();
+        vi.stubGlobal('fetch', fetchSpy);
+        await expect(listCompanionDevices()).rejects.toThrow('INVALID_SYNC_BASE_URL');
+        expect(fetchSpy).not.toHaveBeenCalled();
+    });
 });
