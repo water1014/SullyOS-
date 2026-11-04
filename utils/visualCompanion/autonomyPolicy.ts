@@ -7,6 +7,28 @@ export type VisualShareContextKind =
     | 'reunion'
     | 'user_requested';
 
+const IN_FLIGHT_SPONTANEOUS_STATUSES = new Set([
+    'queued',
+    'planning',
+    'awaiting_approval',
+    'generating',
+    'persisting',
+    'delivery_pending',
+    'retry_wait',
+]);
+
+/**
+ * An unfinished spontaneous share reserves the character's single active share slot.
+ * This prevents multiple scheduled messages from queuing images before the first is delivered.
+ */
+export function hasPendingSpontaneousShare(
+    tasks: ReadonlyArray<{ kind: string; status: string }>,
+): boolean {
+    return tasks.some(task =>
+        task.kind === 'spontaneous_share' && IN_FLIGHT_SPONTANEOUS_STATUSES.has(task.status),
+    );
+}
+
 export interface VisualAutonomyContext {
     kind: VisualShareContextKind;
     now: number;
