@@ -1796,13 +1796,14 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
             'html-mode-toggle', 'html-mode-settings', 'thinking-settings', 'favorites', 'collaboration',
             // 独立小功能：点一下就是用了一次，跟「打开某个面板」同一性质。
             // send-emoji / select-category 这些是「挑哪一个」，不进名单。
-            'poke', 'emoji-import', 'add-category', 'mcd-end', 'luckin-end',
+            'poke', 'emoji-import', 'add-category', 'mcd-end', 'luckin-end', 'visual-create',
         ].includes(type)) {
             trackEvent('打开聊天功能面板项', { action: type });
         }
         switch (type) {
             case 'export-chat': void handleExportChat(); break;
             case 'collaboration': setShowPanel('none'); setCollaborationOpen(true); break;
+            case 'visual-create': setShowPanel('none'); openApp(AppID.ImageStudio); break;
             case 'memory-link': setShowPanel('none'); setMemoryRepairOpen(true); break;
             case 'favorites': setShowPanel('none'); setFavoritesOpen(true); break;
             case 'transfer': setModalType('transfer'); break;
