@@ -6,7 +6,7 @@
  * This is deliberately not a background/cloud executor: it runs only while the page is alive.
  */
 import { editGptImage, generateGptImage, generateNaiImage, type GptImageConfig, type NaiImageConfig } from '../imageGeneration';
-import { getBlobForRef, putImageBlob } from '../blobRef';
+import { deleteBlobRef, getBlobForRef, putImageBlob } from '../blobRef';
 import { mergeCharacterVisualContextPrompt } from './identityPrompt';
 import { resolveVisualReferenceAssetId } from './referenceAsset';
 import {
@@ -61,7 +61,7 @@ async function loadStandardReferenceImage(task: VisualTask, profileBaseAssetId?:
     return blob;
 }
 
-async function generateForTask(task: VisualTask): Promise<Blob> {
+async function generateForTask(task: VisualTask, signal: AbortSignal): Promise<Blob> {
     const config = getProviderConfig(task);
     const appearanceProfile = await visualCompanionRepository.getProfile('visual_profile_' + encodeURIComponent(task.charId));
     const visualMemories = await visualCompanionRepository.listMemories(task.charId);
@@ -72,11 +72,13 @@ async function generateForTask(task: VisualTask): Promise<Blob> {
             return editGptImage(config as GptImageConfig, referenceImage, effectivePrompt, {
                 size: '1024x1024',
                 quality: 'high',
+                signal,
             });
         }
         return generateGptImage(config as GptImageConfig, effectivePrompt, {
             size: '1024x1024',
             quality: 'high',
+            signal,
         });
     }
     const naiConfig = config as NaiImageConfig;
@@ -87,14 +89,14 @@ async function generateForTask(task: VisualTask): Promise<Blob> {
         steps: 28,
         scale: 5,
         sampler: 'k_euler_ancestral',
-    });
+    }, signal);
 }
 
 /**
  * Execute or resume a single visual task in the foreground.
  * Repeated calls are harmless: state transitions and chat delivery are idempotent.
  */
-async function runVisualTaskInForeground(taskId: string): Promise<VisualTask | null> {
+async function runVisualTaskInForeground(taskId: string, signal: AbortSignal): Promise<VisualTask | null> {
     let task = await visualCompanionRepository.getTask(taskId);
     if (!task) return null;
 
@@ -117,7 +119,8 @@ async function runVisualTaskInForeground(taskId: string): Promise<VisualTask | n
         }
 
         if (task.status === 'generating') {
-            const image = await generateForTask(task);
+            const image = await generateForTask(task, signal);
+            if (signal.aborted || (await visualCompanionRepository.getTask(task.id))?.status === 'cancelled') return visualCompanionRepository.getTask(task.id);
             const blobRef = await putImageBlob(image);
             const assetId = `visual_asset_${encodeURIComponent(task.id)}`;
             await visualCompanionRepository.saveAsset({
@@ -131,10 +134,22 @@ async function runVisualTaskInForeground(taskId: string): Promise<VisualTask | n
                 taskId: task.id,
                 createdAt: Date.now(),
             });
-            task = await recordGeneratedVisualAssets(task.id, [assetId]);
+            try {
+                if (signal.aborted || (await visualCompanionRepository.getTask(task.id))?.status === 'cancelled') {
+                    await visualCompanionRepository.deleteAsset(assetId);
+                    await deleteBlobRef(blobRef);
+                    return visualCompanionRepository.getTask(task.id);
+                }
+                task = await recordGeneratedVisualAssets(task.id, [assetId]);
+            } catch (error) {
+                await visualCompanionRepository.deleteAsset(assetId).catch(() => undefined);
+                await deleteBlobRef(blobRef).catch(() => undefined);
+                throw error;
+            }
         }
 
         if (task.status === 'persisting') {
+            if (signal.aborted || (await visualCompanionRepository.getTask(task.id))?.status === 'cancelled') return visualCompanionRepository.getTask(task.id);
             const assetId = task.resultAssetIds[0];
             const asset = assetId ? await visualCompanionRepository.getAsset(assetId) : null;
             if (!asset || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
@@ -144,6 +159,7 @@ async function runVisualTaskInForeground(taskId: string): Promise<VisualTask | n
         }
 
         if (task.status === 'delivery_pending') {
+            if (signal.aborted || (await visualCompanionRepository.getTask(task.id))?.status === 'cancelled') return visualCompanionRepository.getTask(task.id);
             const assetId = task.resultAssetIds[0];
             const asset = assetId ? await visualCompanionRepository.getAsset(assetId) : null;
             if (!asset || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
@@ -160,6 +176,7 @@ async function runVisualTaskInForeground(taskId: string): Promise<VisualTask | n
     } catch (error) {
         const latest = await visualCompanionRepository.getTask(task.id);
         const message = error instanceof Error ? error.message : String(error);
+        if (latest && latest.status === 'cancelled') return latest;
         if (latest && ['generating', 'persisting', 'delivery_pending'].includes(latest.status)) {
             const retryStage = latest.status;
             const attempt = latest.attempt + 1;
@@ -203,15 +220,24 @@ async function runVisualTaskInForeground(taskId: string): Promise<VisualTask | n
  * trigger is still running; sharing one promise prevents duplicate provider calls.
  */
 const inFlightVisualTasks = new Map<string, Promise<VisualTask | null>>();
+const visualTaskControllers = new Map<string, AbortController>();
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('visual-task-cancelled', event => {
+        const taskId = (event as CustomEvent<{ taskId?: string }>).detail?.taskId;
+        if (taskId) visualTaskControllers.get(taskId)?.abort();
+    });
+}
 
 export function executeVisualTaskInForeground(taskId: string): Promise<VisualTask | null> {
     const existing = inFlightVisualTasks.get(taskId);
     if (existing) return existing;
 
-    const execution = runVisualTaskInForeground(taskId).finally(() => {
-        if (inFlightVisualTasks.get(taskId) === execution) {
-            inFlightVisualTasks.delete(taskId);
-        }
+    const controller = new AbortController();
+    visualTaskControllers.set(taskId, controller);
+    const execution = runVisualTaskInForeground(taskId, controller.signal).finally(() => {
+        if (inFlightVisualTasks.get(taskId) === execution) inFlightVisualTasks.delete(taskId);
+        if (visualTaskControllers.get(taskId) === controller) visualTaskControllers.delete(taskId);
     });
     inFlightVisualTasks.set(taskId, execution);
     return execution;
