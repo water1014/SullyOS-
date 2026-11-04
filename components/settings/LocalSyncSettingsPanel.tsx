@@ -184,6 +184,7 @@ export default function LocalSyncSettingsPanel() {
                                 setError('');
                                 setSyncStatus('正在上传并接收便签…');
                                 try {
+                                    await setCompanionRemoteSyncPolicy(true);
                                     const result = await syncCompanionOnce();
                                     setSyncStatus(`同步完成：上传 ${result.pushed} 条，接收 ${result.received} 条，应用 ${result.applied} 条，冲突 ${result.conflicts} 条。`);
                                     await refresh();
