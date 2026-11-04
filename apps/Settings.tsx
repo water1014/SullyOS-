@@ -6,6 +6,7 @@ import ApiPresetGroups from '../components/settings/ApiPresetGroups';
 import DialogueApiFields from '../components/settings/DialogueApiFields';
 import { llmApiType, normalizeLlmBaseUrl, type LlmApiType } from '../utils/llmEndpoint';
 import { fetchLlm } from '../utils/anthropicApi';
+import { fetchOpenCodeGo } from '../utils/openCodeGoTransport';
 import ModelPicker from '../components/settings/ModelPicker';
 import { buildModelPickerView } from '../utils/modelPickerView';
 
@@ -1437,8 +1438,8 @@ const Settings: React.FC = () => {
     try {
         const isOpenCodeGo = isOpenCodeGoEndpoint(baseUrl);
         const modelsUrl = isOpenCodeGo ? 'https://opencode.ai/inference/go/v1/models' : `${baseUrl}/models`;
-        const requestOptions = { method: 'GET', headers: buildApiRequestHeaders(apiKey, localCustomHeaders) };
-        const response = isOpenCodeGo ? await fetch(modelsUrl, requestOptions) : await fetchLlm(modelsUrl, requestOptions);
+        const requestOptions = { method: 'GET', headers: buildApiRequestHeaders(apiKey, localCustomHeaders, { baseUrl, sessionId: 'sullyos-model-list' }) };
+        const response = isOpenCodeGo ? await fetchOpenCodeGo(modelsUrl, requestOptions) : await fetchLlm(modelsUrl, requestOptions);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await safeResponseJson(response);
         // Support common OpenAI-compatible and nested gateway response formats.
