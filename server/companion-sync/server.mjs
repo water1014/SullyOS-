@@ -297,44 +297,68 @@ async function pushEvents(device, events) {
 async function pullEvents(device, url) {
   const cursor = parsePositiveInteger(url.searchParams.get('cursor'), 0, Number.MAX_SAFE_INTEGER);
   const limit = Math.min(100, Math.max(1, parsePositiveInteger(url.searchParams.get('limit'), 50, 100)));
-  const highest = await pool.query(
-    'SELECT COALESCE((SELECT last_server_sequence FROM companion_sync_account_state WHERE account_id = $1), 0) AS max_sequence',
-    [device.account_id],
-  );
-  const maxSequence = Number(highest.rows[0].max_sequence);
-  if (cursor > maxSequence) return { status: 409, body: { error: 'CURSOR_AHEAD_OF_SERVER', maxSequence } };
-  const result = await pool.query(
-    `SELECT e.event_id, e.server_sequence, e.entity_type, e.entity_id, e.operation,
-            e.entity_version, e.payload, e.received_at
-       FROM companion_sync_events e
-      WHERE e.account_id = $1 AND e.server_sequence > $2
-        AND EXISTS (
-          SELECT 1 FROM companion_sync_policies p
-           WHERE p.account_id = e.account_id AND p.entity_type = e.entity_type
-             AND p.enabled = TRUE AND p.mode = 'text'
-        )
-      ORDER BY e.server_sequence ASC LIMIT $3`,
-    [device.account_id, cursor, limit],
-  );
-  const events = result.rows.map(row => ({
-    eventId: row.event_id,
-    serverSequence: Number(row.server_sequence),
-    entityType: row.entity_type,
-    entityId: row.entity_id,
-    operation: row.operation,
-    entityVersion: Number(row.entity_version),
-    payload: row.payload,
-  }));
-  const maxDelivered = events.reduce((max, event) => Math.max(max, event.serverSequence), 0);
-  await pool.query(
-    `INSERT INTO companion_device_deliveries (account_id, device_id, max_delivered_sequence)
-     VALUES ($1,$2,$3)
-     ON CONFLICT (account_id, device_id) DO UPDATE SET
-       max_delivered_sequence = GREATEST(companion_device_deliveries.max_delivered_sequence, EXCLUDED.max_delivered_sequence),
-       updated_at = now()`,
-    [device.account_id, device.device_id, maxDelivered],
-  );
-  return { status: 200, body: { events, nextCursor: events.length ? events[events.length - 1].serverSequence : cursor } };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Hold a shared policy-row lock for the complete read + delivery-watermark
+    // update. Disabling sync updates this row in its own transaction, so it
+    // must wait for an already-started pull to finish. Once opt-out returns,
+    // no concurrent pull can still publish a pre-opt-out snapshot.
+    const policy = await client.query(
+      "SELECT enabled, mode FROM companion_sync_policies WHERE account_id = $1 AND entity_type = 'room_note' FOR SHARE",
+      [device.account_id],
+    );
+    const isEnabled = Boolean(policy.rows[0]?.enabled && policy.rows[0]?.mode === 'text');
+    const highest = await client.query(
+      'SELECT COALESCE((SELECT last_server_sequence FROM companion_sync_account_state WHERE account_id = $1), 0) AS max_sequence',
+      [device.account_id],
+    );
+    const maxSequence = Number(highest.rows[0].max_sequence);
+    if (cursor > maxSequence) {
+      await client.query('ROLLBACK');
+      return { status: 409, body: { error: 'CURSOR_AHEAD_OF_SERVER', maxSequence } };
+    }
+    if (!isEnabled) {
+      await client.query('COMMIT');
+      return { status: 200, body: { events: [], nextCursor: cursor } };
+    }
+    const result = await client.query(
+      `SELECT e.event_id, e.server_sequence, e.entity_type, e.entity_id, e.operation,
+              e.entity_version, e.payload, e.received_at
+         FROM companion_sync_events e
+        WHERE e.account_id = $1 AND e.server_sequence > $2
+          AND e.entity_type = 'room_note'
+        ORDER BY e.server_sequence ASC LIMIT $3`,
+      [device.account_id, cursor, limit],
+    );
+    const events = result.rows.map(row => ({
+      eventId: row.event_id,
+      serverSequence: Number(row.server_sequence),
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      operation: row.operation,
+      entityVersion: Number(row.entity_version),
+      payload: row.payload,
+    }));
+    const maxDelivered = events.reduce((max, event) => Math.max(max, event.serverSequence), 0);
+    if (maxDelivered > 0) {
+      await client.query(
+        `INSERT INTO companion_device_deliveries (account_id, device_id, max_delivered_sequence)
+         VALUES ($1,$2,$3)
+         ON CONFLICT (account_id, device_id) DO UPDATE SET
+           max_delivered_sequence = GREATEST(companion_device_deliveries.max_delivered_sequence, EXCLUDED.max_delivered_sequence),
+           updated_at = now()`,
+        [device.account_id, device.device_id, maxDelivered],
+      );
+    }
+    await client.query('COMMIT');
+    return { status: 200, body: { events, nextCursor: events.length ? events[events.length - 1].serverSequence : cursor } };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function ackEvents(device, body) {
