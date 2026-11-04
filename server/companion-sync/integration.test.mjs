@@ -13,6 +13,7 @@ const baseUrl = `http://127.0.0.1:${port}`;
 const bootstrapToken = 'test-bootstrap-token-'.padEnd(48, 'x');
 const pepper = 'test-token-pepper-'.padEnd(48, 'y');
 const origin = 'https://sullyos.example.test';
+const nativeOrigin = 'https://localhost';
 const pool = new Pool({ connectionString: databaseUrl, ssl: false });
 
 let child;
@@ -75,7 +76,7 @@ async function main() {
       PGSSLMODE: 'disable',
       COMPANION_BOOTSTRAP_TOKEN: bootstrapToken,
       COMPANION_TOKEN_PEPPER: pepper,
-      COMPANION_CORS_ORIGINS: origin,
+      COMPANION_CORS_ORIGINS: `${origin},${nativeOrigin}`,
       PORT: String(port),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -277,6 +278,10 @@ async function main() {
 
   const forbiddenOrigin = await fetch(baseUrl + '/v1/health', { headers: { origin: 'https://not-allowed.example.test' } });
   assert.equal(forbiddenOrigin.status, 403);
+
+  const nativeOriginHealth = await fetch(baseUrl + '/v1/health', { headers: { origin: nativeOrigin } });
+  assert.equal(nativeOriginHealth.status, 200);
+  assert.equal(nativeOriginHealth.headers.get('access-control-allow-origin'), nativeOrigin);
 
   process.stdout.write('Companion sync PostgreSQL integration test passed.\n');
 }
