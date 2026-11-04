@@ -33,7 +33,7 @@ export const visionApiConfigFromPreset = (preset: ApiPreset, enabled = true): Vi
   baseUrl: normalizeLlmBaseUrl(normalizeApiBaseUrl(preset.config.baseUrl), 'openai'),
   apiKey: normalizeApiCredential(preset.config.apiKey),
   model: normalizeApiModel(preset.config.model),
-  customHeaders: normalizeApiHeaders(preset.config.customHeaders),
+  ...(Object.keys(normalizeApiHeaders(preset.config.customHeaders)).length ? { customHeaders: normalizeApiHeaders(preset.config.customHeaders) } : {}),
   ...(preset.config.customHeaders ? { customHeaders: normalizeApiHeaders(preset.config.customHeaders) } : {}),
 });
 
