@@ -116,6 +116,8 @@ export interface VisualTask {
     errorCode?: string;
     errorMessage?: string;
     nextAttemptAt?: number;
+    /** retry_wait 恢复时回到的阶段，确保投递失败不会重新生成图片。 */
+    retryStage?: 'generating' | 'persisting' | 'delivery_pending';
     createdAt: number;
     updatedAt: number;
     completedAt?: number;
