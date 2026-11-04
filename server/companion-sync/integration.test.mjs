@@ -242,10 +242,10 @@ async function main() {
   const remaining = await pool.query('SELECT count(*)::int AS count FROM companion_sync_events WHERE account_id = $1', [account.rows[0].account_id]);
   assert.equal(remaining.rows[0].count, 0);
 
-  const watermarkPull = await request(`/v1/sync/pull?cursor=${sequenceTwo}&limit=50`, { token: deviceOne });
+  const watermarkPull = await request(`/v1/sync/pull?cursor=${sequenceThree}&limit=50`, { token: deviceOne });
   assertStatus(watermarkPull, 200, 'account watermark survives opt-out');
   assert.equal(watermarkPull.body.events.length, 0);
-  const cursorAhead = await request(`/v1/sync/pull?cursor=${sequenceTwo + 1}&limit=50`, { token: deviceOne });
+  const cursorAhead = await request(`/v1/sync/pull?cursor=${sequenceThree + 1}&limit=50`, { token: deviceOne });
   assertStatus(cursorAhead, 409, 'reject cursor beyond account watermark');
 
   const selfRevoke = await request(`/v1/devices/${firstPair.body.deviceId}`, { method: 'DELETE', token: deviceOne });
