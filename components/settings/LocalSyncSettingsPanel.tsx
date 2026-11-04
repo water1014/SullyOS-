@@ -29,6 +29,7 @@ export default function LocalSyncSettingsPanel() {
     const [serverUrl, setServerUrl] = useState('');
     const [pairingCode, setPairingCode] = useState('');
     const [syncBusy, setSyncBusy] = useState(false);
+    const [policyBusy, setPolicyBusy] = useState(false);
     const [syncStatus, setSyncStatus] = useState('');
     const [savingDeviceLabel, setSavingDeviceLabel] = useState(false);
     const [queue, setQueue] = useState<SyncQueueSummary>({ pending: 0, inFlight: 0, blocked: 0 });
@@ -177,6 +178,22 @@ export default function LocalSyncSettingsPanel() {
                                     );
                                 })}
                             </div>
+                        )}
+                        {tokenAvailable && (
+                            <button type="button" disabled={policyBusy || syncBusy} onClick={async () => {
+                                setPolicyBusy(true);
+                                setError('');
+                                try {
+                                    await setCompanionRemoteSyncPolicy(enabled);
+                                    setSyncStatus(enabled
+                                        ? '云端已确认允许同步便签文字，尚未开始传输。'
+                                        : '云端已确认关闭便签同步并清理该类副本。');
+                                } catch (policyError) {
+                                    setError(policyError instanceof Error ? `同步授权状态失败：${policyError.message}` : '同步授权状态更新失败，请检查网络。');
+                                } finally { setPolicyBusy(false); }
+                            }} className="w-full rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[10px] font-semibold text-sky-700 disabled:opacity-40">
+                                {policyBusy ? '正在更新云端授权…' : enabled ? '重试云端同步授权' : '重试云端关闭与清理'}
+                            </button>
                         )}
                         <div className="flex gap-2">
                             <button type="button" disabled={!enabled || syncBusy || !tokenAvailable} onClick={async () => {
