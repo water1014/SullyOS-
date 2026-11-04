@@ -25,11 +25,11 @@ const checks = [
   ['wrapper integration checks package identity and provider authority', integration.includes('package\\s+com\\.aetheros\\.simulator') && integration.includes('android:authorities="${applicationId}.fileprovider"')],
   ['web update flow requires native verification and exact manifest size', update.includes('!verified.valid') && update.includes('Number(fileInfo.size) === manifest.sizeBytes') && update.includes('verified.versionCode <= installed.versionCode')],
   ['APK compilation is opt-in and skipped by default', syncScript.includes('[switch]$BuildDebugApk') && syncScript.includes('if (-not $BuildDebugApk)') && syncScript.includes('pass -BuildDebugApk') && !syncScript.includes('[switch]$SkipAndroidBuild')],
-  ['fork update channel stays disabled until its own signed release exists', updateManifest.status === 'disabled' && updateManifest.versionCode === 0 && updateManifest.apkUrl === '' && updateManifest.sha256 === '' && capacitorEnv.split(/\\r?\\n/).some((line) => /^VITE_APK_UPDATE_MANIFEST_URL=\\s*$/.test(line))],
+  ['fork update channel stays disabled until its own signed release exists', updateManifest.status === 'disabled' && updateManifest.versionCode === 0 && updateManifest.apkUrl === '' && updateManifest.sha256 === '' && capacitorEnv.split(String.fromCharCode(10)).some((line) => line.trim() === 'VITE_APK_UPDATE_MANIFEST_URL=')],
 ];
 
 for (const [label, passed] of checks) {
   assert.equal(passed, true, 'Android APK installer contract failed: ' + label);
-  process.stdout.write('✓ ' + label + '\\n');
+  process.stdout.write('✓ ' + label + String.fromCharCode(10));
 }
-process.stdout.write('\\n' + checks.length + ' Android APK installer contract checks passed.\\n');
+process.stdout.write(String.fromCharCode(10) + checks.length + ' Android APK installer contract checks passed.' + String.fromCharCode(10));
