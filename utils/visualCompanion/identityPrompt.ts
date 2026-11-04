@@ -12,7 +12,7 @@ export function buildCharacterAppearancePrompt(profile: CharacterVisualProfile |
     // Older profiles may repeat the same detail in both anchorPrompt and identity[].
     const seen = new Set<string>();
     const descriptionParts = [profile.anchorPrompt?.trim(), ...legacyAttributes]
-        .map(value => value?.replace(/\\s+/g, ' ').trim() || '')
+        .map(value => value?.replace(/\s+/g, ' ').trim() || '')
         .filter(value => {
             if (!value) return false;
             const key = value.toLocaleLowerCase();
@@ -58,7 +58,7 @@ export function buildCharacterVisualChangePrompt(
                 || a.id.localeCompare(b.id),
             )
             .filter(item => {
-                const key = item.content.replace(/\\s+/g, ' ').trim().toLocaleLowerCase();
+                const key = item.content.replace(/\s+/g, ' ').trim().toLocaleLowerCase();
                 if (seen.has(key)) return false;
                 seen.add(key);
                 return true;
