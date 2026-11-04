@@ -96,6 +96,11 @@ export async function pairCompanionDevice(input: {
     };
 }
 
+export async function hasCompanionDeviceToken(): Promise<boolean> {
+    try { return Boolean(await secureStorageGet(TOKEN_KEY)); }
+    catch { return false; }
+}
+
 export async function disconnectCompanionDevice(revokeOnServer = true): Promise<void> {
     const [connection, token] = await Promise.all([
         getCompanionSyncConnection(),
