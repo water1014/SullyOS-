@@ -162,6 +162,7 @@ describe('视觉人格本地仓库', () => {
             referenceAssetIds: [],
             maxAttempts: 3,
             budget: { maxImages: 1 },
+            deliveryId: 'amsg-event-char-policy-001',
         };
         const denied = await createAutonomousVisualTask(settings, {
             kind: 'ordinary_conversation',
@@ -182,6 +183,11 @@ describe('视觉人格本地仓库', () => {
         }, input);
         expect(allowed.decision).toEqual({ allowed: true, reason: 'special_moment' });
         expect(allowed.task?.status).toBe('queued');
+        expect(await visualCompanionRepository.listTasks('char_policy')).toHaveLength(1);
+        const duplicate = await createAutonomousVisualTask(settings, {
+            kind: 'milestone', now, localTime: '12:00', imagesGeneratedToday: 0, sample: 0.5,
+        }, input);
+        expect(duplicate.task?.id).toBe(allowed.task?.id);
         expect(await visualCompanionRepository.listTasks('char_policy')).toHaveLength(1);
     });
 
