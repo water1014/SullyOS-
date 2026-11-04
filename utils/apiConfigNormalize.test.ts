@@ -5,6 +5,7 @@ import {
   normalizeApiCredential,
   normalizeApiHeaders,
   buildApiRequestHeaders,
+  isOpenCodeInferenceEndpoint,
 } from './apiConfigNormalize';
 
 describe('API config normalization', () => {
@@ -14,6 +15,12 @@ describe('API config normalization', () => {
 
   it('normalizes the base URL without touching its path', () => {
     expect(normalizeApiBaseUrl('  https://api.example.com/v1///\u200B ')).toBe('https://api.example.com/v1');
+  });
+
+  it('recognizes OpenCode inference endpoints for both supported API families', () => {
+    expect(isOpenCodeInferenceEndpoint('https://opencode.ai/inference/openai/v1')).toBe(true);
+    expect(isOpenCodeInferenceEndpoint('https://opencode.ai/inference/anthropic/v1/messages')).toBe(true);
+    expect(isOpenCodeInferenceEndpoint('https://api.example.com/v1')).toBe(false);
   });
 
   it('keeps valid custom headers and drops invalid or browser-forbidden headers', () => {
