@@ -15,7 +15,7 @@ export function buildCharacterAppearancePrompt(profile: CharacterVisualProfile |
         '[Fixed character appearance]',
         'Preserve this character’s recognizable facial identity, hair, eyes, proportions and defining visual traits. Treat this as the same person in every image. Do not let the scene prompt alter these fixed traits.',
         description,
-    ].join('\\n');
+    ].join('\n');
 }
 
 export function mergeCharacterAppearancePrompt(scenePrompt: string, profile: CharacterVisualProfile | null | undefined): string {
