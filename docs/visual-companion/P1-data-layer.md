@@ -53,9 +53,9 @@
 - 重试检查点保存 `retryStage`。聊天投递失败恢复到 `delivery_pending`，不得回退到 `generating`；任务创建使用稳定 deliveryId 派生任务 ID，并通过 IndexedDB `add` 原子防重。
 - `utils/visualCompanion/delivery.ts` 已加入标准图片聊天投递适配器：将 data URL 迁移为 `blobref:` 后，通过 `DB.saveMessageOnce(deliveryId, message)` 写入 assistant/image 消息，并回写 `deliveredMessageId`；重复调用只返回同一条消息。私密资产明确拒绝进入普通聊天 Blob 管线。
 - `utils/visualCompanion/autonomyPolicy.ts` 加入自主分享决策闸：全局开关、暂停状态、主动分享开关、安静时段（含跨午夜）、每日张数/额度、分享冷却与频率抽样；纪念日/情绪高点/重逢等特殊情境使用更高分享概率，但不能绕过预算和安静时段。显式用户请求可绕过主动分享专属开关与冷却，但仍受总开关和预算限制。
-- `utils/visualCompanion/autonomySettings.ts` 按角色 ID 持久化自主分享偏好，首次默认关闭主动生图和私密创作、要求新视觉身份确认；设置不包含 Provider 密钥或自定义请求头。保存时对频率、张数上限和安静时段做基础归一化。
+- `utils/visualCompanion/autonomySettings.ts` 按角色 ID 持久化自主分享偏好，首次默认关闭主动生图和私密创作、要求新视觉身份确认；设置不包含 Provider 密钥或自定义请求头。保存时对频率、Provider 偏好、张数上限和安静时段做基础归一化。
 - `createAutonomousVisualTask()` 先经过决策闸，再允许 `spontaneous_share` 任务入队；测试覆盖未获准不创建任务、特殊情境通过后入队。
-- 当前编排器仍只管理本地元数据，不调用 Provider、不自动执行后台任务，也未接入 Worker。生成执行器需在资产保存完成后调用投递适配器；跨设备/浏览器关闭后的可靠执行仍需独立 Worker + Queue。
+- `utils/visualCompanion/activeMessageTrigger.ts` 已接入主动消息收件后处理：仅对已完整送达的 scheduled 消息评估自主分享策略，使用稳定消息 ID 作为 deliveryId，默认普通情境；只有显式可信 metadata 才能标记特殊情境。需要角色存在 active 视觉档案和本机已配置的生图 Provider。\n- `utils/visualCompanion/foregroundExecutor.ts` 已复用现有 GPT / NAI 生图函数，在页面存活时执行任务、写入标准 BlobRef 资产并投递回角色聊天；投递沿用 `DB.saveMessageOnce` 幂等机制。Provider 凭据和自定义请求头只从本机生图室配置读取，不进入任务记录。失败按生成/持久化/投递检查点重试。\n- 当前执行器仍是前台执行：浏览器关闭或页面被系统挂起时不会继续跑；本地 retry timer 也不是持久队列。跨设备/浏览器关闭后的可靠执行仍需独立 Worker + Queue 和安全凭据托管。
 
 测试覆盖 v74→v75 升级保留旧聊天/画廊/Blob、标准备份隔离、任务状态转换和资产隐私边界。CI 对应测试文件为 `utils/visualCompanion/data.test.ts`、`utils/visualCompanion/repository.test.ts` 和 `utils/blobGc.test.ts`。
 
