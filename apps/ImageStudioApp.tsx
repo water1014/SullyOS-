@@ -139,8 +139,6 @@ const ImageStudioApp: React.FC = () => {
   const [naiScale, setNaiScale] = useState(() => readNaiSettings().scale);
   const [naiSampler, setNaiSampler] = useState(() => readNaiSettings().sampler);
   const [naiSeed, setNaiSeed] = useState(() => readNaiSettings().seed);
-  const [naiStrength, setNaiStrength] = useState(0.35);
-  const [naiNoise, setNaiNoise] = useState(0.05);
   const [generating, setGenerating] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
   const [error, setError] = useState('');
@@ -357,9 +355,7 @@ const ImageStudioApp: React.FC = () => {
         ? referenceImage
           ? await editGptImage(config.gpt, referenceImage, prompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
           : await generateGptImage(config.gpt, prompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
-        : referenceImage
-          ? await editNaiImage(config.nai, referenceImage, prompt, negativePrompt, { ...naiOptions, strength: naiStrength, noise: naiNoise }, controller.signal)
-          : await generateNaiImage(config.nai, prompt, negativePrompt, naiOptions, controller.signal);
+        : await generateNaiImage(config.nai, prompt, negativePrompt, naiOptions, controller.signal);
       await saveImage(blob);
       addToast('图片已生成并保存到我的画廊', 'success');
     } catch (cause) {
@@ -714,11 +710,6 @@ const ImageStudioApp: React.FC = () => {
               </div>
             )}
             {engine === 'nai' && <>
-              <div className="rounded-2xl border border-dashed border-sky-200 bg-sky-50/55 p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2"><div><div className="text-xs font-semibold text-slate-700">NAI 参考图 / 图生图 <span className="font-normal text-slate-400">· 可选</span></div><p className="text-[10px] text-slate-400 mt-1">上传图片，让 NAI 在参考原图的基础上重新绘制</p></div>{referenceImage && <button type="button" onClick={() => setReferenceImage(null)} className="text-[10px] text-rose-500 font-semibold">移除图片</button>}</div>
-                {referencePreview ? <div className="flex items-center gap-3"><img src={referencePreview} alt="NAI 图生图参考图预览" className="w-20 h-20 rounded-xl object-cover border border-white shadow-sm"/><div className="min-w-0"><div className="text-xs text-slate-600 truncate">{referenceImage?.name}</div><div className="text-[10px] text-slate-400 mt-1">{((referenceImage?.size || 0) / 1024 / 1024).toFixed(1)} MB · PNG/JPEG/WebP</div></div></div> : <label className="flex items-center justify-center gap-2 rounded-xl bg-white/75 border border-white py-3 text-xs font-semibold text-sky-700 cursor-pointer"><ImageSquare size={16}/>选择图生图参考图片<input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={event => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 20 * 1024 * 1024) { setError('NAI 参考图片不能超过 20 MB'); event.target.value = ''; return; } setError(''); setReferenceImage(file); event.target.value = ''; }}/></label>}
-                {referenceImage && <p className="text-[10px] text-sky-700">已启用图生图，下方强度与噪声参数会生效。</p>}
-              </div>
               <div className="rounded-2xl border border-sky-100 bg-white/55 p-3 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <div><div className="text-xs font-semibold text-slate-700">标签灵感库</div><p className="text-[10px] text-slate-400 mt-1">点选标签加入提示词，重复标签会自动跳过</p></div>
@@ -797,7 +788,7 @@ const ImageStudioApp: React.FC = () => {
 
           {error && <div className="rounded-2xl border border-rose-200 bg-rose-50/90 p-3 text-xs text-rose-700 leading-5">{error}</div>}
           <button onClick={handleGenerate} disabled={generating || !configured || !prompt.trim()} className="primary w-full rounded-2xl py-4 flex items-center justify-center gap-2 text-sm font-bold">
-            {generating ? <><ArrowsClockwise size={18} className="animate-spin"/>{referenceImage ? (engine === 'nai' ? 'NAI 正在重绘参考图…' : '正在编辑参考图…') : '正在绘制，请稍候…'}</> : <><Sparkle size={18}/>{referenceImage ? (engine === 'nai' ? '开始 NAI 图生图' : '开始编辑图片') : '开始生成'}</>}
+            {generating ? <><ArrowsClockwise size={18} className="animate-spin"/>{referenceImage && engine === 'gpt' ? '正在编辑参考图…' : '正在绘制，请稍候…'}</> : <><Sparkle size={18}/>{referenceImage && engine === 'gpt' ? '开始编辑图片' : '开始生成'}</>}
           </button>
           {generating && <button onClick={() => generationAbortRef.current?.abort()} className="soft w-full rounded-xl py-2.5 text-xs font-semibold text-rose-600">取消本次生成</button>}
           <p className="text-center text-[10px] text-slate-400">生成费用由对应平台收取 · 作品只保存在本机设备</p>
