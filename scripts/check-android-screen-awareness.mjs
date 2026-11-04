@@ -26,6 +26,7 @@ const checks = [
   ['only one latest JPEG frame is retained in app cache', service.includes('new File(directory, "latest.jpg")') && service.includes('new File(directory, "latest.tmp")') && service.includes('FRAME_INTERVAL_MS')],
   ['screen frames are not sent to network services by native capture code', !/https?\.|HttpURLConnection|OkHttp|WebSocket|upload/i.test(service)],
   ['stop operation releases projection, virtual display, reader and cached frame', service.includes('virtualDisplay.release()') && service.includes('imageReader.close()') && service.includes('current.stop()') && service.includes('frame.delete()')],
+  ['process restart and manual cleanup remove both latest frame and interrupted temporary file', service.includes('clearTemporaryFrames(this)') && service.includes('new File(directory, "latest.tmp")') && service.includes('new File(directory, "latest.jpg")') && service.includes('onCreate()')],
   ['UI explains local-only behavior and provides visible stop action', ui.includes('不会自动上传或发送') && ui.includes('停止感知') && ui.includes('授权并开启')],
   ['web preview cannot access native screen capture', bridge.includes("Capacitor.getPlatform() === 'android'") && bridge.includes('assertAvailable()')],
   ['no screenshot is automatically attached to chat or cloud sync', !/sendMessage|upload|fetch\(/i.test(bridge) && !/sendMessage|upload|fetch\(/i.test(ui)],
