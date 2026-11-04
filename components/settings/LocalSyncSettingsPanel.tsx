@@ -13,7 +13,7 @@ import {
     type LocalSyncConflict,
     type SyncQueueSummary,
 } from '../../utils/localSyncStore';
-import { pairCompanionDevice, syncCompanionOnce, disconnectCompanionDevice, setCompanionRemoteSyncPolicy, hasCompanionDeviceToken } from '../../utils/companionSyncClient';
+import { pairCompanionDevice, syncCompanionOnce, disconnectCompanionDevice, setCompanionRemoteSyncPolicy, hasCompanionDeviceToken, listCompanionDevices, revokeCompanionDevice, type CompanionRemoteDevice } from '../../utils/companionSyncClient';
 import { isPersistentSecureStorageAvailable } from '../../utils/androidSecureStorage';
 
 const SYNC_LABELS = [{ entityType: 'room_note' as const, label: '房间便签', detail: '只允许同步便签文字，不包含关联聊天或附件。' }];
@@ -24,6 +24,8 @@ export default function LocalSyncSettingsPanel() {
     const [deviceLabel, setDeviceLabel] = useState('这台手机');
     const [connection, setConnection] = useState<CompanionSyncConnection | null>(null);
     const [tokenAvailable, setTokenAvailable] = useState(false);
+    const [remoteDevices, setRemoteDevices] = useState<CompanionRemoteDevice[]>([]);
+    const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
     const [serverUrl, setServerUrl] = useState('');
     const [pairingCode, setPairingCode] = useState('');
     const [syncBusy, setSyncBusy] = useState(false);
@@ -52,6 +54,12 @@ export default function LocalSyncSettingsPanel() {
             setDeviceLabel(identity.label || '这台手机');
             setConnection(savedConnection);
             setTokenAvailable(hasToken);
+            if (savedConnection && hasToken) {
+                try { setRemoteDevices(await listCompanionDevices()); }
+                catch { setRemoteDevices([]); }
+            } else {
+                setRemoteDevices([]);
+            }
 
             setQueue(summary);
             setConflicts(unresolved);
@@ -130,6 +138,44 @@ export default function LocalSyncSettingsPanel() {
                                 finally { setSyncBusy(false); }
                             }} className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-[10px] font-semibold text-amber-800">清除失效配对</button>
                         </div>}
+                        {tokenAvailable && (
+                            <div className="space-y-2 rounded-lg border border-slate-100 bg-white p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="text-[11px] font-bold text-slate-700">已配对设备</p>
+                                    <button type="button" disabled={syncBusy} onClick={() => void refresh()} className="text-[10px] font-semibold text-sky-700">刷新</button>
+                                </div>
+                                {remoteDevices.length === 0 ? (
+                                    <p className="text-[10px] text-slate-400">暂时无法读取设备列表，检查服务器连接后刷新。</p>
+                                ) : remoteDevices.map(device => {
+                                    const isCurrent = device.id === connection.serverDeviceId;
+                                    const lastSeen = device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : '尚无在线记录';
+                                    return (
+                                        <div key={device.id} className="flex items-center justify-between gap-2 border-t border-slate-50 pt-2">
+                                            <div className="min-w-0">
+                                                <p className="truncate text-[11px] font-semibold text-slate-700">{device.label} {isCurrent ? '· 当前设备' : ''}</p>
+                                                <p className="mt-0.5 text-[10px] text-slate-400">{device.platform} · 最近活动：{lastSeen}</p>
+                                            </div>
+                                            {isCurrent ? (
+                                                <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[9px] text-emerald-700">本机</span>
+                                            ) : (
+                                                <button type="button" disabled={syncBusy || revokingDeviceId === device.id} onClick={async () => {
+                                                    if (!window.confirm(`确定撤销设备“${device.label}”吗？撤销后该设备需要重新配对。`)) return;
+                                                    setRevokingDeviceId(device.id);
+                                                    setError('');
+                                                    try {
+                                                        await revokeCompanionDevice(device.id);
+                                                        setSyncStatus(`已撤销设备“${device.label}”。`);
+                                                        await refresh();
+                                                    } catch (revokeError) {
+                                                        setError(revokeError instanceof Error ? `撤销失败：${revokeError.message}` : '撤销设备失败，请重试。');
+                                                    } finally { setRevokingDeviceId(null); }
+                                                }} className="shrink-0 rounded-lg border border-rose-200 px-2 py-1.5 text-[10px] font-semibold text-rose-600 disabled:opacity-40">{revokingDeviceId === device.id ? '撤销中…' : '撤销'}</button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                         <div className="flex gap-2">
                             <button type="button" disabled={!enabled || syncBusy || !tokenAvailable} onClick={async () => {
                                 setSyncBusy(true);
