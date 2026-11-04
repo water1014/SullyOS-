@@ -52,6 +52,8 @@
 - `utils/visualCompanion/orchestrator.ts` 提供本地任务编排：创建幂等任务、认领排队任务、生成结果登记、资产保存完成、投递完成、失败重试、按失败阶段恢复、审批和取消。
 - 重试检查点保存 `retryStage`。聊天投递失败恢复到 `delivery_pending`，不得回退到 `generating`；任务创建使用稳定 deliveryId 派生任务 ID，并通过 IndexedDB `add` 原子防重。
 - `utils/visualCompanion/delivery.ts` 已加入标准图片聊天投递适配器：将 data URL 迁移为 `blobref:` 后，通过 `DB.saveMessageOnce(deliveryId, message)` 写入 assistant/image 消息，并回写 `deliveredMessageId`；重复调用只返回同一条消息。私密资产明确拒绝进入普通聊天 Blob 管线。
+- `utils/visualCompanion/autonomyPolicy.ts` 加入自主分享决策闸：全局开关、暂停状态、主动分享开关、安静时段（含跨午夜）、每日张数/额度、分享冷却与频率抽样；纪念日/情绪高点/重逢等特殊情境使用更高分享概率，但不能绕过预算和安静时段。显式用户请求可绕过主动分享专属开关与冷却，但仍受总开关和预算限制。
+- `createAutonomousVisualTask()` 先经过决策闸，再允许 `spontaneous_share` 任务入队；测试覆盖未获准不创建任务、特殊情境通过后入队。
 - 当前编排器仍只管理本地元数据，不调用 Provider、不自动执行后台任务，也未接入 Worker。生成执行器需在资产保存完成后调用投递适配器；跨设备/浏览器关闭后的可靠执行仍需独立 Worker + Queue。
 
 测试覆盖 v74→v75 升级保留旧聊天/画廊/Blob、标准备份隔离、任务状态转换和资产隐私边界。CI 对应测试文件为 `utils/visualCompanion/data.test.ts`、`utils/visualCompanion/repository.test.ts` 和 `utils/blobGc.test.ts`。
