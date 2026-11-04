@@ -57,7 +57,7 @@ function assertAssetPrivacy(record: VisualAssetRecord): void {
         }
         return;
     }
-    if (record.storage.kind === 'blobref' || !record.encryptionKeyVersion || record.encryptionKeyVersion < 1) {
+    if (record.storage.kind !== 'private_local' || !record.encryptionKeyVersion || !Number.isSafeInteger(record.encryptionKeyVersion) || record.encryptionKeyVersion < 1) {
         throw new Error('私密视觉资产必须使用独立私密存储并指定密钥版本');
     }
 }
