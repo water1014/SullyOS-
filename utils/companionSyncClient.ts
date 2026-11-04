@@ -1,7 +1,6 @@
 import {
     getCompanionSyncConnection,
     getSyncPreference,
-    getSyncPreference,
     getSyncCursorState,
     listPendingSyncEvents,
     listPendingInboxEvents,
@@ -284,10 +283,6 @@ export async function syncCompanionOnce(): Promise<{
     const token = await secureStorageGet(TOKEN_KEY);
     if (!token) throw new Error('DEVICE_TOKEN_UNAVAILABLE_REPAIR_REQUIRED');
     try {
-        const preference = await getSyncPreference('room_note');
-        if (!preference.enabled || preference.mode !== 'text') {
-            throw new Error('LOCAL_SYNC_CONSENT_REQUIRED');
-        }
         const pushed = await pushPending(connection.baseUrl, token);
         const pulled = await pullAndApply(connection.baseUrl, token, connection.accountId, connection.serverDeviceId);
         return { pushed, ...pulled };
