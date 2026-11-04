@@ -48,7 +48,7 @@ Generate three independent random values and put them into `.env`:
 - `COMPANION_BOOTSTRAP_TOKEN`
 - `COMPANION_TOKEN_PEPPER`
 
-Set `COMPANION_DOMAIN` to the DNS name and `ACME_EMAIL` to an address for certificate expiry notices. Keep `COMPANION_CORS_ORIGINS` as an exact origin, currently `https://water1014.github.io`. Never use `*`.
+Set `COMPANION_DOMAIN` to the DNS name and `ACME_EMAIL` to an address for certificate expiry notices. Keep `COMPANION_CORS_ORIGINS` as exact origins only. The template includes `https://water1014.github.io` for the Pages preview and `https://localhost` for the Android Capacitor WebView (`androidScheme: https`). Never use `*`.
 
 The filled `.env` is ignored by Git. Never paste its contents into chat, commit it, or include it in logs. Keep a secure offline copy of `COMPANION_TOKEN_PEPPER`; rotating it invalidates all existing device tokens and pairing codes.
 
