@@ -19,7 +19,7 @@ describe('OpenCode Go transport', () => {
     expect(native).toHaveBeenCalledWith(expect.objectContaining({
       url: 'https://opencode.ai/zen/go/v1/chat/completions',
       method: 'POST',
-      headers: expect.objectContaining({ authorization: 'Bearer go-token', 'x-opencode-session': 'chat-1' }),
+      headers: expect.objectContaining({ authorization: 'Bearer go-token', 'x-opencode-session': 'chat-1', 'user-agent': 'SullyOS/1.0' }),
       responseType: 'text',
     }));
     expect(fallback).not.toHaveBeenCalled();
