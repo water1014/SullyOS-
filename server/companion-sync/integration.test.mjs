@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import pg from 'pg';
 
@@ -52,14 +52,20 @@ async function waitForServer() {
 }
 
 async function main() {
-  for (const migration of [
+  const migrationEnv = {
+    ...process.env,
+    DATABASE_URL: databaseUrl,
+    PGSSLMODE: 'disable',
+  };
+  execFileSync(process.execPath, ['server/companion-sync/migrate.mjs'], { cwd: process.cwd(), env: migrationEnv, stdio: 'pipe' });
+  // A second run must be a no-op, not duplicate schema objects or fail on existing tables.
+  execFileSync(process.execPath, ['server/companion-sync/migrate.mjs'], { cwd: process.cwd(), env: migrationEnv, stdio: 'pipe' });
+  const appliedMigrations = await pool.query('SELECT name FROM companion_schema_migrations ORDER BY name');
+  assert.deepEqual(appliedMigrations.rows.map(row => row.name), [
     '0001_initial.sql',
     '0002_pairing_and_delivery.sql',
     '0003_account_sequence_watermark.sql',
-  ]) {
-    const sql = await readFile(new URL(`./migrations/${migration}`, import.meta.url), 'utf8');
-    await pool.query(sql);
-  }
+  ]);
 
   child = spawn(process.execPath, ['server/companion-sync/server.mjs'], {
     cwd: process.cwd(),
