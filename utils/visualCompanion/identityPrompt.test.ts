@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildCharacterAppearancePrompt, mergeCharacterAppearancePrompt } from './identityPrompt';
+import { buildCharacterAppearancePrompt, buildCharacterVisualChangePrompt, mergeCharacterAppearancePrompt, mergeCharacterVisualContextPrompt } from './identityPrompt';
+import type { VisualMemoryRecord } from './types';
 import type { CharacterVisualProfile } from './types';
 
 const profile: CharacterVisualProfile = {
@@ -42,5 +43,43 @@ describe('character appearance prompt', () => {
         const prompt = mergeCharacterAppearancePrompt('雨夜里的咖啡馆', profile);
         expect(prompt.indexOf('黑色长发')).toBeLessThan(prompt.indexOf('雨夜里的咖啡馆'));
         expect(prompt).toContain('【本次场景】');
+    });
+});
+
+
+describe('character visual change timeline', () => {
+    const memory = (overrides: Partial<VisualMemoryRecord>): VisualMemoryRecord => ({
+        id: 'm1', charId: 'c1', status: 'confirmed', source: 'user', category: 'appearance',
+        content: '雨水打湿的黑色长发', locked: true, privacyScope: 'standard',
+        visualChangeKind: 'temporary', createdAt: 1, updatedAt: 1, ...overrides,
+    });
+
+    it('includes confirmed permanent changes and active temporary context separately', () => {
+        const prompt = buildCharacterVisualChangePrompt([
+            memory({ id: 'permanent', content: '右眉新增一道浅疤', visualChangeKind: 'permanent', activeUntil: undefined }),
+            memory({ id: 'temporary', content: '雨水打湿头发', activeUntil: 500 }),
+        ], 100);
+        expect(prompt).toContain('[Confirmed permanent visual changes]');
+        expect(prompt).toContain('右眉新增一道浅疤');
+        expect(prompt).toContain('[Temporary appearance for the current scene only]');
+        expect(prompt).toContain('雨水打湿头发');
+        expect(prompt).toContain('Do not save these temporary conditions');
+    });
+
+    it('excludes expired, unconfirmed and private visual changes', () => {
+        const prompt = buildCharacterVisualChangePrompt([
+            memory({ id: 'expired', activeUntil: 99 }),
+            memory({ id: 'draft', status: 'proposed', content: '未确认的新发色' }),
+            memory({ id: 'private', privacyScope: 'private', content: '私密造型' }),
+        ], 100);
+        expect(prompt).toBe('');
+    });
+
+    it('keeps fixed identity first, visual timeline second and scene last', () => {
+        const prompt = mergeCharacterVisualContextPrompt('海边黄昏', profile, [
+            memory({ id: 'permanent', visualChangeKind: 'permanent', content: '右耳耳钉' }),
+        ], 100);
+        expect(prompt.indexOf('[Fixed character appearance]')).toBeLessThan(prompt.indexOf('[Confirmed permanent visual changes]'));
+        expect(prompt.indexOf('[Confirmed permanent visual changes]')).toBeLessThan(prompt.indexOf('海边黄昏'));
     });
 });
