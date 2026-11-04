@@ -186,11 +186,19 @@ export async function resumeVisualTaskRetry(taskId: string, now = Date.now()): P
     });
 }
 
-export function cancelVisualTask(taskId: string): Promise<VisualTask> {
-    return visualCompanionRepository.transitionTask(taskId, 'cancelled', {
+export async function cancelVisualTask(taskId: string): Promise<VisualTask> {
+    const task = await visualCompanionRepository.getTask(taskId);
+    if (!task) throw new Error('视觉任务不存在：' + taskId);
+    if (task.status === 'cancelled') return task;
+    if (['delivered', 'failed'].includes(task.status)) throw new Error('已结束的视觉任务不能取消');
+    const cancelled = await visualCompanionRepository.transitionTask(taskId, 'cancelled', {
         nextAttemptAt: undefined,
         retryStage: undefined,
     });
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('visual-task-cancelled', { detail: { taskId } }));
+    }
+    return cancelled;
 }
 
 /** 用户批准等待确认的任务后，重新进入队列等待认领。 */
