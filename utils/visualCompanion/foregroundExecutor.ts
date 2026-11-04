@@ -7,7 +7,7 @@
  */
 import { editGptImage, generateGptImage, generateNaiImage, type GptImageConfig, type NaiImageConfig } from '../imageGeneration';
 import { getBlobForRef, putImageBlob } from '../blobRef';
-import { mergeCharacterAppearancePrompt } from './identityPrompt';
+import { mergeCharacterVisualContextPrompt } from './identityPrompt';
 import { resolveVisualReferenceAssetId } from './referenceAsset';
 import {
     markVisualAssetsPersisted,
@@ -64,7 +64,8 @@ async function loadStandardReferenceImage(task: VisualTask, profileBaseAssetId?:
 async function generateForTask(task: VisualTask): Promise<Blob> {
     const config = getProviderConfig(task);
     const appearanceProfile = await visualCompanionRepository.getProfile('visual_profile_' + encodeURIComponent(task.charId));
-    const effectivePrompt = mergeCharacterAppearancePrompt(task.prompt, appearanceProfile);
+    const visualMemories = await visualCompanionRepository.listMemories(task.charId);
+    const effectivePrompt = mergeCharacterVisualContextPrompt(task.prompt, appearanceProfile, visualMemories);
     if (task.provider === 'openai' || task.provider === 'openai_compatible') {
         const referenceImage = await loadStandardReferenceImage(task, appearanceProfile?.baseAssetId);
         if (referenceImage) {
