@@ -35,6 +35,10 @@ export const normalizeApiHeaders = (value: unknown): Record<string, string> => {
 export const isOpenCodeInferenceEndpoint = (baseUrl: string): boolean =>
   /opencode\.ai\/inference\//i.test(baseUrl.trim());
 
+/** Go uses a distinct path and requires a stable x-opencode-session per conversation. */
+export const isOpenCodeGoEndpoint = (baseUrl: string): boolean =>
+  /opencode\.ai\/inference\/go\//i.test(baseUrl.trim());
+
 export const buildApiRequestHeaders = (
   apiKey: string,
   customHeaders?: unknown,
@@ -42,7 +46,7 @@ export const buildApiRequestHeaders = (
 ): Headers => {
   const headers = new Headers({ 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey || 'sk-none'}` });
   // OpenCode Go asks clients to identify each conversation with a stable session ID.
-  if (options?.sessionId && options.baseUrl && isOpenCodeInferenceEndpoint(options.baseUrl)) {
+  if (options?.sessionId && options.baseUrl && isOpenCodeGoEndpoint(options.baseUrl)) {
     headers.set('x-opencode-session', options.sessionId);
   }
   for (const [name, value] of Object.entries(normalizeApiHeaders(customHeaders))) headers.set(name, value);
