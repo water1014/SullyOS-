@@ -56,12 +56,12 @@ Before publishing an update, set the configured manifest URL to the release mani
 
 ## Current implementation gaps (do not treat as release-ready)
 
-- This repository contains the TypeScript updater but does not currently track the native `ApkInstaller` Capacitor plugin implementation.
-- The Android wrapper project is external to this repository; `scripts/sync-tiao-capacitor.ps1` currently expects a local wrapper directory.
+- The TypeScript updater and a native Capacitor `ApkInstaller` source implementation are now tracked under `native/android/apk-installer/`. The native source has not yet been compiled against the actual wrapper project or verified on a device.
+- The Android wrapper project remains external to this repository. `scripts/install-apk-installer.ps1` now copies the native source, registers the plugin and FileProvider with guarded checks; `scripts/sync-tiao-capacitor.ps1` invokes it before `cap sync`. The wrapper directory and its exact Android project structure still need validation.
 - The checked-in public update manifest is a historical release manifest, not a release target for this feature branch.
 - Physical-device in-place upgrade and same-signer update tests have not been run in this repository session.
 
-Therefore the current state is **update flow partially implemented, APK release not yet verified**. Before the APK milestone, bring the native installer plugin and wrapper integration under a reproducible, version-controlled release workflow, then complete the smoke test above.
+Therefore the current state is **web updater plus native installer source implemented, wrapper integration and APK release not yet verified**. Before the APK milestone, bring the native installer plugin and wrapper integration under a reproducible, version-controlled release workflow, then complete the smoke test above.
 
 ## User backup guidance
 
