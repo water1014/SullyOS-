@@ -166,19 +166,35 @@ const ImageStudioApp: React.FC = () => {
 
   useEffect(() => {
     let alive = true;
+    let refreshVersion = 0;
     const hydrate = async () => {
+      const version = ++refreshVersion;
       const saved = readItems();
       const hydrated: DisplayImage[] = [];
       for (const item of saved) {
         const blob = await DB.getBlobAsset(item.blobId).catch(() => null);
         if (blob) hydrated.push({ ...item, url: URL.createObjectURL(blob) });
       }
-      if (alive) setImages(hydrated.sort((a, b) => b.createdAt - a.createdAt));
-      else hydrated.forEach(item => URL.revokeObjectURL(item.url));
+      if (!alive || version !== refreshVersion) {
+        hydrated.forEach(item => URL.revokeObjectURL(item.url));
+        return;
+      }
+      const sorted = hydrated.sort((a, b) => b.createdAt - a.createdAt);
+      setImages(current => {
+        current.forEach(item => URL.revokeObjectURL(item.url));
+        return sorted;
+      });
+      setSelected(current => current ? sorted.find(item => item.id === current.id) || null : null);
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === ITEMS_KEY || event.key === null) void hydrate();
     };
     void hydrate();
+    window.addEventListener('storage', handleStorage);
     return () => {
       alive = false;
+      refreshVersion += 1;
+      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 
