@@ -62,7 +62,7 @@ export default function DialogueApiFields({ value, onChange, fetchModels, isLoad
                         <button type="button" onClick={() => onChange({ baseUrl: 'https://opencode.ai/inference/go/openai/v1', apiType: 'openai' })} className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[10px] font-semibold text-sky-700">填入 OpenCode Go · OpenAI</button>
                         <button type="button" onClick={() => onChange({ baseUrl: 'https://opencode.ai/inference/go/anthropic/v1', apiType: 'anthropic' })} className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[10px] font-semibold text-sky-700">填入 OpenCode Go · Anthropic</button>
                     </div>
-                    <p className="text-[9px] leading-relaxed text-slate-400">Go 订阅密钥填在上方 Key。OpenAI 模型使用 Chat Completions；Anthropic 模型使用 Messages。模型 ID 请以 Go 控制台当前列表为准。自定义请求头保存在本机 API 配置中。</p>
+                    <p className="text-[9px] leading-relaxed text-slate-400">Go 订阅密钥填在上方 Key。OpenAI 模型使用 Chat Completions；Anthropic 模型使用 Messages。模型 ID 请以 Go 控制台当前列表为准。聊天请求会自动附带稳定的 x-opencode-session；如需手动覆盖，可在上方自定义请求头中添加同名字段。自定义请求头保存在本机 API 配置中。</p>
                 </div>
 
                 {/* 高级（流式 / 温度）— 默认折叠，灰色低调，明确写"不建议修改" */}
