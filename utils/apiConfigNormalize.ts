@@ -64,9 +64,10 @@ export function normalizeApiConfig(config: APIConfig): APIConfig {
     ...(visionApi ? {
       visionApi: {
         enabled: visionApi.enabled === true,
-        baseUrl: normalizeApiBaseUrl(visionApi.baseUrl),
+        baseUrl: normalizeLlmBaseUrl(normalizeApiBaseUrl(visionApi.baseUrl), 'openai'),
         apiKey: normalizeApiCredential(visionApi.apiKey),
         model: normalizeApiModel(visionApi.model),
+        ...(Object.keys(normalizeApiHeaders(visionApi.customHeaders)).length ? { customHeaders: normalizeApiHeaders(visionApi.customHeaders) } : {}),
         ...(visionApi.customHeaders ? { customHeaders: normalizeApiHeaders(visionApi.customHeaders) } : {}),
       },
     } : {}),
