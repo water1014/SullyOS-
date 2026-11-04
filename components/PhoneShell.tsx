@@ -468,6 +468,28 @@ const PhoneShell: React.FC = () => {
   const useIOSStandaloneLayout = isIOSStandaloneWebApp();
   const deploymentNotice = useDeploymentNotice();
 
+  const visualRecoveryStarted = useRef(false);
+
+  // 恢复上次关闭页面时留下的安全视觉任务。只恢复 queued、到期的持久化/投递重试；
+  // generating 阶段可能已被 Provider 受理并计费，因此绝不在启动时自动重跑。
+  useEffect(() => {
+    if (!isDataLoaded || isLocked || visualRecoveryStarted.current) return;
+    visualRecoveryStarted.current = true;
+    let cancelled = false;
+    void import('../utils/visualCompanion/foregroundExecutor').then(({ recoverSafeVisualTasksForCharacter }) => {
+      if (cancelled) return;
+      return Promise.all(characters.map(character =>
+        recoverSafeVisualTasksForCharacter(character.id).catch(error => {
+          console.warn('[VisualCompanion] startup recovery failed', { charId: character.id, error });
+        })
+      ));
+    }).catch(error => {
+      console.warn('[VisualCompanion] startup recovery module unavailable', error);
+    });
+    return () => { cancelled = true; };
+  }, [isDataLoaded, isLocked, characters]);
+
+
   // 三档顶部状态栏：安全显示 / 紧凑显示 / 隐藏。旧存档仍由 hideStatusBar 兼容解析。
   // compact 把时间放进 safe-area，本体顶栏只让出 max(safe-area, 1.5rem)，避免顶部再多一整行。
   const statusBarMode = resolveStatusBarMode(theme.statusBarMode, theme.hideStatusBar);
