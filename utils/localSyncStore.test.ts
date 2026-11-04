@@ -21,6 +21,7 @@ import {
     updateSyncEventState,
     recoverStaleInFlightSyncEvents,
     getOrCreateLocalSyncDeviceIdentity,
+    updateLocalSyncDeviceLabel,
 } from './localSyncStore';
 
 const note = {
@@ -277,6 +278,19 @@ describe('local-first sync outbox', () => {
         });
         expect(identities[0].deviceId.length).toBeGreaterThanOrEqual(8);
         expect(identities[0].createdAt).toBeGreaterThan(0);
+        expect(identities[0].label).toBe('这台手机');
+    });
+
+    it('saves a friendly local device name without changing its stable identity', async () => {
+        const original = await getOrCreateLocalSyncDeviceIdentity();
+        const updated = await updateLocalSyncDeviceLabel('我的主力手机');
+        expect(updated.label).toBe('我的主力手机');
+        expect(updated.deviceId).toBe(original.deviceId);
+        expect(updated.createdAt).toBe(original.createdAt);
+        expect(updated.updatedAt).toBeGreaterThanOrEqual(original.updatedAt);
+        await expect(updateLocalSyncDeviceLabel('   ')).rejects.toThrow('INVALID_DEVICE_LABEL');
+        await expect(updateLocalSyncDeviceLabel('x'.repeat(25))).rejects.toThrow('INVALID_DEVICE_LABEL');
+        await expect(updateLocalSyncDeviceLabel('bad\\u0000name')).rejects.toThrow('INVALID_DEVICE_LABEL');
     });
 
     it('uses collision-safe keys for account and device cursor pairs', async () => {
