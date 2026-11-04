@@ -408,7 +408,26 @@ const ImageStudioApp: React.FC = () => {
                   </div>
                   {tagSuggestions.length > 0 && <div className="flex flex-wrap gap-1.5">{tagSuggestions.map(item => <button key={item.tag} type="button" onClick={() => addNaiTag(item.tag)} className="rounded-lg border border-sky-100 bg-sky-50/80 px-2.5 py-1.5 text-[10px] text-sky-800">＋ {item.tag}</button>)}</div>}
                 </div>
+                <div className="border-t border-sky-100 pt-3 space-y-2">
+                  <div className="text-xs font-semibold text-slate-700">模型专属质量标签</div>
+                  <p className="text-[10px] text-slate-400">按当前模型追加推荐组合，不会覆盖已有内容</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => addNaiQualityPreset("light")} className="soft rounded-xl py-2 text-[11px] font-semibold">＋ 轻量质量</button>
+                    <button type="button" onClick={() => addNaiQualityPreset("standard")} className="soft rounded-xl py-2 text-[11px] font-semibold">＋ 标准质量</button>
+                  </div>
+                </div>
                 <button type="button" onClick={generateRandomIdea} className="w-full soft rounded-xl py-2.5 text-xs font-semibold flex items-center justify-center gap-2"><Sparkle size={14}/>随机灵感组合 <span className="text-[10px] font-normal opacity-65">· 只追加，不覆盖原提示词</span></button>
+                <div className="border-t border-sky-100 pt-3 space-y-2">
+                  <div className="flex items-center justify-between"><div className="text-xs font-semibold text-slate-700">我的提示词模板</div><span className="text-[10px] text-slate-400">{naiTemplates.length} 个已收藏</span></div>
+                  <div className="flex gap-2">
+                    <input className="field min-w-0 flex-1" value={templateName} onChange={event => setTemplateName(event.target.value)} placeholder="给这组提示词起个名字"/>
+                    <button type="button" onClick={saveNaiTemplate} disabled={!prompt.trim()} className="primary rounded-xl px-3 text-[11px] font-semibold disabled:opacity-50">收藏</button>
+                  </div>
+                  {naiTemplates.length > 0 ? <div className="space-y-1.5">{naiTemplates.map(template => <div key={template.id} className="flex items-center gap-2 rounded-xl bg-white/70 border border-sky-50 px-3 py-2">
+                    <button type="button" onClick={() => applyNaiTemplate(template)} className="min-w-0 flex-1 text-left"><div className="text-[11px] font-semibold text-slate-700 truncate">{template.name}</div><div className="text-[9px] text-slate-400 truncate mt-0.5">{template.prompt}</div></button>
+                    <button type="button" onClick={() => deleteNaiTemplate(template.id)} className="text-[10px] text-rose-400 px-1.5 py-1">删除</button>
+                  </div>)}</div> : <p className="text-[10px] text-slate-400">收藏后的模板会保存在本机，可以随时载入。</p>}
+                </div>
               </div>
               <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">反向提示词</label><button onClick={() => copyPrompt(negativePrompt)} className="text-[10px] text-sky-700 flex items-center gap-1"><Copy size={12}/>复制</button></div>
               <textarea className="field min-h-[76px] resize-y leading-5" value={negativePrompt} onChange={event => setNegativePrompt(event.target.value)} placeholder="不希望出现在画面中的内容……"/>
