@@ -31,6 +31,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Run tests
-        run: pnpm exec vitest run utils/imageGeneration.test.ts utils/blobGc.test.ts utils/visualCompanion/data.test.ts
+        run: pnpm exec vitest run utils/imageGeneration.test.ts utils/blobGc.test.ts utils/visualCompanion/data.test.ts utils/visualCompanion/repository.test.ts
       - name: Build production app
         run: pnpm build
