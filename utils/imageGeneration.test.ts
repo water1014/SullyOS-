@@ -73,6 +73,38 @@ describe('image generation clients', () => {
     expect(JSON.parse(String(request.body))).toMatchObject({ model: 'gpt-image-2', n: 1, prompt: 'a little blue house' });
   });
 
+  it('downloads image URLs returned by OpenAI-compatible providers', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ url: 'https://images.example/result.png' }] }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(new Blob(['url-image'], { type: 'image/png' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const blob = await generateGptImage(
+      { baseUrl: 'https://api.example/v1', apiKey: 'test-key', model: 'compatible-image-model' },
+      'a moonlit garden',
+      { size: '1024x1024', quality: 'high' },
+    );
+
+    expect(blob.type).toBe('image/png');
+    expect(await blob.text()).toBe('url-image');
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://images.example/result.png');
+  });
+
+  it('accepts direct binary image responses from compatible providers', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(new Blob(['direct-image'], { type: 'image/webp' }), { status: 200 }),
+    ));
+    const blob = await generateGptImage(
+      { baseUrl: 'https://api.example/v1', apiKey: 'test-key', model: 'compatible-image-model' },
+      'a quiet lake',
+      { size: '1024x1024', quality: 'high' },
+    );
+    expect(blob.type).toBe('image/webp');
+    expect(await blob.text()).toBe('direct-image');
+  });
+
   it('extracts the first image from NovelAI ZIP output', async () => {
     const zip = new JSZip();
     zip.file('image_0.png', 'nai-png');
