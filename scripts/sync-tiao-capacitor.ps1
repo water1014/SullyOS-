@@ -7,9 +7,18 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $sourceRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+if (-not (Test-Path -LiteralPath $WrapperRoot -PathType Container)) {
+  throw "Wrapper project directory does not exist: $WrapperRoot"
+}
 $wrapperRoot = (Resolve-Path -LiteralPath $WrapperRoot).Path
 $sourceDist = Join-Path $sourceRoot 'dist'
 $targetDist = Join-Path $wrapperRoot 'dist'
+
+$sourceRootFull = [IO.Path]::GetFullPath($sourceRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+$wrapperRootFull = [IO.Path]::GetFullPath($wrapperRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+if ([string]::Equals($sourceRootFull, $wrapperRootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+  throw 'WrapperRoot points to the SullyOS source repository itself. Refusing to replace its dist directory.'
+}
 
 if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot 'node_modules\vite\bin\vite.js'))) {
   throw 'Source dependencies are missing. Run npm/pnpm install in the SullyOS source first.'
@@ -30,6 +39,13 @@ if (-not (Test-Path -LiteralPath $targetDist)) {
 
 $sourceDist = (Resolve-Path -LiteralPath $sourceDist).Path
 $targetDist = (Resolve-Path -LiteralPath $targetDist).Path
+if ([string]::Equals(
+  [IO.Path]::GetFullPath($sourceDist),
+  [IO.Path]::GetFullPath($targetDist),
+  [System.StringComparison]::OrdinalIgnoreCase
+)) {
+  throw 'Source and wrapper dist directories resolve to the same path. Refusing destructive copy.'
+}
 $expectedTarget = [IO.Path]::GetFullPath((Join-Path $wrapperRoot 'dist'))
 $wrapperPrefix = $wrapperRoot.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
 if ($targetDist -ne $expectedTarget -or -not $targetDist.StartsWith($wrapperPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
