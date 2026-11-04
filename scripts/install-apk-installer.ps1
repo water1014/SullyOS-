@@ -5,6 +5,15 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Write-Utf8NoBom {
+  param(
+    [Parameter(Mandatory = $true)][string]$Path,
+    [Parameter(Mandatory = $true)][string]$Value
+  )
+  $encoding = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($Path, $Value, $encoding)
+}
 $androidRoot = Join-Path $WrapperRoot 'android'
 $appRoot = Join-Path $androidRoot 'app'
 $javaSource = Join-Path $PSScriptRoot '..\native\android\apk-installer\ApkInstallerPlugin.java'
@@ -68,7 +77,7 @@ if ($activityContent -notmatch 'registerPlugin\(ApkInstallerPlugin\.class\)') {
     $activityContent = $activityContent.Insert($lastBrace, $method)
   }
 }
-Set-Content -LiteralPath $mainActivity.FullName -Value $activityContent -Encoding UTF8
+Write-Utf8NoBom -Path $mainActivity.FullName -Value $activityContent
 
 $manifestPath = Join-Path $appRoot 'src\main\AndroidManifest.xml'
 if (-not (Test-Path -LiteralPath $manifestPath)) { throw "AndroidManifest.xml not found: $manifestPath" }
@@ -77,7 +86,7 @@ if ($manifest -notmatch 'android\.permission\.REQUEST_INSTALL_PACKAGES') {
   if ($manifest -notmatch '</manifest>') { throw 'AndroidManifest.xml has no manifest closing tag.' }
   $permission = '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />' + [Environment]::NewLine
   $manifest = $manifest.Replace('</manifest>', $permission + '</manifest>')
-  Set-Content -LiteralPath $manifestPath -Value $manifest -Encoding UTF8
+  Write-Utf8NoBom -Path $manifestPath -Value $manifest
 }
 if ($manifest -notmatch 'androidx\.core\.content\.FileProvider') {
   $provider = @'
