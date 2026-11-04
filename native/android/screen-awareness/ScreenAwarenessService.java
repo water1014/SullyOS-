@@ -91,6 +91,9 @@ public final class ScreenAwarenessService extends Service {
             frozen = false;
             freezeRequested = false;
             lastFrameAt = 0L;
+            if (virtualDisplay != null && imageReader != null) {
+                virtualDisplay.setSurface(imageReader.getSurface());
+            }
             updateNotification();
             return START_STICKY;
         }
@@ -285,6 +288,7 @@ public final class ScreenAwarenessService extends Service {
             if (freezeRequested) {
                 freezeRequested = false;
                 frozen = true;
+                if (virtualDisplay != null) virtualDisplay.setSurface(null);
                 updateNotification();
             }
         } catch (Exception ignored) {
