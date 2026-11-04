@@ -239,6 +239,8 @@ export interface LocalSyncConflict {
     remoteVersion: number;
     localSnapshotRef?: string;
     remoteSnapshotRef?: string;
+    localSnapshot?: Record<string, unknown> | null;
+    remoteSnapshot?: Record<string, unknown> | null;
     detectedAt: number;
     resolutionState: 'unresolved' | 'keep_local' | 'keep_remote' | 'merged';
 }
@@ -360,5 +362,137 @@ export async function resolveSyncConflict(
     const current = await requestResult(store.get(conflictId)) as LocalSyncConflict | undefined;
     if (!current) throw new Error('SYNC_CONFLICT_NOT_FOUND');
     store.put({ ...current, resolutionState });
+    await done;
+}
+
+
+export type InboxApplyResult =
+    | { status: 'applied' }
+    | { status: 'conflict'; conflictId: string }
+    | { status: 'blocked'; reason: string };
+
+const ROOM_NOTE_TYPES = new Set(['lyric', 'doodle', 'thought', 'search', 'gossip']);
+
+function parseRemoteRoomNote(event: LocalSyncInboxEvent): Record<string, unknown> | null {
+    if (event.entityType !== 'room_note' || event.operation === 'delete') return null;
+    const payload = event.payload;
+    if (
+        payload.id !== event.entityId
+        || typeof payload.charId !== 'string' || !payload.charId
+        || typeof payload.timestamp !== 'number' || !Number.isFinite(payload.timestamp)
+        || typeof payload.content !== 'string'
+        || typeof payload.type !== 'string' || !ROOM_NOTE_TYPES.has(payload.type)
+    ) return null;
+    return {
+        id: payload.id,
+        charId: payload.charId,
+        timestamp: payload.timestamp,
+        content: payload.content,
+        type: payload.type,
+    };
+}
+
+/** Apply remote note + inbox state atomically; never silently overwrite a local edit. */
+export async function applyPendingRoomNoteInboxEvent(eventId: string): Promise<InboxApplyResult> {
+    const db = await openDB();
+    const tx = db.transaction([INBOX, 'room_notes', CONFLICTS, PREFERENCES], 'readwrite');
+    const done = transactionDone(tx);
+    const inbox = tx.objectStore(INBOX);
+    const notes = tx.objectStore('room_notes');
+    const conflicts = tx.objectStore(CONFLICTS);
+    const preferences = tx.objectStore(PREFERENCES);
+    const event = await requestResult(inbox.get(eventId)) as LocalSyncInboxEvent | undefined;
+    if (!event) {
+        await done;
+        throw new Error('INBOX_EVENT_NOT_FOUND');
+    }
+    if (event.applyState === 'applied') {
+        await done;
+        return { status: 'applied' };
+    }
+    if (event.applyState === 'blocked') {
+        await done;
+        return { status: 'blocked', reason: 'EVENT_ALREADY_BLOCKED' };
+    }
+    if (event.entityType !== 'room_note') {
+        inbox.put({ ...event, applyState: 'blocked' });
+        await done;
+        return { status: 'blocked', reason: 'UNSUPPORTED_ENTITY' };
+    }
+    const preference = await requestResult(preferences.get('room_note')) as SyncPreference | undefined;
+    if (!preference?.enabled || preference.mode !== 'text') {
+        inbox.delete(eventId);
+        await done;
+        return { status: 'blocked', reason: 'SYNC_DISABLED' };
+    }
+    if (!['create', 'update', 'delete'].includes(event.operation)
+        || !Number.isSafeInteger(event.entityVersion) || event.entityVersion < 1) {
+        inbox.put({ ...event, applyState: 'blocked' });
+        await done;
+        return { status: 'blocked', reason: 'INVALID_EVENT_METADATA' };
+    }
+
+    const local = await requestResult(notes.get(event.entityId)) as Record<string, unknown> | undefined;
+    const remote = parseRemoteRoomNote(event);
+    if (event.operation !== 'delete' && !remote) {
+        inbox.put({ ...event, applyState: 'blocked' });
+        await done;
+        return { status: 'blocked', reason: 'INVALID_ROOM_NOTE_PAYLOAD' };
+    }
+    const sameContent = Boolean(local && remote
+        && local.id === remote.id && local.charId === remote.charId
+        && local.timestamp === remote.timestamp && local.content === remote.content
+        && local.type === remote.type);
+
+    if (!local || sameContent) {
+        if (event.operation === 'delete') notes.delete(event.entityId);
+        else if (remote) notes.put(remote);
+        inbox.put({ ...event, applyState: 'applied', appliedAt: Date.now() });
+        await done;
+        return { status: 'applied' };
+    }
+
+    conflicts.put({
+        conflictId: event.eventId,
+        entityType: 'room_note',
+        entityId: event.entityId,
+        localVersion: 0,
+        remoteVersion: event.entityVersion,
+        localSnapshot: {
+            id: local.id, charId: local.charId, timestamp: local.timestamp,
+            content: local.content, type: local.type,
+        },
+        remoteSnapshot: remote,
+        detectedAt: Date.now(),
+        resolutionState: 'unresolved',
+    } satisfies LocalSyncConflict);
+    inbox.put({ ...event, applyState: 'blocked' });
+    await done;
+    return { status: 'conflict', conflictId: event.eventId };
+}
+
+/** Resolve a conflict and mark its inbox event applied in the same transaction. */
+export async function resolveRoomNoteSyncConflict(
+    conflictId: string,
+    resolution: 'keep_local' | 'keep_remote',
+): Promise<void> {
+    const db = await openDB();
+    const tx = db.transaction([CONFLICTS, INBOX, 'room_notes'], 'readwrite');
+    const done = transactionDone(tx);
+    const conflicts = tx.objectStore(CONFLICTS);
+    const inbox = tx.objectStore(INBOX);
+    const notes = tx.objectStore('room_notes');
+    const conflict = await requestResult(conflicts.get(conflictId)) as LocalSyncConflict | undefined;
+    const event = await requestResult(inbox.get(conflictId)) as LocalSyncInboxEvent | undefined;
+    if (!conflict || !event) {
+        await done;
+        throw new Error('SYNC_CONFLICT_NOT_FOUND');
+    }
+    if (resolution === 'keep_remote') {
+        if (conflict.remoteSnapshot) notes.put(conflict.remoteSnapshot);
+        else notes.delete(conflict.entityId);
+    }
+    conflicts.put({ ...conflict, resolutionState: resolution });
+    inbox.put({ ...event, applyState: 'applied', appliedAt: Date.now() });
     await done;
 }
