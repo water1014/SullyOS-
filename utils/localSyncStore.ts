@@ -278,6 +278,55 @@ export interface SyncCursorState {
     updatedAt: number;
 }
 
+export interface LocalSyncDeviceIdentity {
+    id: 'local_device_identity';
+    deviceId: string;
+    createdAt: number;
+    updatedAt: number;
+    schemaVersion: 1;
+}
+
+const LOCAL_DEVICE_IDENTITY_KEY = 'local_device_identity';
+
+function createLocalDeviceId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `device_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+}
+
+/**
+ * Stable per-install identity only. It is not an account ID, pairing token,
+ * authentication credential, or proof of device ownership.
+ */
+export async function getOrCreateLocalSyncDeviceIdentity(): Promise<LocalSyncDeviceIdentity> {
+    const db = await openDB();
+    const tx = db.transaction(SYNC_STATE, 'readwrite');
+    const done = transactionDone(tx);
+    const store = tx.objectStore(SYNC_STATE);
+    const existing = await requestResult(store.get(LOCAL_DEVICE_IDENTITY_KEY)) as LocalSyncDeviceIdentity | undefined;
+    if (existing && typeof existing.deviceId === 'string' && existing.deviceId.length >= 8) {
+        await done;
+        return existing;
+    }
+    const now = Date.now();
+    const identity: LocalSyncDeviceIdentity = {
+        id: LOCAL_DEVICE_IDENTITY_KEY,
+        deviceId: createLocalDeviceId(),
+        createdAt: now,
+        updatedAt: now,
+        schemaVersion: 1,
+    };
+    store.put(identity);
+    await done;
+    return identity;
+}
+
+function getSyncCursorKey(accountId: string, deviceId: string): string {
+    // Length-prefixing avoids collisions when identifiers contain separators.
+    return `cursor:${accountId.length}:${accountId}:${deviceId.length}:${deviceId}`;
+}
+
 export interface LocalSyncConflict {
     conflictId: string;
     entityType: SyncEntityType;
@@ -390,7 +439,7 @@ export async function markInboxEventApplied(eventId: string): Promise<void> {
 }
 
 export async function getSyncCursorState(accountId: string, deviceId: string): Promise<SyncCursorState> {
-    const id = `${accountId}:${deviceId}`;
+    const id = getSyncCursorKey(accountId, deviceId);
     const db = await openDB();
     const tx = db.transaction(SYNC_STATE, 'readonly');
     const done = transactionDone(tx);
@@ -415,7 +464,7 @@ export async function updateSyncCursorState(
     // Read + max-merge + write in one readwrite transaction. IndexedDB serializes
     // overlapping readwrite transactions for this store, so a slower stale sync
     // response cannot overwrite a newer cursor written by another sync worker.
-    const id = `${accountId}:${deviceId}`;
+    const id = getSyncCursorKey(accountId, deviceId);
     const db = await openDB();
     const tx = db.transaction(SYNC_STATE, 'readwrite');
     const done = transactionDone(tx);
