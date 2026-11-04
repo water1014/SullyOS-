@@ -27,9 +27,66 @@ function errorMessage(payload: any, fallback: string): string {
 }
 
 export function normalizeOpenAIImagesEndpoint(baseUrl: string): string {
-  const clean = baseUrl.trim().replace(/\/+$/, '');
+  const clean = baseUrl.trim().replace(/\\/+$/, '');
   if (!clean) throw new Error('请填写 GPT API Base URL');
   return clean.endsWith('/images/generations') ? clean : `${clean}/images/generations`;
+}
+
+export function normalizeOpenAIImageEditsEndpoint(baseUrl: string): string {
+  const clean = baseUrl.trim().replace(/\\/+$/, '');
+  if (!clean) throw new Error('请填写 GPT API Base URL');
+  return clean.endsWith('/images/edits') ? clean : `${clean}/images/edits`;
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('无法读取参考图片'));
+    reader.onerror = () => reject(new Error('读取参考图片失败'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Edit an uploaded reference image through the OpenAI-compatible Images Edits API. */
+export async function editGptImage(
+  config: GptImageConfig,
+  image: Blob,
+  prompt: string,
+  options: { size: string; quality: string; signal?: AbortSignal },
+): Promise<Blob> {
+  if (!config.apiKey.trim()) throw new Error('请先填写 GPT 生图 API Key');
+  if (!prompt.trim()) throw new Error('请写下希望如何修改参考图');
+  if (!image.type.startsWith('image/')) throw new Error('参考文件必须是图片');
+  if (image.size > 20 * 1024 * 1024) throw new Error('参考图片不能超过 20 MB');
+
+  const imageUrl = await blobToDataUrl(image);
+  const response = await fetch(normalizeOpenAIImageEditsEndpoint(config.baseUrl), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey.trim()}`,
+    },
+    body: JSON.stringify({
+      model: config.model || 'gpt-image-2.5-flare',
+      images: [{ image_url: imageUrl }],
+      prompt: prompt.trim(),
+      size: options.size,
+      quality: options.quality,
+      n: 1,
+      output_format: 'png',
+    }),
+    signal: options.signal,
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(errorMessage(payload, `GPT 图片编辑失败（HTTP ${response.status}）`));
+  const encoded = payload?.data?.[0]?.b64_json;
+  if (typeof encoded !== 'string' || !encoded) {
+    throw new Error('GPT API 没有返回编辑后的图片数据，请确认服务支持 Images Edits 接口。');
+  }
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: 'image/png' });
 }
 
 export async function generateGptImage(
