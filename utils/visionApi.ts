@@ -49,6 +49,17 @@ export const readVisionDescription = (message: Message): string => {
   return typeof value === 'string' ? value.trim() : '';
 };
 
+// A deterministic session per image keeps OpenCode Go prompt-cache routing stable
+// without incorrectly merging every user's unrelated vision requests into one session.
+const visionSessionId = (imageUrl: string): string => {
+  let hash = 2166136261;
+  for (let i = 0; i < imageUrl.length; i++) {
+    hash ^= imageUrl.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `sullyos-vision-${(hash >>> 0).toString(36)}`;
+};
+
 const cleanDescription = (value: string): string => value
   .replace(/^\s*\[?图片\s*[：:]\s*/i, '')
   .replace(/\]\s*$/i, '')
@@ -75,7 +86,7 @@ export async function describeImageWithVisionApi(
     const baseUrl = normalizeLlmBaseUrl(config.baseUrl, 'openai');
     const data = await safeFetchJson(`${baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: buildApiRequestHeaders(config.apiKey.trim(), config.customHeaders, { baseUrl, sessionId: 'sullyos-vision' }),
+      headers: buildApiRequestHeaders(config.apiKey.trim(), config.customHeaders, { baseUrl, sessionId: visionSessionId(imageUrl) }),
       body: JSON.stringify({
         model: config.model.trim(),
         messages: [{
