@@ -7,7 +7,7 @@ import { useOS } from '../context/OSContext';
 import { DB } from '../utils/db';
 import {
   generateGptImage, editGptImage, generateNaiImage,
-  type GptImageConfig, type NaiImageConfig, type ImageEngine,
+  suggestNaiTags, type GptImageConfig, type NaiImageConfig, type ImageEngine,
 } from '../utils/imageGeneration';
 
 const CONFIG_KEY = 'sully-image-studio:config:v1';
@@ -55,6 +55,13 @@ const NAI_TAGS: Record<TagCategory, string[]> = {
 };
 const TAG_CATEGORIES = Object.keys(NAI_TAGS) as TagCategory[];
 
+const NAI_NEGATIVE_PACKS = [
+  { name: '画质瑕疵', tags: ['low quality', 'worst quality', 'lowres', 'blurry', 'jpeg artifacts'] },
+  { name: '人体结构', tags: ['bad anatomy', 'bad hands', 'malformed hands', 'extra fingers', 'missing fingers', 'extra limbs', 'fused fingers'] },
+  { name: '画面干扰', tags: ['text', 'watermark', 'signature', 'logo', 'cropped', 'out of frame'] },
+  { name: '人物瑕疵', tags: ['poorly drawn face', 'asymmetrical eyes', 'deformed', 'duplicate', 'mutation'] },
+];
+
 const ImageStudioApp: React.FC = () => {
   const { closeApp, addToast } = useOS();
   const [tab, setTab] = useState<'create' | 'gallery' | 'settings'>('create');
@@ -65,6 +72,9 @@ const ImageStudioApp: React.FC = () => {
   const [referencePreview, setReferencePreview] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('low quality, worst quality, blurry, bad anatomy');
   const [activeTagCategory, setActiveTagCategory] = useState<TagCategory>('主体');
+  const [tagSearch, setTagSearch] = useState('');
+  const [tagSuggestions, setTagSuggestions] = useState<{ tag: string; count?: number; confidence?: number }[]>([]);
+  const [suggestingTags, setSuggestingTags] = useState(false);
   const [gptSize, setGptSize] = useState('1024x1024');
   const [gptQuality, setGptQuality] = useState('high');
   const [naiSize, setNaiSize] = useState('832x1216');
@@ -125,6 +135,55 @@ const ImageStudioApp: React.FC = () => {
     setPrompt(prompt.split(',').map(value => value.trim()).filter(value => value && value.toLowerCase() !== tag.toLowerCase()).join(', '));
   };
   const promptTags = prompt.split(',').map(value => value.trim()).filter(Boolean);
+
+  const appendPromptTags = (tags: string[]) => {
+    const existing = prompt.split(',').map(value => value.trim()).filter(Boolean);
+    const seen = new Set(existing.map(value => value.toLowerCase()));
+    const additions = tags.filter(tag => {
+      const key = tag.trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    setPrompt([...existing, ...additions].join(', '));
+  };
+
+  const addNegativePack = (tags: string[]) => {
+    const existing = negativePrompt.split(',').map(value => value.trim()).filter(Boolean);
+    const seen = new Set(existing.map(value => value.toLowerCase()));
+    const additions = tags.filter(tag => {
+      const key = tag.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    setNegativePrompt([...existing, ...additions].join(', '));
+  };
+
+  const generateRandomIdea = () => {
+    const pick = (items: string[]) => items[Math.floor(Math.random() * items.length)];
+    const categories: TagCategory[] = ['主体', '发型', '眼睛', '表情', '服装', '动作', '构图', '场景', '画风'];
+    const idea = categories.map(category => pick(NAI_TAGS[category]));
+    idea.push(pick(['masterpiece', 'very aesthetic', 'best quality', 'no text']));
+    appendPromptTags(idea);
+    addToast('灵感已追加到提示词末尾', 'success');
+  };
+
+  const loadNaiSuggestions = async () => {
+    if (suggestingTags) return;
+    setSuggestingTags(true);
+    try {
+      const results = await suggestNaiTags(config.nai, tagSearch);
+      setTagSuggestions(results.slice(0, 12));
+      if (!results.length) addToast('暂时没有找到相关标签', 'info');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '标签建议获取失败';
+      setError(message);
+      addToast(message.slice(0, 80), 'error');
+    } finally {
+      setSuggestingTags(false);
+    }
+  };
 
   const saveImage = useCallback(async (blob: Blob) => {
     const id = `studio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -292,9 +351,22 @@ const ImageStudioApp: React.FC = () => {
                   })}
                 </div>
                 {promptTags.length > 0 && <div className="border-t border-sky-100 pt-2"><div className="text-[10px] text-slate-400 mb-2">已加入 · {promptTags.length}</div><div className="flex flex-wrap gap-1.5">{promptTags.map((tag, index) => <button key={`${tag}-${index}`} type="button" onClick={() => removeNaiTag(tag)} className="rounded-lg bg-sky-50 text-sky-800 px-2 py-1 text-[10px]">{tag} ×</button>)}</div></div>}
+                <div className="border-t border-sky-100 pt-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2"><div><div className="text-xs font-semibold text-slate-700">官方标签联想</div><p className="text-[10px] text-slate-400 mt-1">连接 NovelAI 标签库，按当前模型推荐</p></div><span className="text-[9px] text-sky-700">FREE</span></div>
+                  <div className="flex gap-2">
+                    <input className="field min-w-0 flex-1" value={tagSearch} onChange={event => setTagSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void loadNaiSuggestions(); }} placeholder="输入标签片段，例如 blue hair"/>
+                    <button type="button" disabled={suggestingTags || !tagSearch.trim()} onClick={() => void loadNaiSuggestions()} className="primary rounded-xl px-3 text-[11px] font-semibold disabled:opacity-50">{suggestingTags ? '查询中' : '联想'}</button>
+                  </div>
+                  {tagSuggestions.length > 0 && <div className="flex flex-wrap gap-1.5">{tagSuggestions.map(item => <button key={item.tag} type="button" onClick={() => addNaiTag(item.tag)} className="rounded-lg border border-sky-100 bg-sky-50/80 px-2.5 py-1.5 text-[10px] text-sky-800">＋ {item.tag}</button>)}</div>}
+                </div>
+                <button type="button" onClick={generateRandomIdea} className="w-full soft rounded-xl py-2.5 text-xs font-semibold flex items-center justify-center gap-2"><Sparkle size={14}/>随机灵感组合 <span className="text-[10px] font-normal opacity-65">· 只追加，不覆盖原提示词</span></button>
               </div>
               <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">反向提示词</label><button onClick={() => copyPrompt(negativePrompt)} className="text-[10px] text-sky-700 flex items-center gap-1"><Copy size={12}/>复制</button></div>
               <textarea className="field min-h-[76px] resize-y leading-5" value={negativePrompt} onChange={event => setNegativePrompt(event.target.value)} placeholder="不希望出现在画面中的内容……"/>
+              <div className="space-y-2">
+                <div className="text-[10px] font-semibold text-slate-500">负面标签快捷包 · 点击追加</div>
+                <div className="flex flex-wrap gap-1.5">{NAI_NEGATIVE_PACKS.map(pack => <button key={pack.name} type="button" onClick={() => addNegativePack(pack.tags)} className="rounded-lg border border-rose-100 bg-rose-50/70 text-rose-700 px-2.5 py-1.5 text-[10px]">＋ {pack.name}</button>)}</div>
+              </div>
             </>}
           </section>
 
