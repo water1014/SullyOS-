@@ -30,9 +30,10 @@ const inFlightDescriptions = new Map<string, Promise<string>>();
 /** 把一份通用模型预设填入独立识图配置，不改变主 API 当前选择。 */
 export const visionApiConfigFromPreset = (preset: ApiPreset, enabled = true): VisionApiConfig => ({
   enabled,
-  baseUrl: normalizeApiBaseUrl(preset.config.baseUrl),
+  baseUrl: normalizeLlmBaseUrl(normalizeApiBaseUrl(preset.config.baseUrl), 'openai'),
   apiKey: normalizeApiCredential(preset.config.apiKey),
   model: normalizeApiModel(preset.config.model),
+  customHeaders: normalizeApiHeaders(preset.config.customHeaders),
   ...(preset.config.customHeaders ? { customHeaders: normalizeApiHeaders(preset.config.customHeaders) } : {}),
 });
 
