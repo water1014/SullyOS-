@@ -203,6 +203,28 @@ async function main() {
   });
   assertStatus(ackTwo, 200, 'ack update');
 
+  const deleteEvent = {
+    ...updateEvent,
+    eventId: 'evt_integration_delete',
+    operation: 'delete',
+    baseVersion: 2,
+    clientVersion: 3,
+    clientCreatedAt: Date.now(),
+    payload: {},
+  };
+  const deleted = await request('/v1/sync/push', { method: 'POST', token: deviceOne, body: { events: [deleteEvent] } });
+  assertStatus(deleted, 200, 'push delete tombstone');
+  assert.equal(deleted.body.outcomes[0].status, 'accepted');
+  const sequenceThree = deleted.body.outcomes[0].serverSequence;
+  const pulledDelete = await request(`/v1/sync/pull?cursor=${sequenceTwo}&limit=50`, { token: deviceTwo });
+  assertStatus(pulledDelete, 200, 'pull delete tombstone');
+  assert.equal(pulledDelete.body.events[0].operation, 'delete');
+  assert.deepEqual(pulledDelete.body.events[0].payload, {});
+  const ackThree = await request('/v1/sync/ack', {
+    method: 'POST', token: deviceTwo, body: { lastAckedSequence: sequenceThree },
+  });
+  assertStatus(ackThree, 200, 'ack delete tombstone');
+
   const devices = await request('/v1/devices', { token: deviceOne });
   assertStatus(devices, 200, 'list devices');
   assert.equal(devices.body.devices.length, 2);
