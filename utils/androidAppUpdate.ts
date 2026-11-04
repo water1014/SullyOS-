@@ -215,3 +215,6 @@ export const installVerifiedAndroidUpdate = (
   path: string,
   manifest: AndroidUpdateManifest,
 ): Promise<InstallAndroidApkResult> => ApkInstaller.installApk({ path, sha256: manifest.sha256 });
+
+export const openInstallPermissionSettings = (): Promise<void> =>
+  ApkInstaller.openInstallPermissionSettings();
