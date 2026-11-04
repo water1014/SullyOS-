@@ -64,7 +64,7 @@ import {
     type AvatarModelBackupInventory,
     type AvatarModelBackupProgress,
 } from '../utils/avatarModelBackup';
-import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel } from '../utils/apiConfigNormalize';
+import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel, normalizeApiHeaders, buildApiRequestHeaders } from '../utils/apiConfigNormalize';
 import { configFromPreset, findActivePresetId, presetDiffersFromConfig, type PresetSwitchPatch } from '../utils/apiPresetSwitch';
 import type { APIConfig, TtsProvider, SttProvider } from '../types';
 import {
@@ -507,6 +507,7 @@ const Settings: React.FC = () => {
   const [localKey, setLocalKey] = useState(apiConfig.apiKey);
   const [localUrl, setLocalUrl] = useState(apiConfig.baseUrl);
   const [localApiType, setLocalApiType] = useState<LlmApiType>(llmApiType(apiConfig));
+  const [localCustomHeaders, setLocalCustomHeaders] = useState<Record<string, string>>(() => normalizeApiHeaders(apiConfig.customHeaders));
   const [localModel, setLocalModel] = useState(String(apiConfig.model || ''));
   const [localStream, setLocalStream] = useState<boolean>(apiConfig.stream === true);
   const [localMaxTokens, setLocalMaxTokens] = useState(apiConfig.maxTokens ?? 8000);
@@ -990,12 +991,13 @@ const Settings: React.FC = () => {
   useEffect(() => {
       setLocalUrl(apiConfig.baseUrl);
       setLocalApiType(llmApiType(apiConfig));
+      setLocalCustomHeaders(normalizeApiHeaders(apiConfig.customHeaders));
       setLocalKey(apiConfig.apiKey);
       setLocalModel(String(apiConfig.model || ''));
       setLocalStream(apiConfig.stream === true);
       setLocalMaxTokens(apiConfig.maxTokens ?? 8000);
       setLocalTemperature(typeof apiConfig.temperature === 'number' ? apiConfig.temperature : 0.85);
-  }, [apiConfig.baseUrl, apiConfig.apiKey, apiConfig.model, apiConfig.stream, apiConfig.temperature, apiConfig.maxTokens, apiConfig.apiType]);
+  }, [apiConfig.baseUrl, apiConfig.apiKey, apiConfig.model, apiConfig.stream, apiConfig.temperature, apiConfig.maxTokens, apiConfig.apiType, JSON.stringify(apiConfig.customHeaders || {})]);
 
   useEffect(() => {
       setLocalVisionEnabled(apiConfig.visionApi?.enabled === true);
@@ -1042,7 +1044,7 @@ const Settings: React.FC = () => {
   // 这样刷新、手改 URL、导入备份之后，界面上的「使用中」永远等于请求真的会发去哪。
   const activePresetId = useMemo(
       () => findActivePresetId(apiPresets, apiConfig),
-      [apiPresets, apiConfig.baseUrl, apiConfig.apiKey, apiConfig.model],
+      [apiPresets, apiConfig.baseUrl, apiConfig.apiKey, apiConfig.model, JSON.stringify(apiConfig.customHeaders || {})],
   );
 
   /**
@@ -1174,6 +1176,7 @@ const Settings: React.FC = () => {
         stream: localStream,
         temperature: localTemperature,
         maxTokens: localMaxTokens,
+        customHeaders: normalizeApiHeaders(localCustomHeaders),
       }, newPresetGroup);
       setNewPresetName('');
       setNewPresetGroup('');
@@ -1197,6 +1200,7 @@ const Settings: React.FC = () => {
       stream: localStream,
       temperature: localTemperature,
       maxTokens: localMaxTokens,
+      customHeaders: normalizeApiHeaders(localCustomHeaders),
     };
     // 「是不是来自某条预设」要在保存之前问，存完值就对不上了
     const sourcePreset = apiPresets.find(preset => preset.id === activePresetId);
@@ -1429,10 +1433,10 @@ const Settings: React.FC = () => {
     setIsLoadingModels(true);
     setStatusMsg('正在连接...');
     try {
-        const response = await fetchLlm(`${baseUrl}/models`, {
-            method: 'GET',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' }
-        });
+        const isOpenCodeGo = /opencode\\.ai\\/inference\\/go\\/(?:openai|anthropic)\\/v1$/i.test(baseUrl);
+        const modelsUrl = isOpenCodeGo ? 'https://opencode.ai/inference/go/v1/models' : `${baseUrl}/models`;
+        const requestOptions = { method: 'GET', headers: buildApiRequestHeaders(apiKey, localCustomHeaders) };
+        const response = isOpenCodeGo ? await fetch(modelsUrl, requestOptions) : await fetchLlm(modelsUrl, requestOptions);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await safeResponseJson(response);
         // Support common OpenAI-compatible and nested gateway response formats.
@@ -2623,11 +2627,12 @@ const Settings: React.FC = () => {
 
             <div className="space-y-4">
                 <DialogueApiFields
-                    value={{ baseUrl: localUrl, apiKey: localKey, model: localModel, stream: localStream, temperature: localTemperature, maxTokens: localMaxTokens, apiType: localApiType }}
+                    value={{ baseUrl: localUrl, apiKey: localKey, model: localModel, stream: localStream, temperature: localTemperature, maxTokens: localMaxTokens, apiType: localApiType, customHeaders: localCustomHeaders }}
                     onChange={patch => {
                         if (patch.apiType !== undefined) setLocalApiType(patch.apiType);
                         if (patch.baseUrl !== undefined) setLocalUrl(patch.baseUrl);
                         if (patch.apiKey !== undefined) setLocalKey(patch.apiKey);
+                        if (patch.customHeaders !== undefined) setLocalCustomHeaders(normalizeApiHeaders(patch.customHeaders));
                         if (patch.stream !== undefined) setLocalStream(patch.stream);
                         if (patch.temperature !== undefined) setLocalTemperature(patch.temperature);
                         if ('maxTokens' in patch) setLocalMaxTokens(patch.maxTokens ?? 8000);
@@ -2655,7 +2660,7 @@ const Settings: React.FC = () => {
                         try {
                             const res = await fetchLlm(`${normalizeLlmBaseUrl(localUrl, localApiType)}/chat/completions`, {
                                 method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localKey.trim()}` },
+                                headers: buildApiRequestHeaders(localKey.trim(), localCustomHeaders),
                                 body: JSON.stringify({
                                     model: localModel.trim(),
                                     messages: [{ role: 'user', content: 'Hi' }],
