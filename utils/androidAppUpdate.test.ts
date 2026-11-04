@@ -149,7 +149,7 @@ describe('downloadAndVerifyAndroidUpdate', () => {
     await expect(downloadAndVerifyAndroidUpdate({ ...manifest, versionCode: 30403 }))
       .rejects.toThrow('另一个更新正在下载或校验');
     expect(filesystemMocks.deleteFile).toHaveBeenCalledTimes(1);
-    release({ valid: true, versionCode: manifest.versionCode });
+    release({ valid: true, packageName: 'com.aetheros.simulator', versionCode: manifest.versionCode, certificateSha256: 'b'.repeat(64) });
     await first;
   });
 
