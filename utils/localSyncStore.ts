@@ -239,6 +239,26 @@ export async function removeSyncEvent(eventId: string): Promise<void> {
     await done;
 }
 
+/**
+ * A data restore invalidates transport state so stale queued edits cannot be
+ * replayed over restored data. Keep the per-install identity, but reset all
+ * account/device cursors and transport/conflict copies. Sync preferences live
+ * in their own store and are intentionally preserved.
+ */
+export async function resetLocalSyncTransportStateAfterRestore(): Promise<void> {
+    const db = await openDB();
+    const tx = db.transaction([OUTBOX, INBOX, SYNC_STATE, CONFLICTS], 'readwrite');
+    const done = transactionDone(tx);
+    tx.objectStore(OUTBOX).clear();
+    tx.objectStore(INBOX).clear();
+    tx.objectStore(CONFLICTS).clear();
+    const state = tx.objectStore(SYNC_STATE);
+    const records = await requestResult(state.getAll()) as Array<{ id?: string }>;
+    records.filter(record => record.id !== LOCAL_DEVICE_IDENTITY_KEY)
+        .forEach(record => { if (record.id) state.delete(record.id); });
+    await done;
+}
+
 export async function getSyncQueueSummary(): Promise<SyncQueueSummary> {
     const db = await openDB();
     const tx = db.transaction(OUTBOX, 'readonly');
