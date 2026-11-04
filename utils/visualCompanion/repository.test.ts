@@ -138,6 +138,19 @@ describe('视觉人格本地仓库', () => {
         expect(TASK_TRANSITIONS.delivered).toEqual([]);
     });
 
+    it('生成完成后的持久化和待投递阶段仍允许取消', async () => {
+        const persisting = task({ id: 'task_cancel_persisting', deliveryId: 'delivery_cancel_persisting', status: 'persisting' });
+        await visualCompanionRepository.saveTask(persisting);
+        const cancelledPersisting = await visualCompanionRepository.transitionTask(persisting.id, 'cancelled');
+        expect(cancelledPersisting.status).toBe('cancelled');
+
+        const deliveryPending = task({ id: 'task_cancel_delivery', deliveryId: 'delivery_cancel_delivery', status: 'delivery_pending' });
+        await visualCompanionRepository.saveTask(deliveryPending);
+        const cancelledDelivery = await visualCompanionRepository.transitionTask(deliveryPending.id, 'cancelled');
+        expect(cancelledDelivery.status).toBe('cancelled');
+        expect(TASK_TRANSITIONS.cancelled).toEqual([]);
+    });
+
     it('更新写真分镜时不允许改变分镜 id', async () => {
         await visualCompanionRepository.saveProject({
             id: 'project_1',
