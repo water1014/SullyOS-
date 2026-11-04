@@ -38,6 +38,7 @@ import { MULTIPART_FAILURE_REASON } from '@rei-standard/amsg-shared';
 import { appendInstantTraceEntry } from './instantTraceLog';
 import { captureSwRegistrationSnapshot, probeSwChannel } from './swChannelProbe';
 import { trackEvent } from './analytics';
+import { maybeQueueVisualShareForActiveMessage } from './visualCompanion/activeMessageTrigger';
 import {
   readAmsgSarSurface,
   resolveAmsgSarSnapshot,
@@ -1697,6 +1698,24 @@ const flushInboxToChatImpl = async (trigger: FlushTrigger, charId?: string): Pro
         try {
           await replyStep(async () => processInboxMessageWithPostProcessing(message, persistTimestamp, replyRun, typingController.signal));
           routed = true;
+
+          // 视觉主动分享是聊天送达后的独立副作用：失败不能让已成功的聊天消息重入收件箱。
+          try {
+            const visualOutcome = await maybeQueueVisualShareForActiveMessage(message);
+            if (visualOutcome !== 'not_applicable' && visualOutcome !== 'denied') {
+              activeMsgTrace('visual-share-trigger', {
+                messageId: message.messageId,
+                charId: message.charId,
+                outcome: visualOutcome,
+              });
+            }
+          } catch (visualError) {
+            log.warn('视觉主动分享触发失败（不影响主动消息送达）', {
+              messageId: message.messageId,
+              charId: message.charId,
+              error: visualError,
+            });
+          }
         } catch (postErr) {
           if (replyRun?.signal.aborted || isReplyStopped(message.taskUuid)) continue;
           const attempts = (message.processAttempts ?? 0) + 1;
