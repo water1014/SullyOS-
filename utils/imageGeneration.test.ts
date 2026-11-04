@@ -1,10 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import JSZip from 'jszip';
-import { editGptImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint, suggestNaiTags, getNaiQualityTags } from './imageGeneration';
+import { editGptImage, generateGptImage, generateNaiImage, normalizeOpenAIImageEditsEndpoint, normalizeOpenAIImagesEndpoint, normalizeNaiGenerateEndpoint, suggestNaiTags, getNaiQualityTags } from './imageGeneration';
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe('image generation clients', () => {
+  it('normalizes NovelAI official and third-party generation endpoints', () => {
+    expect(normalizeNaiGenerateEndpoint('https://image.novelai.net')).toBe('https://image.novelai.net/ai/generate-image');
+    expect(normalizeNaiGenerateEndpoint('https://proxy.example/api', 'thirdparty')).toBe('https://proxy.example/api/ai/generate-image');
+    expect(normalizeNaiGenerateEndpoint('https://proxy.example/ai/generate-image', 'thirdparty')).toBe('https://proxy.example/ai/generate-image');
+    expect(() => normalizeNaiGenerateEndpoint('', 'thirdparty')).toThrow('请填写 NAI 第三方 API Base URL');
+  });
+
   it('normalizes an OpenAI-compatible images endpoint', () => {
     expect(normalizeOpenAIImagesEndpoint('https://api.openai.com/v1/')).toBe('https://api.openai.com/v1/images/generations');
     expect(normalizeOpenAIImagesEndpoint('https://proxy.example/v1/images/generations')).toBe('https://proxy.example/v1/images/generations');
