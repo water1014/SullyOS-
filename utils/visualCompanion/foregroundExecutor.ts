@@ -8,6 +8,7 @@
 import { editGptImage, generateGptImage, generateNaiImage, type GptImageConfig, type NaiImageConfig } from '../imageGeneration';
 import { getBlobForRef, putImageBlob } from '../blobRef';
 import { mergeCharacterAppearancePrompt } from './identityPrompt';
+import { resolveVisualReferenceAssetId } from './referenceAsset';
 import {
     markVisualAssetsPersisted,
     recordGeneratedVisualAssets,
@@ -45,12 +46,12 @@ function getProviderConfig(task: VisualTask): GptImageConfig | NaiImageConfig {
     return { ...config, model: task.model || config.model, provider: 'thirdparty' } as NaiImageConfig;
 }
 
-async function loadStandardReferenceImage(task: VisualTask): Promise<Blob | null> {
-    const referenceAssetId = task.referenceAssetIds[0];
+async function loadStandardReferenceImage(task: VisualTask, profileBaseAssetId?: string): Promise<Blob | null> {
+    const referenceAssetId = resolveVisualReferenceAssetId(task.referenceAssetIds, profileBaseAssetId);
     if (!referenceAssetId) return null;
 
     const asset = await visualCompanionRepository.getAsset(referenceAssetId);
-    if (!asset || asset.status !== 'ready' || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
+    if (!asset || asset.charId !== task.charId || asset.status !== 'ready' || asset.privacyScope !== 'standard' || asset.storage.kind !== 'blobref') {
         throw new Error('角色基础形象图片不可用，已停止生成以避免丢失形象锚点');
     }
     const blob = await getBlobForRef(asset.storage.ref);
@@ -65,7 +66,7 @@ async function generateForTask(task: VisualTask): Promise<Blob> {
     const appearanceProfile = await visualCompanionRepository.getProfile('visual_profile_' + encodeURIComponent(task.charId));
     const effectivePrompt = mergeCharacterAppearancePrompt(task.prompt, appearanceProfile);
     if (task.provider === 'openai' || task.provider === 'openai_compatible') {
-        const referenceImage = await loadStandardReferenceImage(task);
+        const referenceImage = await loadStandardReferenceImage(task, appearanceProfile?.baseAssetId);
         if (referenceImage) {
             return editGptImage(config as GptImageConfig, referenceImage, effectivePrompt, {
                 size: '1024x1024',
