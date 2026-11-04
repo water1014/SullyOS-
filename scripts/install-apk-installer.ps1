@@ -103,8 +103,14 @@ if ($manifest -notmatch 'androidx\.core\.content\.FileProvider') {
   if ($manifest -notmatch '</application>') { throw 'AndroidManifest.xml has no application closing tag.' }
   $manifest = $manifest.Replace('</application>', $provider + [Environment]::NewLine + '    </application>')
   Write-Utf8NoBom -Path $manifestPath -Value $manifest
-} elseif ($manifest -notmatch 'android:authorities="\$\{applicationId\}\.fileprovider"' -or $manifest -notmatch 'android:resource="@xml/apk_installer_paths"') {
-  throw 'An existing FileProvider uses a different authority or paths resource. Resolve the conflict manually before building.'
+} else {
+  if ($manifest -notmatch 'android:authorities="\$\{applicationId\}\.fileprovider"' -or $manifest -notmatch 'android:resource="@xml/apk_installer_paths"') {
+    throw 'An existing FileProvider uses a different authority or paths resource. Resolve the conflict manually before building.'
+  }
+  $providerTag = [regex]::Match($manifest, '<provider\b(?=[^>]*android:name="androidx\.core\.content\.FileProvider")[^>]*>').Value
+  if (-not $providerTag -or $providerTag -notmatch 'android:exported="false"' -or $providerTag -notmatch 'android:grantUriPermissions="true"') {
+    throw 'The existing FileProvider must be non-exported and grant URI read permissions explicitly.'
+  }
 }
 
 Write-Host 'ApkInstaller sources copied and Capacitor plugin registration checked.'
