@@ -177,8 +177,8 @@ describe('image generation clients', () => {
     expect(await blob.text()).toBe('nai-png');
     const [url, request] = vi.mocked(fetch).mock.calls[0];
     expect(url).toBe('https://nai-proxy.example/ai/generate-image');
-    expect(request.headers.get('Authorization')).toBe('Bearer thirdparty-token');
-    expect(request.headers.get('x-provider')).toBe('studio-test');
+    expect(new Headers(request.headers).get('Authorization')).toBe('Bearer thirdparty-token');
+    expect(new Headers(request.headers).get('x-provider')).toBe('studio-test');
     expect(JSON.parse(String(request.body))).toMatchObject({
       action: 'generate',
       model: 'nai-diffusion-5-full',
@@ -259,8 +259,8 @@ describe('image generation clients', () => {
     expect(String(url)).toContain('/ai/generate-image/suggest-tags?');
     expect(String(url)).toContain('model=nai-diffusion-5-full');
     expect(String(url)).toContain('prompt=blue');
-    expect(request.headers.get('Authorization')).toBe('Bearer pst-test');
-    expect(request.headers.get('x-tag-test')).toBe('enabled');
+    expect(new Headers(request.headers).get('Authorization')).toBe('Bearer pst-test');
+    expect(new Headers(request.headers).get('x-tag-test')).toBe('enabled');
   });
 
   it('rejects NovelAI tag suggestions without a persistent token', async () => {
