@@ -17,6 +17,7 @@ const checks = [
   ['Android 13+ notification permission is requested before projection consent', plugin.includes('Manifest.permission.POST_NOTIFICATIONS') && plugin.includes('requestPermissionForAlias("notifications"') && installer.includes('android.permission.POST_NOTIFICATIONS')],
   ['foreground service notification is ongoing and has an explicit stop action', service.includes('setOngoing(true)') && service.includes('addAction(') && service.includes('ACTION_STOP')],
   ['notification can freeze a chosen frame and resume capture', service.includes('ACTION_FREEZE') && service.includes('ACTION_RESUME') && service.includes('截取此刻') && service.includes('继续感知')],
+  ['frozen capture detaches the virtual display surface to reduce background work', service.includes('virtualDisplay.setSurface(null)') && service.includes('virtualDisplay.setSurface(imageReader.getSurface())')],
   ['native bridge exposes frozen state and resume control', plugin.includes('void resumeSession(PluginCall call)') && plugin.includes('result.put("frozen", ScreenAwarenessService.isFrozen())') && bridge.includes('resumeSession()')],
   ['chat requires a frozen frame and explicit preview confirmation before sending', chat.includes("case 'screen-share'") && chat.includes('status.frozen') && chat.includes('handleConfirmScreenShare') && chat.includes('userConfirmed: true') && chat.includes('确认发送给角色')],
   ['chat plus menu exposes the screen sharing action', chatInput.includes("key=\"screen-share\"") && chatInput.includes("onPanelAction('screen-share')")],
