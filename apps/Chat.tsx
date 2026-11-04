@@ -135,6 +135,7 @@ import {
     validateInstallableArtifact,
 } from '../features/collaboration/makers';
 import { upsertMountedWorldbooks } from '../utils/worldbook';
+import { getLatestScreenFrame, getScreenAwarenessStatus, isScreenAwarenessAvailable } from '../utils/androidScreenAwareness';
 
 const CollaborationWindow = React.lazy(() => import('../features/collaboration/CollaborationWindow'));
 
@@ -179,6 +180,8 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
     const [collaborationPreviewAssetId, setCollaborationPreviewAssetId] = useState<string | null>(null);
     const [memoryRepairOpen, setMemoryRepairOpen] = useState(false);
     const [favoritesOpen, setFavoritesOpen] = useState(false);
+    const [screenSharePreview, setScreenSharePreview] = useState<{ dataUrl: string; capturedAt: number } | null>(null);
+    const [screenShareSending, setScreenShareSending] = useState(false);
     
     // Emoji State
     const [emojis, setEmojis] = useState<Emoji[]>([]);
@@ -1788,6 +1791,50 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
         finally { exportingChatRef.current = false; }
     };
 
+    const handlePrepareScreenShare = async () => {
+        setShowPanel('none');
+        if (!isScreenAwarenessAvailable()) {
+            addToast('屏幕分享需要安装后的 Android App', 'info');
+            return;
+        }
+        try {
+            const status = await getScreenAwarenessStatus();
+            if (!status.active) {
+                addToast('请先到设置 → 手机与屏幕感知，授权并开启屏幕感知', 'info');
+                return;
+            }
+            if (!status.frozen) {
+                addToast('请先切换到要分享的 App，在通知栏点击“截取此刻”，再回到聊天分享', 'info');
+                return;
+            }
+            const frame = await getLatestScreenFrame();
+            setScreenSharePreview({
+                dataUrl: `data:${frame.mimeType};base64,${frame.base64}`,
+                capturedAt: frame.capturedAt,
+            });
+        } catch (error) {
+            addToast(error instanceof Error ? error.message : '读取屏幕画面失败', 'error');
+        }
+    };
+
+    const handleConfirmScreenShare = async () => {
+        if (!screenSharePreview || !char || screenShareSending) return;
+        setScreenShareSending(true);
+        try {
+            await handleSendText(screenSharePreview.dataUrl, 'image', {
+                source: 'screen_awareness',
+                capturedAt: screenSharePreview.capturedAt,
+                userConfirmed: true,
+            });
+            setScreenSharePreview(null);
+            addToast(`已把这张屏幕画面发送给 ${char.name}`, 'success');
+        } catch (error) {
+            addToast(error instanceof Error ? error.message : '屏幕画面发送失败', 'error');
+        } finally {
+            setScreenShareSending(false);
+        }
+    };
+
     const handlePanelAction = (type: string, payload?: any) => {
         // 只统计「打开某个面板 / 开关某个能力」这几个固定入口，名单写死在这里；
         // 选表情、选分类之类的动作不上报。
@@ -1797,7 +1844,7 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
             'html-mode-toggle', 'html-mode-settings', 'thinking-settings', 'favorites', 'collaboration',
             // 独立小功能：点一下就是用了一次，跟「打开某个面板」同一性质。
             // send-emoji / select-category 这些是「挑哪一个」，不进名单。
-            'poke', 'emoji-import', 'add-category', 'mcd-end', 'luckin-end', 'visual-create',
+            'poke', 'emoji-import', 'add-category', 'mcd-end', 'luckin-end', 'visual-create', 'screen-share',
         ].includes(type)) {
             trackEvent('打开聊天功能面板项', { action: type });
         }
@@ -1805,6 +1852,7 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
             case 'export-chat': void handleExportChat(); break;
             case 'collaboration': setShowPanel('none'); setCollaborationOpen(true); break;
             case 'visual-create': setShowPanel('none'); openApp(AppID.ImageStudio); break;
+            case 'screen-share': void handlePrepareScreenShare(); break;
             case 'memory-link': setShowPanel('none'); setMemoryRepairOpen(true); break;
             case 'favorites': setShowPanel('none'); setFavoritesOpen(true); break;
             case 'transfer': setModalType('transfer'); break;
@@ -4699,6 +4747,48 @@ const Chat: React.FC<{homePhone?:HomePhoneChatProps}> = ({homePhone}) => {
                 const closing = new Set(months);
                 updateCharacter(char.id, current => ({ activeMemoryMonths: (current.activeMemoryMonths || []).filter(month => !closing.has(month)) }));
             }} />}
+            <Modal
+                isOpen={screenSharePreview !== null}
+                title="确认分享屏幕画面"
+                onClose={() => { if (!screenShareSending) setScreenSharePreview(null); }}
+                footer={
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setScreenSharePreview(null)}
+                            disabled={screenShareSending}
+                            className="flex-1 rounded-2xl bg-slate-100 py-3 text-xs font-bold text-slate-600 disabled:opacity-50"
+                        >
+                            不发送
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void handleConfirmScreenShare()}
+                            disabled={screenShareSending || !screenSharePreview}
+                            className="flex-1 rounded-2xl bg-sky-600 py-3 text-xs font-bold text-white disabled:opacity-50"
+                        >
+                            {screenShareSending ? '发送中…' : '确认发送给角色'}
+                        </button>
+                    </>
+                }
+            >
+                {screenSharePreview && (
+                    <div className="space-y-3">
+                        <img
+                            src={screenSharePreview.dataUrl}
+                            alt="准备发送给角色的屏幕画面"
+                            className="max-h-[48vh] w-full rounded-2xl bg-slate-950 object-contain"
+                        />
+                        <p className="text-xs leading-relaxed text-slate-600">
+                            只有点击“确认发送给角色”后，这一张截图才会作为图片消息进入当前聊天。未确认时不会发送。
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                            截取时间：{new Date(screenSharePreview.capturedAt).toLocaleString()}
+                        </p>
+                    </div>
+                )}
+            </Modal>
+
             <Modal isOpen={showForwardModal} title="转发聊天记录" onClose={() => setShowForwardModal(false)}>
                 {(() => {
                     const forwardCandidates = characters.filter(c => c.id !== activeCharacterId);
