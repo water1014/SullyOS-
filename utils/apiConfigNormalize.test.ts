@@ -6,6 +6,7 @@ import {
   normalizeApiHeaders,
   buildApiRequestHeaders,
   isOpenCodeInferenceEndpoint,
+  isOpenCodeGoEndpoint,
 } from './apiConfigNormalize';
 
 describe('API config normalization', () => {
@@ -15,6 +16,12 @@ describe('API config normalization', () => {
 
   it('normalizes the base URL without touching its path', () => {
     expect(normalizeApiBaseUrl('  https://api.example.com/v1///\u200B ')).toBe('https://api.example.com/v1');
+  });
+
+  it('normalizes the user-facing OpenCode Zen Go URL to the OpenAI-compatible v1 root', () => {
+    expect(normalizeLlmBaseUrl('https://opencode.ai/zen/go', 'openai')).toBe('https://opencode.ai/zen/go/v1');
+    expect(normalizeLlmBaseUrl('https://opencode.ai/zen/go/', 'openai')).toBe('https://opencode.ai/zen/go/v1');
+    expect(isOpenCodeGoEndpoint('https://opencode.ai/zen/go/v1')).toBe(true);
   });
 
   it('recognizes OpenCode inference endpoints for both supported API families', () => {
