@@ -3,6 +3,8 @@ import {
   normalizeApiBaseUrl,
   normalizeApiConfig,
   normalizeApiCredential,
+  normalizeApiHeaders,
+  buildApiRequestHeaders,
 } from './apiConfigNormalize';
 
 describe('API config normalization', () => {
@@ -12,6 +14,14 @@ describe('API config normalization', () => {
 
   it('normalizes the base URL without touching its path', () => {
     expect(normalizeApiBaseUrl('  https://api.example.com/v1///\u200B ')).toBe('https://api.example.com/v1');
+  });
+
+  it('keeps valid custom headers and drops invalid or browser-forbidden headers', () => {
+    expect(normalizeApiHeaders({ ' X-OpenCode-Session ': ' session-1 ', 'bad header': 'x', Cookie: 'secret', 'X-Empty': '  ' }))
+      .toEqual({ 'X-OpenCode-Session': 'session-1' });
+    const headers = buildApiRequestHeaders('go-token', { 'X-OpenCode-Session': 'session-1' });
+    expect(headers.get('authorization')).toBe('Bearer go-token');
+    expect(headers.get('x-opencode-session')).toBe('session-1');
   });
 
   it('keeps unrelated API settings intact', () => {
@@ -32,6 +42,7 @@ describe('API config normalization', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'sk-test',
       model: 'gpt-test',
+      customHeaders: {},
       stream: true,
       temperature: 0.7,
       minimaxApiKey: 'mini-key',
