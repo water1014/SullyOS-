@@ -38,7 +38,7 @@ function normalizeSyncBaseUrl(value: string): string {
         || parsed.username || parsed.password || parsed.search || parsed.hash) {
         throw new Error('INVALID_SYNC_BASE_URL');
     }
-    return parsed.toString().replace(/\\/$/, '');
+    return parsed.toString().replace(/\/$/, '');
 }
 
 interface PairResponse {
@@ -59,7 +59,7 @@ async function requestJson<T>(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-        const response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
+        const response = await fetch(`${safeBaseUrl}${path}`, {
             method: options.method ?? 'GET',
             headers: {
                 ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
