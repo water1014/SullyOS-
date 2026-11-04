@@ -7,7 +7,7 @@ const AndroidUpdateControl: React.FC = () => {
     androidUpdateSession.subscribe, androidUpdateSession.getSnapshot, androidUpdateSession.getSnapshot,
   );
   if (!isAndroidAppUpdateEnabled()) return null;
-  const { check, download, continueInstall } = androidUpdateSession;
+  const { check, download, continueInstall, openInstallPermissionSettings } = androidUpdateSession;
   const canContinue = Boolean(downloadedPath) && (phase === 'permission' || phase === 'ready' || phase === 'error');
 
   const busy = phase === 'checking' || phase === 'downloading' || phase === 'installing';
@@ -19,10 +19,16 @@ const AndroidUpdateControl: React.FC = () => {
         ? '正在打开安装器…'
         : phase === 'available'
           ? `下载并安装 ${manifest?.versionName || '新版本'}`
-          : canContinue
-            ? phase === 'ready' ? '再次打开安装器' : '继续安装'
-            : '检查更新';
-  const onClick = phase === 'available' ? download : canContinue ? continueInstall : check;
+          : phase === 'permission'
+            ? '打开安装权限设置'
+            : canContinue
+              ? phase === 'ready' ? '再次打开安装器' : '继续安装'
+              : '检查更新';
+  const onClick = phase === 'available'
+    ? download
+    : phase === 'permission'
+      ? openInstallPermissionSettings
+      : canContinue ? continueInstall : check;
 
   return (
     <div className="mt-2 flex flex-col items-center gap-1.5">
@@ -34,6 +40,15 @@ const AndroidUpdateControl: React.FC = () => {
       >
         {label}
       </button>
+      {phase === 'permission' && (
+        <button
+          type="button"
+          onClick={() => void continueInstall()}
+          className="rounded-full border border-violet-200 px-4 py-2 text-[11px] font-semibold text-violet-700 transition-transform active:scale-95"
+        >
+          我已允许，继续安装
+        </button>
+      )}
       {phase === 'downloading' && (
         <div className="h-1 w-40 overflow-hidden rounded-full bg-slate-100">
           <div className="h-full bg-violet-400 transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
