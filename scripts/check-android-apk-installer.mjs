@@ -31,8 +31,8 @@ const checks = [
   ['APK compilation is opt-in and skipped by default', syncScript.includes('[switch]$BuildDebugApk') && syncScript.includes('if (-not $BuildDebugApk)') && syncScript.includes('pass -BuildDebugApk') && !syncScript.includes('[switch]$SkipAndroidBuild')],
   ['wrapper path boundary and source assets are validated before replacement', syncScript.includes('$wrapperPrefix = $wrapperRoot.TrimEnd') && syncScript.indexOf('$sourceBridgeCount') >= 0 && syncScript.indexOf('$sourceBridgeCount') < syncScript.indexOf('Get-ChildItem -LiteralPath $targetDist -Force | Remove-Item')],
   ['fork update channel stays disabled until its own signed release exists', updateManifest.status === 'disabled' && updateManifest.versionCode === 0 && updateManifest.apkUrl === '' && updateManifest.sha256 === '' && capacitorEnv.split(String.fromCharCode(10)).some((line) => line.trim() === 'VITE_APK_UPDATE_MANIFEST_URL=')],
-  ['no APK binary is tracked or staged in the repository', trackedFiles.every((path) => !/\\.apk$/i.test(path))],
-  ['GitHub workflows do not publish APK releases or APK artifacts', workflowSources.every((source) => !/softprops\\/action-gh-release|gh\\s+release\\s+(?:create|upload)/i.test(source) && !/(?:upload-artifact|upload-pages-artifact)[\\s\\S]{0,1200}\\.apk/i.test(source))],
+  ['no APK binary is tracked or staged in the repository', trackedFiles.every((path) => !/\.apk$/i.test(path))],
+  ['GitHub workflows do not publish APK releases or APK artifacts', workflowSources.every((source) => !/softprops\/action-gh-release|gh\s+release\s+(?:create|upload)/i.test(source) && !/(?:upload-artifact|upload-pages-artifact)[\s\S]{0,1200}\.apk/i.test(source))],
 ];
 
 for (const [label, passed] of checks) {
