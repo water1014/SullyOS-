@@ -2841,6 +2841,19 @@ const Settings: React.FC = () => {
                             placeholder="https://.../v1"
                             className="w-full bg-white/60 border border-slate-200/60 rounded-xl px-4 py-2.5 text-sm font-mono focus:bg-white transition-all disabled:cursor-not-allowed"
                         />
+                        <button
+                            type="button"
+                            disabled={!localVisionEnabled}
+                            onClick={() => {
+                                setLocalVisionUrl('https://opencode.ai/zen/go');
+                                if (localKey.trim()) setLocalVisionKey(localKey);
+                                setLocalVisionCustomHeaders(normalizeApiHeaders(localCustomHeaders));
+                                setSelectedVisionPresetId(null);
+                                setVisionTestResult(null);
+                            }}
+                            className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[10px] font-semibold text-sky-700 disabled:opacity-40"
+                        >使用 OpenCode Go 订阅</button>
+                        <p className="mt-1 text-[9px] leading-relaxed text-slate-400">会填入 /zen/go，并沿用上方主 API Key 与自定义请求头（如已填写）。请在模型列表中选择支持图片输入的视觉模型。</p>
                     </div>
                     <div>
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block pl-1">Key</label>
