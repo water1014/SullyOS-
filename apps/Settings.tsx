@@ -54,6 +54,7 @@ import { isPushVapidReady } from '../utils/pushVapid';
 import ApiCallLogModal from '../components/settings/ApiCallLogModal';
 import StorageUsagePanel from '../components/settings/StorageUsagePanel';
 import LocalSyncSettingsPanel from '../components/settings/LocalSyncSettingsPanel';
+import ScreenAwarenessSettingsPanel from '../components/settings/ScreenAwarenessSettingsPanel';
 import WebCacheControl from '../components/settings/WebCacheControl';
 import McpConnectionConsole from '../components/settings/McpConnectionConsole';
 import { DB } from '../utils/db';
@@ -2229,6 +2230,21 @@ const Settings: React.FC = () => {
 
         </SettingsSection>
         
+        <SettingsSection
+            title="手机与屏幕感知"
+            icon={
+                <div className="rounded-xl bg-sky-100 p-2 text-sky-700">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="h-4 w-4">
+                        <rect x="3" y="4" width="18" height="13" rx="2" />
+                        <path strokeLinecap="round" d="M8 21h8m-4-4v4" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m8 10 2.2 2.2L16 7.5" />
+                    </svg>
+                </div>
+            }
+        >
+            <ScreenAwarenessSettingsPanel />
+        </SettingsSection>
+
         {/* 数据备份区域 */}
         <SettingsSection
             title="备份与恢复 (ZIP)"
