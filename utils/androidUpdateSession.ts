@@ -1,6 +1,6 @@
 import {
   downloadAndVerifyAndroidUpdate, fetchAndroidUpdateManifest, getInstalledAndroidAppInfo,
-  installVerifiedAndroidUpdate, type AndroidUpdateManifest,
+  installVerifiedAndroidUpdate, openInstallPermissionSettings, type AndroidUpdateManifest,
 } from './androidAppUpdate';
 import { trackEvent } from './analytics';
 
@@ -114,9 +114,6 @@ export const createAndroidUpdateSession = (deps: Dependencies) => {
 export const androidUpdateSession = createAndroidUpdateSession({
   getInstalled: getInstalledAndroidAppInfo, fetchManifest: fetchAndroidUpdateManifest,
   download: downloadAndVerifyAndroidUpdate, install: installVerifiedAndroidUpdate,
-  openInstallPermissionSettings: async () => {
-    const { openInstallPermissionSettings } = await import('./androidAppUpdate');
-    await openInstallPermissionSettings();
-  },
+  openInstallPermissionSettings,
   track: trackEvent,
 });
