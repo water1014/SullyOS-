@@ -314,18 +314,41 @@ export async function updateSyncCursorState(
     deviceId: string,
     patch: Partial<Pick<SyncCursorState, 'lastPulledSequence' | 'lastAckedSequence' | 'lastSuccessfulSyncAt' | 'lastErrorCode'>>
 ): Promise<SyncCursorState> {
-    const current = await getSyncCursorState(accountId, deviceId);
-    const next: SyncCursorState = {
-        ...current, ...patch,
-        lastPulledSequence: Math.max(current.lastPulledSequence, patch.lastPulledSequence ?? 0),
-        lastAckedSequence: Math.max(current.lastAckedSequence, patch.lastAckedSequence ?? 0),
-        lastErrorCode: patch.lastErrorCode?.slice(0, 80),
-        updatedAt: Date.now(),
-    };
+    if (!accountId.trim() || !deviceId.trim()) throw new Error('SYNC_IDENTITY_REQUIRED');
+    for (const key of ['lastPulledSequence', 'lastAckedSequence'] as const) {
+        const value = patch[key];
+        if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+            throw new Error('INVALID_SYNC_CURSOR');
+        }
+    }
+
+    // Read + max-merge + write in one readwrite transaction. IndexedDB serializes
+    // overlapping readwrite transactions for this store, so a slower stale sync
+    // response cannot overwrite a newer cursor written by another sync worker.
+    const id = `${accountId}:${deviceId}`;
     const db = await openDB();
     const tx = db.transaction(SYNC_STATE, 'readwrite');
     const done = transactionDone(tx);
-    tx.objectStore(SYNC_STATE).put(next);
+    const store = tx.objectStore(SYNC_STATE);
+    const current = await requestResult(store.get(id)) as SyncCursorState | undefined;
+    const baseline: SyncCursorState = current ?? {
+        id, accountId, deviceId,
+        lastPulledSequence: 0,
+        lastAckedSequence: 0,
+        lastSuccessfulSyncAt: null,
+        updatedAt: 0,
+    };
+    const next: SyncCursorState = {
+        ...baseline,
+        lastPulledSequence: Math.max(baseline.lastPulledSequence, patch.lastPulledSequence ?? 0),
+        lastAckedSequence: Math.max(baseline.lastAckedSequence, patch.lastAckedSequence ?? 0),
+        lastSuccessfulSyncAt: patch.lastSuccessfulSyncAt ?? baseline.lastSuccessfulSyncAt,
+        lastErrorCode: patch.lastErrorCode === undefined
+            ? baseline.lastErrorCode
+            : patch.lastErrorCode?.slice(0, 80),
+        updatedAt: Date.now(),
+    };
+    store.put(next);
     await done;
     return next;
 }
