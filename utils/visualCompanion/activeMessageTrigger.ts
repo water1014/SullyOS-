@@ -77,7 +77,7 @@ function isFinalMessageChunk(message: ActiveMsg2InboxMessage): boolean {
  * Called after a scheduled proactive assistant message has landed in the local chat history.
  * Returns a short outcome for logs; failures are intentionally isolated from chat delivery.
  */
-export async function maybeQueueVisualShareForActiveMessage(
+async function queueVisualShareForActiveMessage(
     message: ActiveMsg2InboxMessage,
 ): Promise<'not_applicable' | 'not_ready' | 'denied' | 'queued'> {
     if (message.source !== 'scheduled' || !isFinalMessageChunk(message)) return 'not_applicable';
@@ -108,10 +108,17 @@ export async function maybeQueueVisualShareForActiveMessage(
         visualCompanionRepository.listAssets(message.charId),
         visualCompanionRepository.listTasks(message.charId),
     ]);
+    // Count only assets produced by autonomous-share tasks. Manual Image Studio work
+    // must not silently consume the companion's spontaneous-share quota.
+    const spontaneousTaskIds = new Set(tasks
+        .filter(task => task.kind === 'spontaneous_share')
+        .map(task => task.id));
     const imagesGeneratedToday = assets.filter(asset =>
         asset.privacyScope === 'standard'
         && asset.status === 'ready'
         && asset.createdAt >= dayStart
+        && !!asset.taskId
+        && spontaneousTaskIds.has(asset.taskId)
     ).length;
     const lastShareAt = tasks
         .filter(task => task.kind === 'spontaneous_share' && task.status === 'delivered')
@@ -162,4 +169,26 @@ export async function maybeQueueVisualShareForActiveMessage(
         });
     });
     return 'queued';
+}
+
+
+/**
+ * Serialize autonomous-share policy evaluation and task creation per character.
+ * This prevents two tabs processing different scheduled messages from both passing
+ * the same cooldown/quota snapshot. Web Locks is optional; deliveryId remains the
+ * idempotency backstop on browsers without it.
+ */
+export async function maybeQueueVisualShareForActiveMessage(
+    message: ActiveMsg2InboxMessage,
+): Promise<'not_applicable' | 'not_ready' | 'denied' | 'queued'> {
+    if (message.source !== 'scheduled' || !isFinalMessageChunk(message)) return 'not_applicable';
+    const lockManager = typeof navigator !== 'undefined' ? (navigator as any).locks : undefined;
+    if (lockManager?.request) {
+        return lockManager.request(
+            `visual-autonomy-share:${message.charId}`,
+            { mode: 'exclusive' },
+            () => queueVisualShareForActiveMessage(message),
+        );
+    }
+    return queueVisualShareForActiveMessage(message);
 }
