@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CharacterProfile, Message, UserProfile, VisionApiConfig } from '../types';
 import { ChatPrompts } from './chatPrompts';
 import { DB } from './db';
-import { materializeVisionDescriptions, visionApiConfigFromPreset } from './visionApi';
+import { describeImageWithVisionApi, materializeVisionDescriptions, visionApiConfigFromPreset } from './visionApi';
 
 const config: VisionApiConfig = {
   enabled: true,
@@ -40,6 +40,27 @@ describe('independent vision API', () => {
         temperature: 1.2,
       },
     })).toEqual(config);
+  });
+
+  it('uses the OpenCode Go zen endpoint and session header for vision recognition', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: '一只猫坐在窗台上。' } }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const description = await describeImageWithVisionApi(image, {
+      enabled: true,
+      baseUrl: 'https://opencode.ai/zen/go',
+      apiKey: 'go-token',
+      model: 'deepseek-v4-flash-vision-exp',
+    });
+
+    expect(description).toContain('猫');
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://opencode.ai/zen/go/v1/chat/completions');
+    expect(new Headers(options.headers).get('authorization')).toBe('Bearer go-token');
+    expect(new Headers(options.headers).get('x-opencode-session')).toBe('sullyos-vision');
   });
 
   it('recognizes identical image data once, writes both message caches, then reuses them', async () => {
