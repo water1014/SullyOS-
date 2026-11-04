@@ -361,8 +361,9 @@ export const parseStandardWorldbook = (
     const rawEntries = Array.isArray(container) ? container : Object.values(container);
     const books = rawEntries.flatMap((value: any, index: number): Worldbook[] => {
         if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.content !== 'string') return [];
-        const hasUid = value.uid !== undefined && value.uid !== null && value.uid !== '';
-        const parsedUid = hasUid ? Number(value.uid) : NaN;
+        const sourceId = value.uid ?? value.id;
+        const hasUid = sourceId !== undefined && sourceId !== null && sourceId !== '';
+        const parsedUid = hasUid ? Number(sourceId) : NaN;
         const uid = Number.isFinite(parsedUid) ? parsedUid : index;
         const primary = asStringArray(value.key ?? value.keys);
         const secondary = asStringArray(value.keysecondary ?? value.secondary_keys ?? value.secondaryKeys);
