@@ -349,7 +349,7 @@ export const parseStandardWorldbook = (
         const uid = Number.isFinite(parsedUid) ? parsedUid : index;
         const primary = asStringArray(value.key);
         const secondary = asStringArray(value.keysecondary);
-        const position = clamp(value.position, 0, 6, 1) as WorldbookPosition;
+        const position = clamp(value.position == null ? undefined : value.position, 0, 6, 1) as WorldbookPosition;
         const rawRole = value.role == null ? null : clamp(value.role, 0, 2, 0) as WorldbookDepthRole;
         const rawOrder = value.order == null || value.order === '' ? NaN : Number(value.order);
         return [{
@@ -363,13 +363,13 @@ export const parseStandardWorldbook = (
             keysecondary: secondary,
             constant: value.constant === true,
             selective: value.selective === true || (value.selective == null && secondary.length > 0),
-            selectiveLogic: clamp(value.selectiveLogic, 0, 3, 0) as WorldbookSelectiveLogic,
+            selectiveLogic: clamp(value.selectiveLogic == null ? undefined : value.selectiveLogic, 0, 3, 0) as WorldbookSelectiveLogic,
             order: Number.isFinite(rawOrder) ? rawOrder : 100,
             position,
             disable: value.disable === true,
-            probability: clamp(value.probability, 0, 100, 100),
+            probability: clamp(value.probability == null ? undefined : value.probability, 0, 100, 100),
             useProbability: value.useProbability === true,
-            depth: Math.max(0, Math.floor(clamp(value.depth, 0, 999, 4))),
+            depth: Math.max(0, Math.floor(clamp(value.depth == null ? undefined : value.depth, 0, 999, 4))),
             role: rawRole,
             scanDepth: value.scanDepth == null ? null : Math.max(0, Math.floor(clamp(value.scanDepth, 0, 999, 4))),
             caseSensitive: value.caseSensitive == null ? null : value.caseSensitive === true,
