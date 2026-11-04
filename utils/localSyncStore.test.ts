@@ -149,6 +149,40 @@ describe('local-first sync outbox', () => {
         expect((await listPendingInboxEvents()).map(event => event.eventId)).toEqual(['remote-2']);
     });
 
+    it('rejects inbox event identity or sequence collisions instead of silently accepting changed data', async () => {
+        const original = {
+            eventId: 'remote-stable', serverSequence: 4, entityType: 'room_note' as const,
+            entityId: 'note-stable', operation: 'create' as const, entityVersion: 1,
+            payload: { id: 'note-stable', charId: 'char-1', timestamp: 1, content: 'original', type: 'thought' },
+        };
+        await persistInboxEvents([original]);
+        await expect(persistInboxEvents([{
+            ...original, payload: { ...original.payload, content: 'tampered replay' },
+        }])).rejects.toThrow('INBOX_EVENT_ID_COLLISION');
+        await expect(persistInboxEvents([{
+            ...original, eventId: 'different-event', entityId: 'different-note',
+        }])).rejects.toThrow('INBOX_SEQUENCE_COLLISION');
+        expect(await listPendingInboxEvents()).toHaveLength(1);
+    });
+
+    it('bounds inbound batches and payload size and rejects malformed metadata', async () => {
+        const base = {
+            eventId: 'remote-bounded', serverSequence: 1, entityType: 'room_note' as const,
+            entityId: 'note-bounded', operation: 'create' as const, entityVersion: 1,
+            payload: { content: 'ok' },
+        };
+        await expect(persistInboxEvents(Array.from({ length: 101 }, (_, index) => ({
+            ...base, eventId: `batch-${index}`, serverSequence: index + 1,
+        })))).rejects.toThrow('INBOX_BATCH_TOO_LARGE');
+        await expect(persistInboxEvents([{ ...base, payload: { content: 'x'.repeat(65 * 1024) } }]))
+            .rejects.toThrow('INBOX_PAYLOAD_TOO_LARGE');
+        await expect(persistInboxEvents([{ ...base, operation: 'unknown' as any }]))
+            .rejects.toThrow('INVALID_INBOX_METADATA');
+        await expect(persistInboxEvents([{ ...base, operation: 'delete', payload: { content: 'must be empty' } }]))
+            .rejects.toThrow('DELETE_EVENT_PAYLOAD_MUST_BE_EMPTY');
+        expect(await listPendingInboxEvents()).toHaveLength(0);
+    });
+
 
 
     it('does not apply inbound note data without opt-in and purges pending inbound data when disabled', async () => {
