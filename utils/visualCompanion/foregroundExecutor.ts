@@ -5,7 +5,7 @@
  * Credentials/custom headers are read locally and are never copied into VisualTask records.
  * This is deliberately not a background/cloud executor: it runs only while the page is alive.
  */
-import { editGptImage, generateGptImage, generateNaiImage, type GptImageConfig, type NaiImageConfig } from '../imageGeneration';
+import { editGptImage, editNaiImage, generateGptImage, generateNaiImage, type GptImageConfig, type NaiImageConfig } from '../imageGeneration';
 import { getBlobForRef, putImageBlob } from '../blobRef';
 import {
     markVisualAssetsPersisted,
@@ -74,7 +74,22 @@ async function generateForTask(task: VisualTask): Promise<Blob> {
             quality: 'high',
         });
     }
-    return generateNaiImage(config as NaiImageConfig, task.prompt, task.negativePrompt || 'low quality, worst quality, blurry, bad anatomy', {
+    const naiConfig = config as NaiImageConfig;
+    const negativePrompt = task.negativePrompt || 'low quality, worst quality, blurry, bad anatomy';
+    const referenceImage = await loadStandardReferenceImage(task);
+    if (referenceImage) {
+        return editNaiImage(naiConfig, referenceImage, task.prompt, negativePrompt, {
+            width: 832,
+            height: 1216,
+            steps: 28,
+            scale: 5,
+            sampler: 'k_euler_ancestral',
+            // Conservative img2img strength prioritizes identity retention over scene drift.
+            strength: 0.35,
+            noise: 0.05,
+        });
+    }
+    return generateNaiImage(naiConfig, task.prompt, negativePrompt, {
         width: 832,
         height: 1216,
         steps: 28,
