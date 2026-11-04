@@ -286,13 +286,14 @@ export async function persistInboxEvents(events: Omit<LocalSyncInboxEvent, 'rece
         if (!event.payload || typeof event.payload !== 'object' || Array.isArray(event.payload)) {
             throw new Error('INVALID_INBOX_PAYLOAD');
         }
-        let payloadSize = 0;
+        let serializedPayload: string | undefined;
         try {
-            payloadSize = JSON.stringify(event.payload).length;
+            serializedPayload = JSON.stringify(event.payload);
         } catch {
             throw new Error('INVALID_INBOX_PAYLOAD');
         }
-        if (payloadSize > 64 * 1024) throw new Error('INBOX_PAYLOAD_TOO_LARGE');
+        if (typeof serializedPayload !== 'string') throw new Error('INVALID_INBOX_PAYLOAD');
+        if (serializedPayload.length > 64 * 1024) throw new Error('INBOX_PAYLOAD_TOO_LARGE');
         if (event.operation === 'delete' && Object.keys(event.payload).length !== 0) {
             throw new Error('DELETE_EVENT_PAYLOAD_MUST_BE_EMPTY');
         }
