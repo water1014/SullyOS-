@@ -190,7 +190,7 @@ export async function generateNaiImage(
     throw new Error(`NAI 生图失败（HTTP ${response.status}）：${message.slice(0, 240)}`);
   }
 
-  const archive = await JSZip.loadAsync(await response.blob());
+  const archive = await JSZip.loadAsync(await response.arrayBuffer());
   const imageFile = Object.values(archive.files).find(file =>
     !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
   );
