@@ -30,6 +30,20 @@ describe('API config normalization', () => {
     expect(isOpenCodeInferenceEndpoint('https://api.example.com/v1')).toBe(false);
   });
 
+  it('normalizes legacy zen/go roots on load for both protocol families', () => {
+    expect(normalizeApiConfig({
+      baseUrl: 'https://opencode.ai/zen/go',
+      apiKey: 'go-token',
+      model: 'kimi-k3',
+    }).baseUrl).toBe('https://opencode.ai/zen/go/v1');
+    expect(normalizeApiConfig({
+      baseUrl: 'https://opencode.ai/zen/go',
+      apiKey: 'go-token',
+      model: 'qwen3.8-max',
+      apiType: 'anthropic',
+    }).baseUrl).toBe('https://opencode.ai/zen/go/v1/messages');
+  });
+
   it('keeps valid custom headers and drops invalid or browser-forbidden headers', () => {
     expect(normalizeApiHeaders({ ' X-OpenCode-Session ': ' session-1 ', 'bad header': 'x', Cookie: 'secret', 'X-Empty': '  ' }))
       .toEqual({ 'X-OpenCode-Session': 'session-1' });
