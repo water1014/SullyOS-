@@ -35,6 +35,7 @@ const GroupChat = lazyApp(() => import('../apps/GroupChat'));
 const ThemeMaker = lazyApp(() => import('./chat/LegacyBubbleMakerEntry'));
 const Appearance = lazyApp(() => import('../apps/Appearance'));
 const Gallery = lazyApp(() => import('../apps/Gallery'));
+const ImageStudioApp = lazyApp(() => import('../apps/ImageStudioApp'));
 const DateApp = lazyApp(() => import('../apps/DateApp'));
 const UserApp = lazyApp(() => import('../apps/UserApp'));
 const JournalApp = lazyApp(() => import('../apps/JournalApp'));
@@ -71,7 +72,7 @@ const SpecialMomentsApp = lazyApp(() => import('./ValentineEvent').then(m => ({ 
 // 仅供「桌面稳定后的空闲串行预热」。严格 await 前一个再取下一个，且任何用户操作都会停止队列。
 // 高频 App 在前；低端设备/省流量/2G 由 shouldUseIdleAppPreload 整体跳过。
 const APP_IDLE_PRELOAD_ORDER: PreloadableLazy[] = [
-  Chat, Character, Settings, Appearance, GroupChat, RoomApp, CheckPhone,
+  Chat, Character, Settings, Appearance, GroupChat, RoomApp, CheckPhone, ImageStudioApp,
   JournalApp, ScheduleApp, SocialApp, MusicApp, CallApp, Gallery, DateApp, UserApp,
   StudyApp, GameApp, NovelApp, BankApp, WorldbookApp, MemoryPalaceApp, HandbookApp,
   VRWorldApp, WorldHomeApp, LifeSimApp, SongwritingApp, GuidebookApp, FAQApp, HotNewsApp,
@@ -88,7 +89,7 @@ let idlePreloadCursor = 0;
 const APP_BY_ID: Partial<Record<AppID, PreloadableLazy>> = {
   [AppID.Settings]: Settings, [AppID.Character]: Character, [AppID.Chat]: Chat,
   [AppID.GroupChat]: GroupChat, [AppID.ThemeMaker]: ThemeMaker, [AppID.Appearance]: Appearance,
-  [AppID.Gallery]: Gallery, [AppID.Date]: DateApp, [AppID.User]: UserApp,
+  [AppID.Gallery]: Gallery, [AppID.ImageStudio]: ImageStudioApp, [AppID.Date]: DateApp, [AppID.User]: UserApp,
   [AppID.Journal]: JournalApp, [AppID.Schedule]: ScheduleApp, [AppID.Room]: RoomApp,
   [AppID.CheckPhone]: CheckPhone, [AppID.Social]: SocialApp, [AppID.Study]: StudyApp,
   [AppID.FriendFeed]: FriendFeedApp,
@@ -969,6 +970,7 @@ const PhoneShell: React.FC = () => {
       case AppID.ThemeMaker: return <ThemeMaker />;
       case AppID.Appearance: return <Appearance />;
       case AppID.Gallery: return <Gallery />;
+      case AppID.ImageStudio: return <ImageStudioApp />;
       case AppID.Date: return <DateApp />; 
       case AppID.User: return <UserApp />;
       case AppID.Journal: return <JournalApp />; 
