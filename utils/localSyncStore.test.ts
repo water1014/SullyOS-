@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DB, openDB } from './db';
 import {
     enqueueRoomNoteSyncEvent,
@@ -510,21 +510,34 @@ describe('local-first sync outbox', () => {
         expect(await getSyncQueueSummary()).toEqual({ pending: 1, inFlight: 0, blocked: 0 });
     });
 
-    it('keeps event identity stable while retrying and increments attempts', async () => {
-        await setSyncPreference('room_note', true, 'text');
-        const event = await enqueueRoomNoteSyncEvent(note, 'create');
-        expect(event).not.toBeNull();
+    it('keeps event identity stable and applies a short retry backoff after network errors', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-11-04T12:00:00.000Z'));
+        try {
+            await setSyncPreference('room_note', true, 'text');
+            const event = await enqueueRoomNoteSyncEvent(note, 'create');
+            expect(event).not.toBeNull();
 
-        await updateSyncEventState(event!.eventId, 'in_flight');
-        await updateSyncEventState(event!.eventId, 'pending', 'NETWORK_UNAVAILABLE');
+            await updateSyncEventState(event!.eventId, 'in_flight');
+            await updateSyncEventState(event!.eventId, 'pending', 'NETWORK_UNAVAILABLE');
 
-        const [pending] = await listPendingSyncEvents();
-        expect(pending.eventId).toBe(event!.eventId);
-        expect(pending.attemptCount).toBe(1);
-        expect(pending.lastErrorCode).toBe('NETWORK_UNAVAILABLE');
+            expect(await listPendingSyncEvents()).toHaveLength(0);
+            vi.advanceTimersByTime(4_999);
+            expect(await listPendingSyncEvents()).toHaveLength(0);
+            vi.advanceTimersByTime(1);
+            const [pending] = await listPendingSyncEvents();
+            expect(pending.eventId).toBe(event!.eventId);
+            expect(pending.attemptCount).toBe(1);
+            expect(pending.lastErrorCode).toBe('NETWORK_UNAVAILABLE');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
-    it('recovers interrupted in-flight events but leaves fresh leases untouched', async () => {
+    it('recovers interrupted in-flight events with backoff but leaves fresh leases untouched', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-11-04T12:00:00.000Z'));
+        try {
         await setSyncPreference('room_note', true, 'text');
         const stale = await enqueueRoomNoteSyncEvent({ ...note, id: 'stale-event' }, 'create');
         const fresh = await enqueueRoomNoteSyncEvent({ ...note, id: 'fresh-event' }, 'create');
@@ -547,9 +560,14 @@ describe('local-first sync outbox', () => {
         expect(await recoverStaleInFlightSyncEvents(1_000)).toBe(1);
         const summary = await getSyncQueueSummary();
         expect(summary).toEqual({ pending: 1, inFlight: 1, blocked: 0 });
+        expect(await listPendingSyncEvents()).toHaveLength(0);
+        vi.advanceTimersByTime(5_000);
         const pending = await listPendingSyncEvents();
         expect(pending[0]).toMatchObject({ eventId: stale!.eventId, lastErrorCode: 'INTERRUPTED_REQUEST' });
         await expect(recoverStaleInFlightSyncEvents(500)).rejects.toThrow('INVALID_SYNC_LEASE_AGE');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('purges all transport copies on opt-out while preserving the original local note', async () => {
