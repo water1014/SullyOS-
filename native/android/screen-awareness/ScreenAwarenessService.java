@@ -290,7 +290,14 @@ public final class ScreenAwarenessService extends Service {
             }
         }
         if (captureThread != null) {
-            captureThread.quitSafely();
+            HandlerThread thread = captureThread;
+            if (captureHandler != null) captureHandler.removeCallbacksAndMessages(null);
+            thread.quitSafely();
+            try {
+                thread.join(1500L);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
             captureThread = null;
             captureHandler = null;
         }
