@@ -78,8 +78,8 @@ jobs:
           }
       - name: Run tests
         run: pnpm exec vitest run utils/imageGeneration.test.ts utils/blobGc.test.ts utils/visualCompanion/data.test.ts utils/visualCompanion/repository.test.ts utils/visualCompanion/autonomyPolicy.test.ts utils/visualCompanion/autonomySettings.test.ts utils/apiConfigNormalize.test.ts utils/characterApi.test.ts utils/apiPresetSwitch.test.ts utils/localSyncStore.test.ts utils/androidSecureStorage.test.ts utils/companionSyncClient.test.ts server/companion-sync/protocol.test.ts utils/androidAppUpdate.test.ts utils/androidUpdateSession.test.ts utils/androidUpdateControl.test.ts
-      - name: Check first-party Android build scripts
-        run: node --check scripts/install-capacitor-android-plugins.mjs && node --check scripts/build-capacitor-android.mjs
+      - name: Check first-party Android build scripts and screen awareness privacy contract
+        run: node --check scripts/install-capacitor-android-plugins.mjs && node --check scripts/build-capacitor-android.mjs && node scripts/check-android-screen-awareness.mjs
       - name: Build production app
         run: pnpm build
       - name: Setup Java for Android build
