@@ -461,7 +461,7 @@ const ImageStudioApp: React.FC = () => {
                 <div className="flex items-center justify-between gap-1"><span className="text-xs font-bold text-slate-700">OpenAI 兼容</span>{engine === 'gpt' && <Check size={13} className="text-sky-600"/>}</div>
                 <div className="text-[9px] text-slate-500 mt-1">第三方兼容接口</div>
               </button>
-              <button onClick={() => { setEngine('nai'); updateNai({ provider: 'thirdparty' }); }} className={`rounded-2xl p-2.5 text-left border ${engine === 'nai' && config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
+              <button onClick={() => { setEngine('nai'); updateNai({ provider: 'thirdparty', baseUrl: config.nai.baseUrl === 'https://image.novelai.net' ? '' : config.nai.baseUrl }); }} className={`rounded-2xl p-2.5 text-left border ${engine === 'nai' && config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-100' : 'bg-white/55 border-white'}`}>
                 <div className="flex items-center justify-between gap-1"><span className="text-xs font-bold text-slate-700">NAI 第三方</span>{engine === 'nai' && config.nai.provider === 'thirdparty' && <Check size={13} className="text-sky-600"/>}</div>
                 <div className="text-[9px] text-slate-500 mt-1">自定义代理地址</div>
               </button>
@@ -668,7 +668,7 @@ const ImageStudioApp: React.FC = () => {
             <label className="block text-xs font-semibold text-slate-600">NAI 接口类型</label>
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => updateNai({provider:'official',baseUrl:'https://image.novelai.net'})} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'official' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>官方接口</button>
-              <button type="button" onClick={() => updateNai({provider:'thirdparty'})} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>第三方 / 代理</button>
+              <button type="button" onClick={() => updateNai({provider:'thirdparty',baseUrl:config.nai.baseUrl === 'https://image.novelai.net' ? '' : config.nai.baseUrl})} className={`rounded-xl border py-2.5 text-xs font-semibold ${config.nai.provider === 'thirdparty' ? 'bg-sky-50 border-sky-300 text-sky-800' : 'bg-white/60 border-white text-slate-500'}`}>第三方 / 代理</button>
             </div>
             {config.nai.provider === 'thirdparty' && <>
               <label className="block text-xs font-semibold text-slate-600">第三方 API Base URL</label>
