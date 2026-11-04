@@ -9,13 +9,13 @@ const androidApp = join(androidRoot, 'app');
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const windows = process.platform === 'win32';
 
-function run(command, args, cwd = root) {
+function run(command, args, cwd = root, envOverrides = {}) {
   process.stdout.write(`\n> ${command} ${args.join(' ')}\n`);
   const result = spawnSync(command, args, {
     cwd,
     stdio: 'inherit',
     shell: windows,
-    env: process.env,
+    env: { ...process.env, ...envOverrides },
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
@@ -28,7 +28,7 @@ async function main() {
 
   run(pnpmCommand, ['run', 'build:chat-preview']);
   run(pnpmCommand, ['run', 'build:workers']);
-  run(pnpmCommand, ['exec', 'vite', 'build', '--mode', 'capacitor']);
+  // Personal Android APK: hide the branch badge and its floating developer wrench.\n  run(pnpmCommand, ['exec', 'vite', 'build', '--mode', 'capacitor'], root, { VITE_HIDE_BUILD_BADGE: '1' });
 
   if (!existsSync(androidApp)) {
     if (existsSync(androidRoot)) {
