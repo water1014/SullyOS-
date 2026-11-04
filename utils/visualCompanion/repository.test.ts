@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DB } from '../db';
 import { assertAssetPrivacy, TASK_TRANSITIONS, visualCompanionRepository } from './repository';
+import { deliverVisualTaskToChat } from './delivery';
 import type { VisualAssetRecord, VisualTask } from './types';
 import { claimNextVisualTask, createVisualTask, markVisualAssetsPersisted, markVisualTaskDelivered, recordGeneratedVisualAssets, resumeVisualTaskRetry, scheduleVisualTaskRetry, startVisualGeneration } from './orchestrator';
 
@@ -177,6 +178,38 @@ describe('视觉人格本地仓库', () => {
         expect(generated.resultAssetIds).toEqual(['asset_result_1']);
         const pending = await markVisualAssetsPersisted(created.id);
         expect(pending.status).toBe('delivery_pending');
+    });
+
+    it('将已保存的标准图片以幂等方式投递回角色聊天', async () => {
+        const created = await createVisualTask({
+            charId: 'char_1',
+            kind: 'spontaneous_share',
+            privacyScope: 'standard',
+            provider: 'openai',
+            providerConfigId: 'provider_ref_only',
+            model: 'gpt-image',
+            prompt: '只保留在任务侧的提示词',
+            referenceAssetIds: [],
+            maxAttempts: 3,
+            budget: { maxImages: 1 },
+        });
+        await claimNextVisualTask('char_1');
+        await startVisualGeneration(created.id);
+        await recordGeneratedVisualAssets(created.id, ['asset_chat_1']);
+        await markVisualAssetsPersisted(created.id);
+
+        const first = await deliverVisualTaskToChat(created.id, 'blobref:b_visual_chat_1');
+        const second = await deliverVisualTaskToChat(created.id, 'blobref:b_visual_chat_1');
+        expect(first.messageId).toBe(second.messageId);
+        expect(second.task.status).toBe('delivered');
+        expect(second.task.deliveredMessageId).toBe(first.messageId);
+
+        const messages = await DB.getMessagesByCharId('char_1', true);
+        const delivered = messages.filter(message => message.metadata?.deliveryId === created.deliveryId);
+        expect(delivered).toHaveLength(1);
+        expect(delivered[0].role).toBe('assistant');
+        expect(delivered[0].type).toBe('image');
+        expect(delivered[0].content).toBe('blobref:b_visual_chat_1');
     });
 
     it('投递失败恢复时只回到 delivery_pending，不重新生成', async () => {
