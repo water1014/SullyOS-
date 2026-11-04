@@ -423,8 +423,12 @@ const ImageStudioApp: React.FC = () => {
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = '糯米机-生图室备份-' + new Date().toISOString().slice(0, 10) + '.zip';
+      document.body.appendChild(anchor);
       anchor.click();
-      URL.revokeObjectURL(url);
+      anchor.remove();
+      // Mobile browsers may begin the download after the click handler returns.
+      // Keep the object URL alive briefly so the ZIP is not revoked too early.
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
       addToast('已打包导出 ' + manifest.length + ' 张作品', 'success');
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : '备份导出失败';
@@ -448,7 +452,9 @@ const ImageStudioApp: React.FC = () => {
       }
 
       const existing = readItems();
-      const knownSourceIds = new Set(existing.map(item => item.backupSourceId).filter(Boolean));
+      // An archive exported by this same installation uses item.id as sourceId.
+      // Restoring it must be idempotent too, not only archives imported elsewhere.
+      const knownSourceIds = new Set(existing.flatMap(item => [item.id, item.backupSourceId]).filter((id): id is string => typeof id === 'string' && !!id));
       const imported: DisplayImage[] = [];
       let skipped = 0;
       let failed = 0;
@@ -533,14 +539,21 @@ const ImageStudioApp: React.FC = () => {
     if (!targets.length || bulkBusy || !window.confirm('确定删除选中的 ' + targets.length + ' 张作品吗？此操作无法撤销。')) return;
     setBulkBusy(true);
     try {
-      await Promise.all(targets.map(item => DB.deleteBlobAsset(item.blobId).catch(() => undefined)));
-      const removed = new Set(targets.map(item => item.id));
-      persistItems(readItems().filter(item => !removed.has(item.id)));
-      setImages(current => current.filter(item => !removed.has(item.id)));
-      setSelected(current => current && removed.has(current.id) ? null : current);
-      targets.forEach(item => URL.revokeObjectURL(item.url));
+      const results = await Promise.all(targets.map(async item => {
+        try { await DB.deleteBlobAsset(item.blobId); return { item, ok: true as const }; }
+        catch { return { item, ok: false as const }; }
+      }));
+      const deleted = results.filter(result => result.ok).map(result => result.item);
+      const failed = results.length - deleted.length;
+      const removed = new Set(deleted.map(item => item.id));
+      if (removed.size) {
+        persistItems(readItems().filter(item => !removed.has(item.id)));
+        setImages(current => current.filter(item => !removed.has(item.id)));
+        setSelected(current => current && removed.has(current.id) ? null : current);
+        deleted.forEach(item => URL.revokeObjectURL(item.url));
+      }
       setSelectedIds(new Set());
-      addToast('已删除 ' + targets.length + ' 张作品', 'success');
+      addToast(failed ? `删除完成：成功 ${deleted.length} 张，失败 ${failed} 张，失败作品已保留` : '已删除 ' + deleted.length + ' 张作品', failed ? 'error' : 'success');
     } finally {
       setBulkBusy(false);
     }
@@ -548,7 +561,12 @@ const ImageStudioApp: React.FC = () => {
 
   const deleteImage = async (item: DisplayImage) => {
     if (!window.confirm('确定删除这张作品吗？')) return;
-    await DB.deleteBlobAsset(item.blobId).catch(() => undefined);
+    try {
+      await DB.deleteBlobAsset(item.blobId);
+    } catch {
+      addToast('图片文件删除失败，作品记录已保留，请稍后重试', 'error');
+      return;
+    }
     const next = readItems().filter(saved => saved.id !== item.id);
     persistItems(next);
     setImages(current => current.filter(saved => saved.id !== item.id));
