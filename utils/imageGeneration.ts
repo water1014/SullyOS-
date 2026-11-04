@@ -88,7 +88,7 @@ export async function generateNaiImage(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey.trim()}`,
-      Accept: 'application/octet-stream',
+      Accept: 'application/zip',
     },
     body: JSON.stringify({
       input: prompt.trim(),
@@ -103,7 +103,6 @@ export async function generateNaiImage(
         n_samples: 1,
         seed: options.seed && options.seed > 0 ? options.seed : Math.floor(Math.random() * 4294967295),
         negative_prompt: negativePrompt.trim(),
-        uc: negativePrompt.trim(),
         noise_schedule: 'karras',
         cfg_rescale: 0,
         qualityToggle: true,
@@ -128,5 +127,8 @@ export async function generateNaiImage(
     !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
   );
   if (!imageFile) throw new Error('NAI 返回成功，但压缩包中没有找到图片文件');
-  return imageFile.async('blob');
+  const bytes = await imageFile.async('uint8array');
+  const extension = imageFile.name.toLowerCase().split('.').pop();
+  const mimeType = extension === 'webp' ? 'image/webp' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : 'image/png';
+  return new Blob([bytes], { type: mimeType });
 }
