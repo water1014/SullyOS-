@@ -149,7 +149,7 @@ export async function generateGptImage(
 }
 
 export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'official' | 'thirdparty' = 'official'): string {
-  const clean = (baseUrl.trim() || (provider === 'official' ? 'https://image.novelai.net' : '')).replace(/\\/+$/, '');
+  const clean = (baseUrl.trim() || (provider === 'official' ? 'https://image.novelai.net' : '')).replace(/\/+$/, '');
   if (!clean) throw new Error('请填写 NAI 第三方 API Base URL');
   return clean.endsWith('/ai/generate-image') ? clean : `${clean}/ai/generate-image`;
 }
