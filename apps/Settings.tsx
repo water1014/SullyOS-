@@ -1010,7 +1010,8 @@ const Settings: React.FC = () => {
       setLocalVisionUrl(apiConfig.visionApi?.baseUrl || '');
       setLocalVisionKey(apiConfig.visionApi?.apiKey || '');
       setLocalVisionModel(apiConfig.visionApi?.model || '');
-  }, [apiConfig.visionApi?.baseUrl || '', apiConfig.visionApi?.apiKey || '', apiConfig.visionApi?.model || '']);
+      setLocalVisionCustomHeaders(normalizeApiHeaders(apiConfig.visionApi?.customHeaders));
+  }, [apiConfig.visionApi?.baseUrl || '', apiConfig.visionApi?.apiKey || '', apiConfig.visionApi?.model || '', JSON.stringify(apiConfig.visionApi?.customHeaders || {})]);
 
   useEffect(() => {
       setLocalMiniMaxKey(apiConfig.minimaxApiKey || '');
