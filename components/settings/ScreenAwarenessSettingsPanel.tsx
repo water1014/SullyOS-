@@ -4,6 +4,7 @@ import {
     getLatestScreenFrame,
     getScreenAwarenessStatus,
     isScreenAwarenessAvailable,
+    resumeScreenAwareness,
     startScreenAwareness,
     stopScreenAwareness,
 } from '../../utils/androidScreenAwareness';
@@ -11,6 +12,7 @@ import {
 const ScreenAwarenessSettingsPanel: React.FC = () => {
     const available = isScreenAwarenessAvailable();
     const [active, setActive] = useState(false);
+    const [frozen, setFrozen] = useState(false);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState('');
     const [preview, setPreview] = useState('');
@@ -21,12 +23,14 @@ const ScreenAwarenessSettingsPanel: React.FC = () => {
         try {
             const status = await getScreenAwarenessStatus();
             setActive(status.active);
+            setFrozen(status.frozen);
             if (!status.active) {
                 setPreview('');
                 setCapturedAt(0);
             }
         } catch {
             setActive(false);
+            setFrozen(false);
         }
     }, [available]);
 
@@ -57,11 +61,26 @@ const ScreenAwarenessSettingsPanel: React.FC = () => {
         try {
             await stopScreenAwareness();
             setActive(false);
+            setFrozen(false);
             setPreview('');
             setCapturedAt(0);
             setMessage('屏幕感知已停止，本机临时画面已清理。');
         } catch (error) {
             setMessage(error instanceof Error ? error.message : '停止屏幕感知失败');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const handleResume = async () => {
+        setBusy(true);
+        try {
+            await resumeScreenAwareness();
+            setFrozen(false);
+            setMessage('已恢复屏幕感知。若要分享其他 App 的画面，请在目标 App 中点通知栏的“截取此刻”。');
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : '恢复屏幕感知失败');
+            await refreshStatus();
         } finally {
             setBusy(false);
         }
@@ -118,7 +137,7 @@ const ScreenAwarenessSettingsPanel: React.FC = () => {
             </div>
 
             <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
-                开启前需要允许通知，然后会弹出 Android 官方屏幕共享确认框；运行期间通知栏会显示持续提示和停止按钮。当前版本每隔数秒只在本机缓存最新画面，不会自动上传云端，也不会自动发给宋祁。
+                开启前需要允许通知，然后会弹出 Android 官方屏幕共享确认框。运行期间通知栏会提供“截取此刻”和“停止感知”。要分享其他 App 的画面，请在那个 App 中从通知栏截取并暂停，再回到聊天选择分享。画面只在本机缓存，不会自动上传或发送。
             </p>
 
             {!available ? (
@@ -134,8 +153,13 @@ const ScreenAwarenessSettingsPanel: React.FC = () => {
                     ) : (
                         <>
                             <button type="button" onClick={handlePreview} disabled={busy} className="rounded-xl bg-sky-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm disabled:opacity-50">
-                                {busy ? '读取中…' : '查看本机画面'}
+                                {busy ? '读取中…' : frozen ? '查看已截取画面' : '查看本机画面'}
                             </button>
+                            {frozen && (
+                                <button type="button" onClick={handleResume} disabled={busy} className="rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-xs font-bold text-sky-700 disabled:opacity-50">
+                                    继续感知
+                                </button>
+                            )}
                             <button type="button" onClick={handleStop} disabled={busy} className="rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-bold text-rose-600 disabled:opacity-50">
                                 停止感知
                             </button>
