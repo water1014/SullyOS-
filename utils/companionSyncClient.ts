@@ -18,6 +18,16 @@ import {
 } from './localSyncStore';
 import { secureStorageGet, secureStoragePut, secureStorageRemove, isPersistentSecureStorageAvailable } from './androidSecureStorage';
 
+export interface CompanionRemoteDevice {
+    id: string;
+    label: string;
+    platform: string;
+    appVersion: string | null;
+    createdAt: string;
+    lastSeenAt: string | null;
+    revokedAt: string | null;
+}
+
 const TOKEN_KEY = 'companion.device-token';
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -100,6 +110,32 @@ export async function pairCompanionDevice(input: {
 export async function hasCompanionDeviceToken(): Promise<boolean> {
     try { return Boolean(await secureStorageGet(TOKEN_KEY)); }
     catch { return false; }
+}
+
+export async function listCompanionDevices(): Promise<CompanionRemoteDevice[]> {
+    const connection = await getCompanionSyncConnection();
+    if (!connection) throw new Error('COMPANION_NOT_PAIRED');
+    const token = await secureStorageGet(TOKEN_KEY);
+    if (!token) throw new Error('DEVICE_TOKEN_UNAVAILABLE_REPAIR_REQUIRED');
+    const result = await requestJson<{ devices: CompanionRemoteDevice[] }>(
+        connection.baseUrl, '/v1/devices', { token },
+    );
+    if (!Array.isArray(result.devices)) throw new Error('INVALID_DEVICE_LIST_RESPONSE');
+    return result.devices.filter(device =>
+        device && typeof device.id === 'string' && typeof device.label === 'string'
+        && typeof device.platform === 'string'
+    );
+}
+
+export async function revokeCompanionDevice(deviceId: string): Promise<void> {
+    if (!/^[0-9a-f-]{36}$/i.test(deviceId)) throw new Error('INVALID_DEVICE_ID');
+    const connection = await getCompanionSyncConnection();
+    if (!connection) throw new Error('COMPANION_NOT_PAIRED');
+    const token = await secureStorageGet(TOKEN_KEY);
+    if (!token) throw new Error('DEVICE_TOKEN_UNAVAILABLE_REPAIR_REQUIRED');
+    await requestJson(connection.baseUrl, `/v1/devices/${encodeURIComponent(deviceId)}`, {
+        method: 'DELETE', token,
+    });
 }
 
 export async function disconnectCompanionDevice(revokeOnServer = true): Promise<void> {
