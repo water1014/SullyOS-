@@ -93,6 +93,14 @@ export async function maybeQueueVisualShareForActiveMessage(
     const provider = readProviderSelection(settings.providerPreference);
     if (!provider) return 'not_ready';
 
+    // NovelAI's official API documentation requires image generations to be initiated
+    // by a human action. Keep NAI available for explicit user-triggered creation, but
+    // never call it from this autonomous scheduled-message path. Third-party proxies
+    // are gated too until their own automation terms are explicitly verified.
+    if (provider.provider === 'novelai_official' || provider.provider === 'novelai_compatible') {
+        return 'not_ready';
+    }
+
     const now = Date.now();
     const localDate = new Date(now);
     const dayStart = new Date(localDate.getFullYear(), localDate.getMonth(), localDate.getDate()).getTime();
