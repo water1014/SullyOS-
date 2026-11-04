@@ -105,6 +105,20 @@ describe('视觉人格本地仓库', () => {
         expect(saved?.identity[0].locked).toBe(true);
     });
 
+    it('已确认且锁定的视觉记忆不能被自动覆盖或删除', async () => {
+        const locked = {
+            id: 'memory_locked', charId: 'char_1', status: 'confirmed' as const,
+            source: 'user' as const, category: 'appearance', content: '银色长发，琥珀色眼睛',
+            locked: true, privacyScope: 'standard' as const, createdAt: now, updatedAt: now,
+        };
+        await visualCompanionRepository.saveMemory(locked);
+        await expect(visualCompanionRepository.saveMemory({ ...locked, content: '黑色短发', source: 'image_inference', updatedAt: now + 1 })).rejects.toThrow('已确认并锁定');
+        await expect(visualCompanionRepository.deleteMemory(locked.id)).rejects.toThrow('不可删除');
+        const saved = await visualCompanionRepository.getMemory(locked.id);
+        expect(saved?.content).toBe('银色长发，琥珀色眼睛');
+        expect(saved?.locked).toBe(true);
+    });
+
     it('拒绝跨越非法任务状态，允许有效推进', async () => {
         await visualCompanionRepository.saveTask(task());
         await expect(visualCompanionRepository.transitionTask('task_1', 'delivered')).rejects.toThrow('不允许的视觉任务状态转换');
