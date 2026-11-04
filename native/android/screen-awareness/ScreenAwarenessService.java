@@ -71,7 +71,31 @@ public final class ScreenAwarenessService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        // A process may be killed while capture is active. Remove any frame left by
+        // the previous process before a new consent session can begin.
+        clearTemporaryFrames(this);
         createNotificationChannel();
+    }
+
+    public static boolean clearTemporaryFrames(Context context) {
+        File frame = getLatestFrameFile(context);
+        File directory = frame.getParentFile();
+        File temporary = directory == null ? null : new File(directory, "latest.tmp");
+        boolean cleared = deleteIfPresent(frame);
+        if (temporary != null) cleared = deleteIfPresent(temporary) && cleared;
+        if (directory != null && directory.exists() && directory.isDirectory()) {
+            // The directory should contain only this feature's two temporary files.
+            String[] leftovers = directory.list();
+            if (leftovers != null && leftovers.length == 0) {
+                //noinspection ResultOfMethodCallIgnored
+                directory.delete();
+            }
+        }
+        return cleared;
+    }
+
+    private static boolean deleteIfPresent(File file) {
+        return !file.exists() || file.delete();
     }
 
     @Override
@@ -348,10 +372,7 @@ public final class ScreenAwarenessService extends Service {
             captureThread = null;
             captureHandler = null;
         }
-        File frame = getLatestFrameFile(this);
-        if (frame.exists()) frame.delete();
-        File directory = frame.getParentFile();
-        if (directory != null && directory.exists()) directory.delete();
+        clearTemporaryFrames(this);
         stopForeground(true);
     }
 
