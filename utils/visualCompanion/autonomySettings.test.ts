@@ -15,6 +15,7 @@ describe('per-character visual autonomy settings', () => {
         expect(settings.allowSpontaneousShare).toBe(false);
         expect(settings.requireApprovalForNewIdentity).toBe(true);
         expect(settings.frequency).toBe('natural');
+        expect(settings.providerPreference).toBe('auto');
         expect(settings.updatedAt).toBe(123);
     });
 
@@ -34,6 +35,7 @@ describe('per-character visual autonomy settings', () => {
         localStorage.setItem('sully-visual-autonomy:v1:char_a', JSON.stringify({
             enabled: 'yes',
             frequency: 'turbo',
+            providerPreference: 'secret-provider',
             dailyImageLimit: 9999,
             allowSpontaneousShare: 1,
             requireApprovalForNewIdentity: false,
@@ -41,6 +43,7 @@ describe('per-character visual autonomy settings', () => {
         const settings = loadVisualAutonomySettings('char_a');
         expect(settings.enabled).toBe(false);
         expect(settings.frequency).toBe('natural');
+        expect(settings.providerPreference).toBe('auto');
         expect(settings.dailyImageLimit).toBe(100);
         expect(settings.allowSpontaneousShare).toBe(false);
         expect(settings.requireApprovalForNewIdentity).toBe(false);
