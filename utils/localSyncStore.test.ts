@@ -482,6 +482,11 @@ describe('local-first sync outbox', () => {
         });
         expect(await listPendingSyncEvents()).toHaveLength(1);
         expect(await listUnresolvedSyncConflicts()).toHaveLength(1);
+        const identity = await getOrCreateLocalSyncDeviceIdentity();
+        await updateSyncCursorState('account-opt-out', identity.deviceId, {
+            lastPulledSequence: 55,
+            lastAckedSequence: 44,
+        });
 
         await setSyncPreference('room_note', false);
         expect(await getSyncPreference('room_note')).toMatchObject({
@@ -491,6 +496,11 @@ describe('local-first sync outbox', () => {
         expect(await listPendingSyncEvents()).toHaveLength(0);
         expect(await listPendingInboxEvents()).toHaveLength(0);
         expect(await listUnresolvedSyncConflicts()).toHaveLength(0);
+        expect(await getSyncCursorState('account-opt-out', identity.deviceId)).toMatchObject({
+            lastPulledSequence: 0,
+            lastAckedSequence: 0,
+        });
+        expect((await getOrCreateLocalSyncDeviceIdentity()).deviceId).toBe(identity.deviceId);
         const checkDb = await openDB();
         const [inboxRows, localNotes] = await Promise.all([
             new Promise<any[]>((resolve, reject) => {
