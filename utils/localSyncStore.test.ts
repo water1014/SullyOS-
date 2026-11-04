@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { DB } from './db';
+import { DB, openDB } from './db';
 import {
     enqueueRoomNoteSyncEvent,
     getSyncPreference,
@@ -22,6 +22,45 @@ const note = {
 describe('local-first sync outbox', () => {
     beforeEach(async () => {
         await DB.deleteDB();
+    });
+
+    it('upgrades an existing v75 database additively and preserves room notes', async () => {
+        const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+            const request = indexedDB.open('AetherOS_Data', 75);
+            request.onupgradeneeded = () => {
+                const notes = request.result.createObjectStore('room_notes', { keyPath: 'id' });
+                notes.createIndex('charId', 'charId', { unique: false });
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        const seed = legacy.transaction('room_notes', 'readwrite');
+        seed.objectStore('room_notes').put({
+            id: 'legacy-note',
+            charId: 'char-legacy',
+            timestamp: 1,
+            content: '保留这条旧便签',
+            type: 'thought',
+        });
+        await new Promise<void>((resolve, reject) => {
+            seed.oncomplete = () => resolve();
+            seed.onerror = () => reject(seed.error);
+            seed.onabort = () => reject(seed.error);
+        });
+        legacy.close();
+
+        const upgraded = await openDB();
+        expect(upgraded.version).toBe(76);
+        for (const store of ['room_notes', 'sync_outbox', 'sync_inbox', 'sync_state', 'sync_conflicts', 'sync_preferences']) {
+            expect(upgraded.objectStoreNames.contains(store)).toBe(true);
+        }
+        const read = upgraded.transaction('room_notes', 'readonly');
+        const preserved = await new Promise((resolve, reject) => {
+            const request = read.objectStore('room_notes').get('legacy-note');
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        expect(preserved).toMatchObject({ id: 'legacy-note', content: '保留这条旧便签' });
     });
 
     it('defaults to local-only and does not queue without explicit opt-in', async () => {
