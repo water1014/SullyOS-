@@ -96,6 +96,32 @@ describe('Android update session survives page lifetimes', () => {
     expect(values.has('sullyos.android.pending-install.v1')).toBe(false);
   });
 
+  it('writes the expected version before handing control to Android and clears it for permission-only results', async () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    };
+    const { deps, session } = setup(storage);
+    const handoff = deferred<{ status: 'installer_opened' }>();
+    deps.install.mockReturnValue(handoff.promise);
+    await session.check();
+    const downloading = session.download();
+    await vi.waitFor(() => expect(deps.install).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(values.get('sullyos.android.pending-install.v1') || '{}')).toMatchObject({
+      versionCode: manifest.versionCode, versionName: manifest.versionName,
+    });
+    handoff.resolve({ status: 'installer_opened' });
+    await downloading;
+
+    const permissionOnly = setup(storage);
+    permissionOnly.deps.install.mockResolvedValue({ status: 'permission_required' });
+    await permissionOnly.session.check();
+    await permissionOnly.session.download();
+    expect(values.has('sullyos.android.pending-install.v1')).toBe(false);
+  });
+
   it('blocks double checks and download while a manifest check is pending', async () => {
     const { deps, session } = setup();
     const check = deferred<typeof manifest>();
