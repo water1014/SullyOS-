@@ -206,6 +206,31 @@ const ProactiveSettingsModal: React.FC<ProactiveSettingsModalProps> = ({
                                 </div>
                             </div>
 
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700">主动生图引擎</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {([
+                                        { value: 'auto', label: '自动选择', desc: '优先 GPT，未配置时尝试 NAI' },
+                                        { value: 'gpt', label: 'GPT 生图', desc: '使用生图室 GPT 配置' },
+                                        { value: 'nai_official', label: 'NAI 官方', desc: '使用 NovelAI 官方 Token' },
+                                        { value: 'nai_thirdparty', label: 'NAI 第三方', desc: '使用第三方接口配置' },
+                                    ] as const).map(option => (
+                                        <button
+                                            type="button"
+                                            key={option.value}
+                                            onClick={() => updateVisual({ providerPreference: option.value })}
+                                            className={`rounded-xl border px-3 py-2 text-left transition-colors ${visualSettings.providerPreference === option.value
+                                                ? 'border-sky-400 bg-sky-50 text-sky-700'
+                                                : 'border-slate-200 bg-white text-slate-600'
+                                            }`}
+                                        >
+                                            <span className="block text-xs font-bold">{option.label}</span>
+                                            <span className="mt-1 block text-[10px] leading-relaxed opacity-70">{option.desc}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             <div className="flex items-center justify-between gap-4">
                                 <div>
                                     <div className="text-sm font-bold text-slate-700">允许日常主动分享</div>
