@@ -157,7 +157,9 @@ async function pairDevice(body) {
   if (typeof body.code !== 'string' || body.code.length < 24 || body.code.length > 128) {
     return { status: 400, body: { error: 'INVALID_PAIRING_CODE' } };
   }
-  const label = normalizeDeviceLabel(body.label);
+  let label;
+  try { label = normalizeDeviceLabel(body.label); }
+  catch (error) { return { status: 400, body: { error: error.message } }; }
   const platform = normalizePlatform(body.platform);
   const appVersion = typeof body.appVersion === 'string' ? body.appVersion.slice(0, 64) : null;
   const token = randomBytes(32).toString('base64url');
