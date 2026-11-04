@@ -183,7 +183,7 @@ async function pairDevice(body) {
     );
     await client.query('UPDATE companion_pairing_codes SET used_at = now() WHERE code_hash = $1', [hashSecret(body.code, TOKEN_PEPPER)]);
     await client.query('COMMIT');
-    return { status: 201, body: { deviceId: device.rows[0].id, deviceToken: token, label } };
+    return { status: 201, body: { accountId: row.account_id, deviceId: device.rows[0].id, deviceToken: token, label } };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
