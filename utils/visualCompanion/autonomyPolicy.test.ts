@@ -5,6 +5,7 @@ import type { VisualAutonomySettings } from './types';
 const settings: VisualAutonomySettings = {
     enabled: true,
     frequency: 'natural',
+    providerPreference: 'auto',
     allowSpontaneousShare: true,
     allowPrivateCreation: false,
     requireApprovalForNewIdentity: true,
