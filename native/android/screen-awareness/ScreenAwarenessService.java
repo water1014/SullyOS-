@@ -78,6 +78,7 @@ public final class ScreenAwarenessService extends Service {
     }
 
     public static boolean clearTemporaryFrames(Context context) {
+        latestFrameAt = 0L;
         File frame = getLatestFrameFile(context);
         File directory = frame.getParentFile();
         File temporary = directory == null ? null : new File(directory, "latest.tmp");
