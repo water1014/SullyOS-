@@ -32,6 +32,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class ScreenAwarenessService extends Service {
     public static final String ACTION_START = "com.aetheros.simulator.screen.START";
     public static final String ACTION_STOP = "com.aetheros.simulator.screen.STOP";
+    public static final String ACTION_FREEZE = "com.aetheros.simulator.screen.FREEZE";
+    public static final String ACTION_RESUME = "com.aetheros.simulator.screen.RESUME";
     public static final String EXTRA_RESULT_CODE = "projection_result_code";
     public static final String EXTRA_DATA = "projection_data";
     private static final String CHANNEL_ID = "sullyos_screen_awareness";
@@ -39,6 +41,8 @@ public final class ScreenAwarenessService extends Service {
     private static final long FRAME_INTERVAL_MS = 3000L;
     private static volatile boolean running = false;
     private static volatile long latestFrameAt = 0L;
+    private static volatile boolean frozen = false;
+    private static volatile boolean freezeRequested = false;
 
     private MediaProjection projection;
     private MediaProjection.Callback projectionCallback;
@@ -57,6 +61,10 @@ public final class ScreenAwarenessService extends Service {
         return latestFrameAt;
     }
 
+    public static boolean isFrozen() {
+        return frozen;
+    }
+
     public static File getLatestFrameFile(Context context) {
         return new File(new File(context.getCacheDir(), "screen-awareness"), "latest.jpg");
     }
@@ -73,6 +81,19 @@ public final class ScreenAwarenessService extends Service {
             stopCapture();
             stopSelf();
             return START_NOT_STICKY;
+        }
+        if (ACTION_FREEZE.equals(intent.getAction()) && running) {
+            freezeRequested = true;
+            lastFrameAt = 0L;
+            updateNotification();
+            return START_STICKY;
+        }
+        if (ACTION_RESUME.equals(intent.getAction()) && running) {
+            frozen = false;
+            freezeRequested = false;
+            lastFrameAt = 0L;
+            updateNotification();
+            return START_STICKY;
         }
         if (!ACTION_START.equals(intent.getAction())) return START_NOT_STICKY;
         if (running) return START_STICKY;
@@ -154,13 +175,22 @@ public final class ScreenAwarenessService extends Service {
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(this, CHANNEL_ID)
             : new Notification.Builder(this);
+        Intent captureIntent = new Intent(this, ScreenAwarenessService.class);
+        captureIntent.setAction(frozen ? ACTION_RESUME : ACTION_FREEZE);
+        PendingIntent capturePending = PendingIntent.getService(this, 7316, captureIntent, pendingFlags);
         builder.setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("糯米机屏幕感知已开启")
-            .setContentText("仅在本机缓存画面，不会自动上传。点击停止即可结束")
+            .setContentTitle(frozen ? "糯米机已截取并暂停屏幕" : "糯米机屏幕感知已开启")
+            .setContentText(frozen ? "画面已冻结在本机，可返回聊天选择分享" : "仅在本机缓存画面，可随时截取此刻并暂停")
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
+            .addAction(android.R.drawable.ic_menu_camera, frozen ? "继续感知" : "截取此刻", capturePending)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "停止感知", stopPending);
         return builder.build();
+    }
+
+    private void updateNotification() {
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null && running) manager.notify(NOTIFICATION_ID, buildNotification());
     }
 
     private void startCapturePipeline() {
@@ -199,8 +229,10 @@ public final class ScreenAwarenessService extends Service {
         try {
             image = reader.acquireLatestImage();
             if (image == null) return;
+            if (frozen) return;
             long now = System.currentTimeMillis();
-            if (now - lastFrameAt < FRAME_INTERVAL_MS || !frameWriting.compareAndSet(false, true)) {
+            boolean captureForFreeze = freezeRequested;
+            if ((!captureForFreeze && now - lastFrameAt < FRAME_INTERVAL_MS) || !frameWriting.compareAndSet(false, true)) {
                 return;
             }
             ownsFrameLock = true;
@@ -246,6 +278,11 @@ public final class ScreenAwarenessService extends Service {
             }
             lastFrameAt = now;
             latestFrameAt = now;
+            if (freezeRequested) {
+                freezeRequested = false;
+                frozen = true;
+                updateNotification();
+            }
         } catch (Exception ignored) {
             // Screen capture is best-effort; never log screen contents or file data.
         } finally {
@@ -261,6 +298,8 @@ public final class ScreenAwarenessService extends Service {
     private void stopCapture(boolean stopProjection) {
         running = false;
         latestFrameAt = 0L;
+        frozen = false;
+        freezeRequested = false;
         if (virtualDisplay != null) {
             virtualDisplay.release();
             virtualDisplay = null;
