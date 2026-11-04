@@ -106,7 +106,7 @@ export default function LocalSyncSettingsPanel() {
             <div className="flex items-center justify-between gap-3">
                 <div>
                     <h3 className="text-sm font-bold text-slate-800">宋祁 · 本地同步试验</h3>
-                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">先管理手机里的同步队列。云端接口尚未接入，开启后也不会上传数据。</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">本机队列、设备配对和手动同步入口已接入。服务器尚未部署前，数据仍只保存在这台手机。</p>
                 </div>
                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold text-amber-700">本地阶段</span>
             </div>
