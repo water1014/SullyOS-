@@ -4,6 +4,7 @@ import {
     getSyncQueueSummary,
     listUnresolvedSyncConflicts,
     resolveRoomNoteSyncConflict,
+    recoverStaleInFlightSyncEvents,
     setSyncPreference,
     type LocalSyncConflict,
     type SyncQueueSummary,
@@ -22,6 +23,7 @@ export default function LocalSyncSettingsPanel() {
 
     const refresh = useCallback(async () => {
         try {
+            await recoverStaleInFlightSyncEvents();
             const [preference, summary, unresolved] = await Promise.all([
                 getSyncPreference('room_note'),
                 getSyncQueueSummary(),
