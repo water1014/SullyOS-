@@ -290,7 +290,7 @@ describe('local-first sync outbox', () => {
         expect(updated.updatedAt).toBeGreaterThanOrEqual(original.updatedAt);
         await expect(updateLocalSyncDeviceLabel('   ')).rejects.toThrow('INVALID_DEVICE_LABEL');
         await expect(updateLocalSyncDeviceLabel('x'.repeat(25))).rejects.toThrow('INVALID_DEVICE_LABEL');
-        await expect(updateLocalSyncDeviceLabel('bad\\u0000name')).rejects.toThrow('INVALID_DEVICE_LABEL');
+        await expect(updateLocalSyncDeviceLabel('bad\u0000name')).rejects.toThrow('INVALID_DEVICE_LABEL');
     });
 
     it('uses collision-safe keys for account and device cursor pairs', async () => {
