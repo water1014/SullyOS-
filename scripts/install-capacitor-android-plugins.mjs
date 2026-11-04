@@ -95,10 +95,10 @@ async function main() {
       '                android:name="android.support.FILE_PROVIDER_PATHS"',
       '                android:resource="@xml/apk_installer_paths" />',
       '        </provider>',
-    ].join('\\n');
+    ].join('\n');
     const applicationClose = manifest.lastIndexOf('</application>');
     if (applicationClose < 0) throw new Error('AndroidManifest.xml has no application closing tag');
-    manifest = manifest.slice(0, applicationClose) + provider + '\\n' + manifest.slice(applicationClose);
+    manifest = manifest.slice(0, applicationClose) + provider + '\n' + manifest.slice(applicationClose);
   } else {
     const markerIndex = manifest.indexOf(providerMarker);
     const providerStart = manifest.lastIndexOf('<provider', markerIndex);
@@ -139,17 +139,10 @@ async function main() {
   if (!pathsXml.includes(requiredCachePath)) {
     const pathsClose = pathsXml.lastIndexOf('</paths>');
     if (pathsClose < 0) throw new Error('FileProvider XML resource has no paths closing tag');
-    pathsXml = pathsXml.slice(0, pathsClose) + '    ' + requiredCachePath + '\\n' + pathsXml.slice(pathsClose);
+    pathsXml = pathsXml.slice(0, pathsClose) + '    ' + requiredCachePath + '\n' + pathsXml.slice(pathsClose);
   }
   await writeFile(xmlPath, pathsXml, 'utf8');
 
-
-  const xmlDirectory = join(appRoot, 'src', 'main', 'res', 'xml');
-  await mkdir(xmlDirectory, { recursive: true });
-  await copyFile(
-    join(pluginRoot, 'apk-installer', 'apk_installer_paths.xml'),
-    join(xmlDirectory, 'apk_installer_paths.xml'),
-  );
 
   process.stdout.write('Android project prepared: APK installer and Android Keystore plugins registered.\n');
 }
