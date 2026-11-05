@@ -69,6 +69,7 @@ async function main() {
     { className: 'SecureStoragePlugin', directory: 'secure-storage' },
     { className: 'ScreenAwarenessPlugin', directory: 'screen-awareness' },
     { className: 'AndroidSafeAreaPlugin', directory: 'android-safe-area' },
+    { className: 'OpenCodeGoStreamPlugin', directory: 'opencode-go-stream' },
   ];
   for (const plugin of plugins) {
     const source = join(pluginRoot, plugin.directory, `${plugin.className}.java`);
