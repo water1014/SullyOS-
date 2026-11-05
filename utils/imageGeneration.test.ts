@@ -164,6 +164,26 @@ describe('image generation clients', () => {
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
   });
 
+  it('keeps the msgpack compatibility hint scoped to third-party NAI gateways', async () => {
+    const zip = new JSZip();
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0));
+    zip.file('image_0.png', png);
+    const archive = await zip.generateAsync({ type: 'uint8array' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(archive, { status: 200 })));
+
+    await generateNaiImage(
+      { apiKey: 'pst-test', model: 'nai-diffusion-4-5-full', provider: 'official' },
+      'blue hair',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
+    );
+
+    const [, request] = vi.mocked(fetch).mock.calls[0];
+    const body = JSON.parse(String(request.body));
+    expect(body.parameters).not.toHaveProperty('stream');
+    expect(body.parameters).toHaveProperty('ucPreset', 3);
+  });
+
   it('extracts the first image from NovelAI ZIP output', async () => {
     const zip = new JSZip();
     zip.file('image_0.png', Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0)));
