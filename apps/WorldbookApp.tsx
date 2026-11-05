@@ -53,6 +53,7 @@ const WorldbookApp: React.FC = () => {
     const [showImportConfirm, setShowImportConfirm] = useState(false);
     const [showPromptPresets, setShowPromptPresets] = useState(false);
     const [expandedPromptPreset, setExpandedPromptPreset] = useState<string | null>(null);
+    const [activePromptPreset, setActivePromptPreset] = useState<string>(() => localStorage.getItem('sully-tavern-prompt-preset-active:v1') || '');
     const [promptPresets, setPromptPresets] = useState<TavernPromptPreset[]>(() => { try { return JSON.parse(localStorage.getItem('sully-tavern-prompt-presets:v1') || '[]'); } catch { return []; } });
     const presetImportRef = useRef<HTMLInputElement>(null);
     const importRef = useRef<HTMLInputElement>(null);
@@ -250,6 +251,7 @@ const WorldbookApp: React.FC = () => {
             const next = [parsed, ...promptPresets.filter(item => item.name !== parsed.name)];
             setPromptPresets(next);
             localStorage.setItem('sully-tavern-prompt-presets:v1', JSON.stringify(next));
+            if (!activePromptPreset) { setActivePromptPreset(parsed.name); localStorage.setItem('sully-tavern-prompt-preset-active:v1', parsed.name); }
             setShowPromptPresets(true);
             addToast(`已导入提示词预设「${parsed.name}」，共 ${parsed.prompts.length} 个提示词模块`, 'success');
         } catch (error: any) {
@@ -261,7 +263,10 @@ const WorldbookApp: React.FC = () => {
         const next = promptPresets.filter(item => item.name !== name);
         setPromptPresets(next);
         localStorage.setItem('sully-tavern-prompt-presets:v1', JSON.stringify(next));
+        if (activePromptPreset === name) { const fallback = next[0]?.name || ''; setActivePromptPreset(fallback); if (fallback) localStorage.setItem('sully-tavern-prompt-preset-active:v1', fallback); else localStorage.removeItem('sully-tavern-prompt-preset-active:v1'); }
     };
+
+    const activatePromptPreset = (name: string) => { setActivePromptPreset(name); localStorage.setItem('sully-tavern-prompt-preset-active:v1', name); addToast(`已启用提示词预设「${name}」，下次聊天生效`, 'success'); };
 
     const handleExportGroup = async (event: React.MouseEvent, category: string, books: Worldbook[]) => {
         event.stopPropagation();
@@ -920,10 +925,10 @@ const WorldbookApp: React.FC = () => {
                         <div key={preset.name} className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
                             <div className="flex items-center gap-3">
                                 <button type="button" onClick={() => setExpandedPromptPreset(current => current === preset.name ? null : preset.name)} className="min-w-0 flex-1 text-left">
-                                    <div className="font-semibold text-sm text-slate-700 truncate">{preset.name}</div>
+                                    <div className="font-semibold text-sm text-slate-700 truncate">{preset.name} {activePromptPreset === preset.name && <span className="text-emerald-600 text-[10px]">· 已启用</span>}</div>
                                     <div className="text-xs text-slate-400 mt-1">{preset.prompts.length} 个提示词模块 · {preset.prompt_order.length} 组启用顺序</div>
                                 </button>
-                                <button type="button" onClick={() => deletePromptPreset(preset.name)} className="text-rose-500 text-xs font-semibold px-2 py-1">删除</button>
+                                <div className="flex items-center gap-2"><button type="button" onClick={() => activatePromptPreset(preset.name)} className={`text-xs font-semibold px-2 py-1 rounded-lg ${activePromptPreset === preset.name ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>{activePromptPreset === preset.name ? "使用中" : "启用"}</button><button type="button" onClick={() => deletePromptPreset(preset.name)} className="text-rose-500 text-xs font-semibold px-2 py-1">删除</button></div>
                             </div>
                             {expandedPromptPreset === preset.name && <div className="border-t border-slate-100 pt-2 space-y-2">
                                 {preset.prompts.map((prompt, index) => <div key={prompt.identifier || prompt.name || index} className="rounded-lg bg-slate-50 p-2">
