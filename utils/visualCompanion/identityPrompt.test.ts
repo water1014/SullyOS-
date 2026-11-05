@@ -57,6 +57,16 @@ describe('character appearance prompt', () => {
         expect(prompt.indexOf('黑色长发')).toBeLessThan(prompt.indexOf('雨夜里的咖啡馆'));
         expect(prompt).toContain('【本次场景】');
     });
+
+    it('replaces stale identity context when a reroll reuses the previous positive prompt', () => {
+        const previous = mergeCharacterVisualContextPrompt('雨夜里的咖啡馆', profile, []);
+        const updatedProfile = { ...profile, anchorPrompt: '银白色短发，琥珀色眼睛', identity: [] };
+        const rerolled = mergeCharacterVisualContextPrompt(previous, updatedProfile, []);
+        expect(rerolled).toContain('银白色短发，琥珀色眼睛');
+        expect(rerolled).not.toContain('黑色长发');
+        expect(rerolled.match(/\\[Fixed character appearance\\]/g)).toHaveLength(1);
+        expect(rerolled).toContain('雨夜里的咖啡馆');
+    });
 });
 
 
