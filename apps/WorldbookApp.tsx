@@ -53,6 +53,7 @@ const WorldbookApp: React.FC = () => {
     const [showImportConfirm, setShowImportConfirm] = useState(false);
     const [showPromptPresets, setShowPromptPresets] = useState(false);
     const [expandedPromptPreset, setExpandedPromptPreset] = useState<string | null>(null);
+    const [editingPromptPreset, setEditingPromptPreset] = useState<string | null>(null);
     const [activePromptPreset, setActivePromptPreset] = useState<string>(() => localStorage.getItem('sully-tavern-prompt-preset-active:v1') || '');
     const [promptPresets, setPromptPresets] = useState<TavernPromptPreset[]>(() => { try { return JSON.parse(localStorage.getItem('sully-tavern-prompt-presets:v1') || '[]'); } catch { return []; } });
     const presetImportRef = useRef<HTMLInputElement>(null);
@@ -259,11 +260,96 @@ const WorldbookApp: React.FC = () => {
         } finally { event.target.value = ''; }
     };
 
+    const savePromptPresets = (next: TavernPromptPreset[], previousActive = activePromptPreset) => {
+        setPromptPresets(next);
+        localStorage.setItem('sully-tavern-prompt-presets:v1', JSON.stringify(next));
+        const renamedActive = next.find(item => item.name === previousActive)?.name || '';
+        if (renamedActive !== activePromptPreset) {
+            setActivePromptPreset(renamedActive);
+            if (renamedActive) localStorage.setItem('sully-tavern-prompt-preset-active:v1', renamedActive);
+            else localStorage.removeItem('sully-tavern-prompt-preset-active:v1');
+        }
+    };
+
+    const updatePromptPreset = (name: string, updater: (preset: TavernPromptPreset) => TavernPromptPreset) => {
+        const current = promptPresets.find(item => item.name === name);
+        if (!current) return;
+        const updated = updater(current);
+        const next = promptPresets.map(item => item.name === name ? updated : item);
+        savePromptPresets(next, activePromptPreset === name ? updated.name : activePromptPreset);
+    };
+
+    const renamePromptPreset = (name: string, nextName: string) => {
+        const cleanName = nextName.trim();
+        if (!cleanName || cleanName === name) return;
+        if (promptPresets.some(item => item.name === cleanName)) {
+            addToast('已有同名预设，请换一个名称', 'error');
+            return;
+        }
+        updatePromptPreset(name, preset => ({ ...preset, name: cleanName }));
+        if (expandedPromptPreset === name) setExpandedPromptPreset(cleanName);
+        if (editingPromptPreset === name) setEditingPromptPreset(cleanName);
+    };
+
+    const togglePromptModule = (presetName: string, identifier: string, enabled: boolean) => {
+        updatePromptPreset(presetName, preset => ({
+            ...preset,
+            prompts: preset.prompts.map((prompt, index) =>
+                (prompt.identifier || prompt.name || String(index)) === identifier ? { ...prompt, enabled } : prompt
+            ),
+        }));
+    };
+
+    const movePromptModule = (presetName: string, index: number, direction: -1 | 1) => {
+        updatePromptPreset(presetName, preset => {
+            const prompts = [...preset.prompts];
+            const target = index + direction;
+            if (target < 0 || target >= prompts.length) return preset;
+            [prompts[index], prompts[target]] = [prompts[target], prompts[index]];
+            return { ...preset, prompts };
+        });
+    };
+
+    const deletePromptModule = (presetName: string, index: number) => {
+        updatePromptPreset(presetName, preset => ({
+            ...preset,
+            prompts: preset.prompts.filter((_, i) => i !== index),
+        }));
+    };
+
+    const addPromptModule = (presetName: string) => {
+        updatePromptPreset(presetName, preset => ({
+            ...preset,
+            prompts: [...preset.prompts, {
+                identifier: `custom_module_${Date.now()}`,
+                name: '新提示词模块',
+                role: 'system',
+                content: '',
+                enabled: true,
+            }],
+        }));
+    };
+
+    const updatePromptModule = (presetName: string, index: number, patch: Partial<TavernPromptPreset['prompts'][number]>) => {
+        updatePromptPreset(presetName, preset => ({
+            ...preset,
+            prompts: preset.prompts.map((prompt, i) => i === index ? { ...prompt, ...patch } : prompt),
+        }));
+    };
+
     const deletePromptPreset = (name: string) => {
         const next = promptPresets.filter(item => item.name !== name);
         setPromptPresets(next);
         localStorage.setItem('sully-tavern-prompt-presets:v1', JSON.stringify(next));
-        if (activePromptPreset === name) { const fallback = next[0]?.name || ''; setActivePromptPreset(fallback); if (fallback) localStorage.setItem('sully-tavern-prompt-preset-active:v1', fallback); else localStorage.removeItem('sully-tavern-prompt-preset-active:v1'); }
+        if (activePromptPreset === name) {
+            const fallback = next[0]?.name || '';
+            setActivePromptPreset(fallback);
+            if (fallback) localStorage.setItem('sully-tavern-prompt-preset-active:v1', fallback);
+            else localStorage.removeItem('sully-tavern-prompt-preset-active:v1');
+        }
+        if (expandedPromptPreset === name) setExpandedPromptPreset(null);
+        if (editingPromptPreset === name) setEditingPromptPreset(null);
+        addToast(`已删除提示词预设「${name}」`, 'success');
     };
 
     const activatePromptPreset = (name: string) => { setActivePromptPreset(name); localStorage.setItem('sully-tavern-prompt-preset-active:v1', name); addToast(`已启用提示词预设「${name}」，下次聊天生效`, 'success'); };
@@ -930,12 +1016,40 @@ const WorldbookApp: React.FC = () => {
                                 </button>
                                 <div className="flex items-center gap-2"><button type="button" onClick={() => activatePromptPreset(preset.name)} className={`text-xs font-semibold px-2 py-1 rounded-lg ${activePromptPreset === preset.name ? "bg-emerald-50 text-emerald-700" : "bg-sky-50 text-sky-700"}`}>{activePromptPreset === preset.name ? "使用中" : "启用"}</button><button type="button" onClick={() => deletePromptPreset(preset.name)} className="text-rose-500 text-xs font-semibold px-2 py-1">删除</button></div>
                             </div>
-                            {expandedPromptPreset === preset.name && <div className="border-t border-slate-100 pt-2 space-y-2">
-                                {preset.prompts.map((prompt, index) => <div key={prompt.identifier || prompt.name || index} className="rounded-lg bg-slate-50 p-2">
-                                    <div className="text-xs font-semibold text-slate-700">{prompt.name || prompt.identifier || `提示词模块 ${index + 1}`}</div>
-                                    <div className="text-[10px] text-slate-400 mt-0.5">{prompt.role || (prompt.system_prompt ? '系统提示词' : '提示词模块')} · {prompt.marker ? '标记模块' : '包含内容'}</div>
-                                    {typeof prompt.content === 'string' && <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap break-words line-clamp-5">{prompt.content}</p>}
-                                </div>)}
+                            {expandedPromptPreset === preset.name && <div className="border-t border-slate-100 pt-3 space-y-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-semibold text-slate-600">预设编辑</span>
+                                    <button type="button" onClick={() => setEditingPromptPreset(current => current === preset.name ? null : preset.name)} className="text-xs text-sky-700 font-semibold">{editingPromptPreset === preset.name ? '完成编辑' : '编辑预设'}</button>
+                                </div>
+                                {editingPromptPreset === preset.name && <label className="block text-xs text-slate-500">预设名称
+                                    <input value={preset.name} onChange={event => renamePromptPreset(preset.name, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700" />
+                                </label>}
+                                {preset.prompts.map((prompt, index) => {
+                                    const moduleId = prompt.identifier || prompt.name || String(index);
+                                    const isEnabled = prompt.enabled !== false;
+                                    return <div key={moduleId} className="rounded-xl bg-slate-50 border border-slate-100 p-3 space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <label className="flex items-center gap-2 flex-1 min-w-0 text-xs font-semibold text-slate-700">
+                                                <input type="checkbox" checked={isEnabled} disabled={editingPromptPreset !== preset.name || !!prompt.marker} onChange={event => togglePromptModule(preset.name, moduleId, event.target.checked)} />
+                                                <span className="truncate">{prompt.name || prompt.identifier || `提示词模块 ${index + 1}`}</span>
+                                            </label>
+                                            {editingPromptPreset === preset.name && <div className="flex items-center gap-1 shrink-0">
+                                                <button type="button" disabled={index === 0} onClick={() => movePromptModule(preset.name, index, -1)} className="px-2 py-1 rounded bg-white text-slate-500 disabled:opacity-30" aria-label="上移模块">↑</button>
+                                                <button type="button" disabled={index === preset.prompts.length - 1} onClick={() => movePromptModule(preset.name, index, 1)} className="px-2 py-1 rounded bg-white text-slate-500 disabled:opacity-30" aria-label="下移模块">↓</button>
+                                                {!prompt.marker && <button type="button" onClick={() => deletePromptModule(preset.name, index)} className="px-2 py-1 rounded bg-rose-50 text-rose-600">删除</button>}
+                                            </div>}
+                                        </div>
+                                        {editingPromptPreset === preset.name ? <>
+                                            <input value={prompt.name || ''} onChange={event => updatePromptModule(preset.name, index, { name: event.target.value })} placeholder="模块名称" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700" />
+                                            <textarea value={typeof prompt.content === 'string' ? prompt.content : ''} onChange={event => updatePromptModule(preset.name, index, { content: event.target.value })} rows={5} placeholder="在这里修改模块提示词内容" className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-700" />
+                                        </> : <>
+                                            <div className="text-[10px] text-slate-400">{prompt.role || (prompt.system_prompt ? '系统提示词' : '提示词模块')} · {prompt.marker ? '标记模块' : isEnabled ? '已启用' : '已停用'}</div>
+                                            {typeof prompt.content === 'string' && <p className="text-xs text-slate-600 whitespace-pre-wrap break-words line-clamp-5">{prompt.content}</p>}
+                                        </>}
+                                    </div>;
+                                })}
+                                {editingPromptPreset === preset.name && <button type="button" onClick={() => addPromptModule(preset.name)} className="w-full rounded-lg border border-dashed border-sky-300 py-2 text-xs font-semibold text-sky-700">＋ 添加提示词模块</button>}
+                                <p className="text-[10px] text-slate-400">修改会即时保存到本机。模块勾选控制聊天注入，↑ ↓ 调整发送顺序。</p>
                             </div>}
                         </div>
                     ))}
