@@ -293,6 +293,22 @@ function describeNaiZip(buffer: Uint8Array, response: Response): string {
     ? eocdOffset - centralDirectorySize : -1;
   const centralHeader = centralCandidate >= 0 && signature(centralCandidate)
     && buffer[centralCandidate + 2] === 0x01 && buffer[centralCandidate + 3] === 0x02;
+  const centralScanHits: number[] = [];
+  if (eocdOffset >= 0) {
+    for (let offset = Math.max(0, eocdOffset - 0x10000 - 46); offset <= eocdOffset - 46; offset += 1) {
+      if (!signature(offset) || buffer[offset + 2] !== 0x01 || buffer[offset + 3] !== 0x02) continue;
+      const nameLength = readU16(offset + 28) ?? -1;
+      const extraLength = readU16(offset + 30) ?? -1;
+      const entryCommentLength = readU16(offset + 32) ?? -1;
+      const entryEnd = offset + 46 + nameLength + extraLength + entryCommentLength;
+      const gap = eocdOffset - entryEnd;
+      const validGap = gap === 0 || (gap >= 6 && signature(entryEnd)
+        && buffer[entryEnd + 2] === 0x05 && buffer[entryEnd + 3] === 0x05
+        && readU16(entryEnd + 4) === gap - 6);
+      if (nameLength > 0 && extraLength >= 0 && entryCommentLength >= 0
+        && entryEnd <= eocdOffset && validGap) centralScanHits.push(offset);
+    }
+  }
   const centralCompressedSize = centralHeader ? readU32(centralCandidate + 20) : null;
   const centralUncompressedSize = centralHeader ? readU32(centralCandidate + 24) : null;
   const centralLocalOffset = centralHeader ? readU32(centralCandidate + 42) : null;
@@ -308,6 +324,7 @@ function describeNaiZip(buffer: Uint8Array, response: Response): string {
     `ZIP条目数=${entryCount ?? '未知'}`,
     `中央目录大小/偏移=${centralDirectorySize ?? '未知'}/${centralDirectoryOffset ?? '未知'}`,
     `中央目录记录=${centralHeader ? `有效（压缩=${centralCompressedSize}，解压=${centralUncompressedSize}，本地偏移=${centralLocalOffset}，CRC=${centralCrc?.toString(16)}）` : '无法定位或签名无效'}`,
+    `中央目录扫描=${centralScanHits.length ? centralScanHits.map(offset => offset.toString()).join(',') : '未发现有效单文件记录'}`,
     `ZIP注释长度声明/实际=${eocdCommentLength ?? '未知'}/${eocdCommentAvailable ?? '未知'}${commentMismatch ? '（不一致，疑似截断或字节损坏）' : ''}`,
     `本地文件头=${localHeader ? 'PK0304' : '非PK0304'}`,
     `flags=${flags === null ? '未知' : `0x${flags.toString(16)}`}`,
