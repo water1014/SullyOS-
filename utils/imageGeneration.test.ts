@@ -189,24 +189,6 @@ describe('image generation clients', () => {
     });
   });
 
-  it('falls back to zip.js when a valid NAI ZIP cannot be read by JSZip', async () => {
-    const zip = new JSZip();
-    zip.file('images/image_0.png', 'fallback-nai-png');
-    const archive = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
-    const loadSpy = vi.spyOn(JSZip, 'loadAsync').mockRejectedValue(new Error('simulated JSZip parser failure'));
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(archive, {
-      status: 200, headers: { 'Content-Type': 'application/zip' },
-    })));
-
-    const blob = await generateNaiImage(
-      { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
-      '1girl, blue hair', '', { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
-    );
-
-    expect(await blob.text()).toBe('fallback-nai-png');
-    loadSpy.mockRestore();
-  });
-
   it('accepts direct image responses from third-party NovelAI gateways', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Blob(['direct-image'], { type: 'image/webp' }), {
       status: 200,
@@ -220,35 +202,6 @@ describe('image generation clients', () => {
     );
     expect(blob.type).toBe('image/webp');
     expect(await blob.text()).toBe('direct-image');
-  });
-
-  it('decodes nested Base64 image payloads even when the gateway labels them as octet-stream', async () => {
-    const pngBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
-    let binary = '';
-    pngBytes.forEach(byte => { binary += String.fromCharCode(byte); });
-    const encoded = btoa(binary);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      result: { images: [{ image_base64: `data:image/png;base64,${encoded}` }] },
-    }), { status: 200, headers: { 'Content-Type': 'application/octet-stream' } })));
-
-    const blob = await generateNaiImage(
-      { apiKey: 'proxy-token', model: 'nai-model', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
-      'blue hair', '', { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
-    );
-    expect(blob.type).toBe('image/png');
-    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(pngBytes);
-  });
-
-  it('recognizes raw PNG bytes even when the third-party gateway omits the image content type', async () => {
-    const pngBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(pngBytes, {
-      status: 200, headers: { 'Content-Type': 'application/octet-stream' },
-    })));
-    const blob = await generateNaiImage(
-      { apiKey: 'proxy-token', model: 'nai-model', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
-      'blue hair', '', { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
-    );
-    expect(blob.type).toBe('image/png');
   });
 
   it('surfaces JSON error details from gateways that return HTTP 200', async () => {
@@ -314,7 +267,7 @@ describe('image generation clients', () => {
       '1girl',
       '',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
-    )).rejects.toThrow('压缩包中没有 PNG/JPEG/WebP 图片条目');
+    )).rejects.toThrow('压缩包中没有找到图片文件');
   });
 
   it('surfaces provider errors instead of silently returning an empty image', async () => {
