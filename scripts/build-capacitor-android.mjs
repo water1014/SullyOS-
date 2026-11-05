@@ -57,13 +57,13 @@ async function main() {
   if (!existsSync(wrapperProperties)) throw new Error('Generated Gradle wrapper properties were not found.');
   let wrapperConfig = readFileSync(wrapperProperties, 'utf8');
   wrapperConfig = wrapperConfig.replace(
-    /distributionUrl=(.+?)gradle-([0-9.]+)-all\\.zip/,
+    /distributionUrl=(.+?)gradle-([0-9.]+)-all\.zip/,
     (_match, prefix, version) => `distributionUrl=${prefix}gradle-${version}-bin.zip`,
   );
   if (/^networkTimeout=/m.test(wrapperConfig)) {
     wrapperConfig = wrapperConfig.replace(/^networkTimeout=.*$/m, 'networkTimeout=120000');
   } else {
-    wrapperConfig = wrapperConfig.trimEnd() + '\\nnetworkTimeout=120000\\n';
+    wrapperConfig = wrapperConfig.trimEnd() + '\nnetworkTimeout=120000\n';
   }
   writeFileSync(wrapperProperties, wrapperConfig, 'utf8');
 
