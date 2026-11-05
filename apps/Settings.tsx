@@ -1415,6 +1415,19 @@ const Settings: React.FC = () => {
     addToast(`语音生成已切到 ${providerLabel}`, 'success');
   };
 
+  const chatImageConfig = apiConfig.chatImage || {};
+  const updateChatImageConfig = (patch: NonNullable<APIConfig['chatImage']>) => {
+    updateApiConfig({ chatImage: { ...apiConfig.chatImage, ...patch } });
+  };
+  const parseImageHeaders = (value: string): Record<string, string> => {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? Object.fromEntries(Object.entries(parsed).filter(([key, item]) => key.trim() && typeof item === 'string'))
+        : {};
+    } catch { return {}; }
+  };
+
   const selectSttProvider = (provider: SttProvider) => {
     if (!isSttProviderConfigured(provider, draftSttLookupConfig)) {
       const opt = STT_PROVIDER_OPTIONS.find(o => o.id === provider);
@@ -2959,6 +2972,47 @@ const Settings: React.FC = () => {
                 <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
             </svg>
         </button>
+
+        {/* 聊天生图 API：与生图室共用一份配置 */}
+        <SettingsSection
+            title="聊天生图 API"
+            icon={<div className="p-2 bg-sky-100/60 rounded-xl text-sky-600"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-4 h-4"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>}
+            badge={<span className="text-[9px] text-sky-600 bg-sky-50 px-2 py-1 rounded-full">聊天共用</span>}
+        >
+            <p className="text-[11px] leading-relaxed text-slate-400 mb-3">在这里配置一次，聊天生图读取这里的固定提示词和参数。动态场景描述由聊天上下文生成，不会覆盖你的固定词。</p>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">生图引擎</label>
+            <select value={chatImageConfig.engine || 'nai'} onChange={e => updateChatImageConfig({ engine: e.target.value as 'nai' | 'gpt' })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+                <option value="nai">NovelAI（NAI 文生图）</option><option value="gpt">GPT / OpenAI 兼容生图</option>
+            </select>
+            <label className="flex items-center gap-2 text-xs text-slate-600 mt-3"><input type="checkbox" checked={chatImageConfig.enabled === true} onChange={e => updateChatImageConfig({ enabled: e.target.checked })}/>启用聊天生图</label>
+            {(chatImageConfig.engine || 'nai') === 'nai' ? <div className="space-y-3 mt-4">
+                <label className="block text-xs text-slate-500">NAI 服务商
+                    <select value={chatImageConfig.naiProvider || 'official'} onChange={e => updateChatImageConfig({ naiProvider: e.target.value as 'official' | 'thirdparty' })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"><option value="official">NovelAI 官方</option><option value="thirdparty">第三方兼容接口</option></select>
+                </label>
+                {(chatImageConfig.naiProvider || 'official') === 'thirdparty' && <label className="block text-xs text-slate-500">第三方 API 地址<input value={chatImageConfig.naiBaseUrl || ''} onChange={e => updateChatImageConfig({ naiBaseUrl: e.target.value })} placeholder="https://..." className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label>}
+                <label className="block text-xs text-slate-500">NAI Token<input type="password" value={chatImageConfig.naiApiKey || ''} onChange={e => updateChatImageConfig({ naiApiKey: e.target.value })} placeholder="Persistent API Token" autoComplete="off" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label>
+                <label className="block text-xs text-slate-500">模型<input value={chatImageConfig.naiModel || 'nai-diffusion-5-full'} onChange={e => updateChatImageConfig({ naiModel: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label>
+                <label className="block text-xs text-slate-500">固定正向提示词<textarea rows={3} value={chatImageConfig.naiPositivePrompt || ''} onChange={e => updateChatImageConfig({ naiPositivePrompt: e.target.value })} placeholder="角色固定外貌、画风、画质等长期不变的标签" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs"/></label>
+                <label className="block text-xs text-slate-500">固定负向提示词<textarea rows={3} value={chatImageConfig.naiNegativePrompt || 'low quality, worst quality, blurry, bad anatomy'} onChange={e => updateChatImageConfig({ naiNegativePrompt: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs"/></label>
+                <div className="grid grid-cols-2 gap-2">
+                    <label className="text-xs text-slate-500">宽度<input type="number" min="512" max="1536" step="64" value={chatImageConfig.naiWidth || 832} onChange={e => updateChatImageConfig({ naiWidth: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"/></label>
+                    <label className="text-xs text-slate-500">高度<input type="number" min="512" max="1536" step="64" value={chatImageConfig.naiHeight || 1216} onChange={e => updateChatImageConfig({ naiHeight: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"/></label>
+                    <label className="text-xs text-slate-500">Steps<input type="number" min="10" max="50" value={chatImageConfig.naiSteps || 28} onChange={e => updateChatImageConfig({ naiSteps: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"/></label>
+                    <label className="text-xs text-slate-500">CFG Scale<input type="number" min="1" max="12" step="0.5" value={chatImageConfig.naiScale || 5} onChange={e => updateChatImageConfig({ naiScale: Number(e.target.value) })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"/></label>
+                </div>
+                <label className="block text-xs text-slate-500">Sampler<input value={chatImageConfig.naiSampler || 'k_euler_ancestral'} onChange={e => updateChatImageConfig({ naiSampler: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"/></label>
+                <label className="block text-xs text-slate-500">固定 Seed（留空则每次随机）<input value={chatImageConfig.naiSeed || ''} onChange={e => updateChatImageConfig({ naiSeed: e.target.value })} placeholder="留空 = 每次随机" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"/></label>
+                <label className="block text-xs text-slate-500">自定义请求头（JSON，可选）<textarea rows={2} value={JSON.stringify(chatImageConfig.naiCustomHeaders || {}, null, 2)} onChange={e => { const parsed = parseImageHeaders(e.target.value); if (e.target.value.trim() === '' || Object.keys(parsed).length) updateChatImageConfig({ naiCustomHeaders: parsed }); }} placeholder={'{"X-Custom-Header":"value"}'} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono"/></label>
+            </div> : <div className="space-y-3 mt-4">
+                <label className="block text-xs text-slate-500">API Base URL<input value={chatImageConfig.gptBaseUrl || ''} onChange={e => updateChatImageConfig({ gptBaseUrl: e.target.value })} placeholder="https://.../v1" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label>
+                <label className="block text-xs text-slate-500">API Key<input type="password" value={chatImageConfig.gptApiKey || ''} onChange={e => updateChatImageConfig({ gptApiKey: e.target.value })} autoComplete="off" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label>
+                <label className="block text-xs text-slate-500">模型<input value={chatImageConfig.gptModel || 'gpt-image-1'} onChange={e => updateChatImageConfig({ gptModel: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label>
+                <label className="block text-xs text-slate-500">固定正向提示词<textarea rows={3} value={chatImageConfig.gptPositivePrompt || ''} onChange={e => updateChatImageConfig({ gptPositivePrompt: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"/></label>
+                <label className="block text-xs text-slate-500">固定负向提示词<textarea rows={3} value={chatImageConfig.gptNegativePrompt || ''} onChange={e => updateChatImageConfig({ gptNegativePrompt: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"/></label>
+                <label className="block text-xs text-slate-500">自定义请求头（JSON，可选）<textarea rows={2} value={JSON.stringify(chatImageConfig.gptCustomHeaders || {}, null, 2)} onChange={e => { const parsed = parseImageHeaders(e.target.value); if (e.target.value.trim() === '' || Object.keys(parsed).length) updateChatImageConfig({ gptCustomHeaders: parsed }); }} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono"/></label>
+            </div>}
+            <p className="text-[10px] text-slate-400 mt-3">设置会自动保存到本机。Token 仅用于向你填写的生图服务商发起请求。</p>
+        </SettingsSection>
 
         {/* 其他 API 区域 — 非 LLM 类（语音、写歌等），不会跟随预设切换 */}
         <SettingsSection
