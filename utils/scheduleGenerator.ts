@@ -11,6 +11,7 @@ import { ChatPrompts } from './chatPrompts';
 import { cleanApiMessages, flattenImageContentParts } from './promptMessageCleanup';
 import { getFlowNarrativeKey, isScheduleFeatureOn } from './scheduleFeature';
 import {buildHomeSchedulePrompt, hasHomeSchedulePositions, parseHomePosition} from './homeSchedule';
+import { getOpenCodeSessionId, isOpenCodeGoEndpoint } from './apiConfigNormalize';
 
 export { getFlowNarrativeKey, isScheduleFeatureOn } from './scheduleFeature';
 
@@ -288,7 +289,7 @@ export async function generateDailyScheduleForChar(
     try {
         const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}`, ...(isOpenCodeGoEndpoint(apiConfig.baseUrl) ? { 'x-opencode-session': getOpenCodeSessionId(`schedule:${char.id}`) } : {}) },
             body: JSON.stringify({
                 model: apiConfig.model,
                 messages: (await ContextBuilder.buildCharacterRequest(characterContextInput, [{ role: 'user', content: prompt }])),
@@ -301,7 +302,8 @@ export async function generateDailyScheduleForChar(
         } as RequestInit);
 
         if (!response.ok) {
-            console.error('[Schedule] API error:', response.status);
+            const errorDetail = await response.text().catch(() => '');
+            console.error('[Schedule] API error:', response.status, errorDetail.slice(0, 500));
             return null;
         }
 
@@ -434,7 +436,7 @@ ${chatSummary}
     try {
         const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}`, ...(isOpenCodeGoEndpoint(apiConfig.baseUrl) ? { 'x-opencode-session': getOpenCodeSessionId(`schedule:${char.id}`) } : {}) },
             body: JSON.stringify({
                 model: apiConfig.model,
                 messages: [{ role: 'user', content: prompt }],
@@ -445,7 +447,8 @@ ${chatSummary}
         } as RequestInit);
 
         if (!response.ok) {
-            console.error('[Schedule/Evolve] API error:', response.status);
+            const errorDetail = await response.text().catch(() => '');
+            console.error('[Schedule/Evolve] API error:', response.status, errorDetail.slice(0, 500));
             return null;
         }
 
