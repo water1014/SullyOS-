@@ -17,6 +17,7 @@ import { protectPendingChatTurn } from './storyTheaterTimeline';
 
 import type { CharacterProfile, UserProfile, GroupProfile, Emoji, EmojiCategory, Message, RealtimeConfig, TranslationConfig, VisionApiConfig } from '../types';
 import { ChatPrompts, detectChatModeTransition } from './chatPrompts';
+import { readActiveTavernPromptPreset } from './tavernPromptPreset';
 import { ContextBuilder } from './context';
 import { injectMemoryPalace } from './memoryPalace/pipeline';
 import { renderLocalContextGuidance } from './memoryPalace/recallRouter';
@@ -386,6 +387,11 @@ export async function buildChatRequestPayload(input: BuildChatPayloadInput): Pro
     ));
     input.signal?.throwIfAborted();
     let systemPrompt = parts.stable;
+    // 酒馆提示词预设仅作用于普通私聊，不污染其他 App / 群聊 / 主动消息。
+    if (isChatConversationEntry(input.recallEntryPoint) && !input.appPrompt) {
+        const tavernPresetPrompt = readActiveTavernPromptPreset();
+        if (tavernPresetPrompt) systemPrompt += `\n\n${tavernPresetPrompt}`;
+    }
     let volatileTail = parts.volatileState;
     const sarModulePlan = input.recallEntryPoint === 'chat_app' && !input.appPrompt
         ? getSARModuleRuntimePlan(char, userProfile)
