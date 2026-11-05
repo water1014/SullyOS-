@@ -70,9 +70,28 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           mkdir -p "$RUNNER_TEMP/sullyos-signing"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sullyos-signing/release.jks"
+          if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sullyos-signing/release.jks"; then
+            echo "::error::Keystore secret is not valid Base64. Re-copy the original Base64 value without adding quotes."
+            exit 1
+          fi
           chmod 600 "$RUNNER_TEMP/sullyos-signing/release.jks"
-          keytool -list -keystore "$RUNNER_TEMP/sullyos-signing/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+          KEYSTORE_SIZE=$(wc -c < "$RUNNER_TEMP/sullyos-signing/release.jks" | tr -d ' ')
+          if [ "$KEYSTORE_SIZE" -lt 500 ]; then
+            echo "::error::Decoded keystore is unexpectedly small ($KEYSTORE_SIZE bytes). The Base64 secret may be truncated."
+            exit 1
+          fi
+          echo "Decoded keystore file size: $KEYSTORE_SIZE bytes."
+          if ! keytool -list -keystore "$RUNNER_TEMP/sullyos-signing/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" >/dev/null 2>"$RUNNER_TEMP/sullyos-signing/keytool-store.log"; then
+            echo "::error::Keystore could not be opened. The keystore file may be incomplete, or ANDROID_KEYSTORE_PASSWORD may not match. Secret values were not printed."
+            sed -E 's/(password|passphrase)[^:]*:.*/\1: [redacted]/I' "$RUNNER_TEMP/sullyos-signing/keytool-store.log" | tail -n 8
+            exit 1
+          fi
+          if ! keytool -list -keystore "$RUNNER_TEMP/sullyos-signing/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>"$RUNNER_TEMP/sullyos-signing/keytool-alias.log"; then
+            echo "::error::Keystore password is accepted, but ANDROID_KEY_ALIAS was not found. Check the alias secret."
+            sed -E 's/(password|passphrase)[^:]*:.*/\1: [redacted]/I' "$RUNNER_TEMP/sullyos-signing/keytool-alias.log" | tail -n 8
+            exit 1
+          fi
+          echo "Keystore password and alias validation passed."
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/sullyos-signing/release.jks" >> "$GITHUB_ENV"
           echo "APKSIGNER_PATH=$ANDROID_HOME/build-tools/35.0.0/apksigner" >> "$GITHUB_ENV"
 
