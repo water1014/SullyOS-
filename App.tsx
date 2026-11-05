@@ -41,7 +41,7 @@ const App: React.FC = () => {
               <PhoneShell />
             </MusicProvider>
             {/* 挂在 Provider 里面才能直接读 characters（省掉轮询 IndexedDB），
-                面板自身用 portal 渲染到 body，绕开上面那层 transform 对 fixed 定位的影响。 */}
+                面板自身用 portal 渲染到 body，避免被应用外壳的定位上下文限制。 */}
             <Amsg2DebugPanel />
             <WebUpdateNotice />
           </OSProvider>
