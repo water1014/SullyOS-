@@ -70,7 +70,9 @@ public class OpenCodeGoStreamPlugin extends Plugin {
             connection.setRequestMethod(method);
             connection.setConnectTimeout(30000);
             connection.setReadTimeout(120000);
-            connection.setInstanceFollowRedirects(true);
+            // Never forward API credentials to a redirect target outside the validated OpenCode host.
+            // OpenCode Go inference endpoints should answer directly; surface redirects as HTTP responses.
+            connection.setInstanceFollowRedirects(false);
             connection.setRequestProperty("Accept-Encoding", "identity");
             if (headers != null) {
                 java.util.Iterator<String> keys = headers.keys();
