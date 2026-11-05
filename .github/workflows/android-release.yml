@@ -69,6 +69,7 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          echo "Validating the newly configured SullyOS release signing key."
           mkdir -p "$RUNNER_TEMP/sullyos-signing"
           if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/sullyos-signing/release.jks"; then
             echo "::error::Keystore secret is not valid Base64. Re-copy the original Base64 value without adding quotes."
