@@ -88,8 +88,13 @@ export function mergeCharacterVisualContextPrompt(
     // Reroll controls may pass the previous fully-composed positive prompt.
     // Strip its old identity/timeline blocks so the latest confirmed profile is
     // injected exactly once and edits to the profile take effect immediately.
-    const priorContextMarker = '[Fixed character appearance]';
-    const sceneOnly = scenePrompt.includes(priorContextMarker)
+    const priorContextMarkers = [
+        '[Fixed character appearance]',
+        '[Confirmed permanent visual changes, newest first]',
+        '[Temporary appearance for the current scene only, newest first]',
+    ];
+    const hasPriorContext = priorContextMarkers.some(marker => scenePrompt.includes(marker));
+    const sceneOnly = hasPriorContext
         ? (scenePrompt.split('【本次场景】').slice(1).join('【本次场景】').trim() || scenePrompt.trim())
         : scenePrompt.trim();
     const stableContext = [identity, changes].filter(Boolean).join('\n\n');
