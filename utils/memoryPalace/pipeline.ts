@@ -2030,6 +2030,10 @@ async function applyMemorySideEffects(
                     }
                     const noteText = notes.map(n => n.trim()).filter(Boolean).join('；');
                     if (!noteText) continue;
+                    node.revisionHistory = [
+                        ...(node.revisionHistory || []),
+                        { content: node.content, editedAt: Date.now() },
+                    ].slice(-5);
                     node.content = `${node.content}\n（${dateStr} 纠正：${noteText}）`;
                     node.embedded = false; // 触发重新向量化
                     node.lastAccessedAt = Date.now();
