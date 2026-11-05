@@ -21,6 +21,7 @@ import { initializeFirstUseGuide } from '../utils/firstUseGuide';
 import { startBeautyUsage, stopBeautyUsage, stopBeautyForThemeChange } from '../utils/beautyUsage';
 import { FEEDBACK_INVITATION_KEY, hasPriorFeedbackInstallEvidence, initializeFeedbackInvitation, suppressFeedbackInvitation } from '../utils/feedbackInvitation';
 import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
 import type { VRSARActivity } from '../types';
 import { APIConfig, AppID, OSTheme, VirtualTime, CharacterProfile, CharacterGroup, ChatTheme, Toast, FullBackupData, UserProfile, ApiPreset, GroupProfile, SystemLog, Worldbook, NovelBook, SongSheet, Message, RealtimeConfig, AppearancePreset, CloudBackupConfig, CloudBackupFile, MemoryPalaceFeatureFlags } from '../types';
 import { DB } from '../utils/db';
@@ -66,6 +67,7 @@ import { loadChatInputPreferences, saveChatInputPreferences } from '../utils/cha
 import { collectAppearance, collectCharSettings, collectDataScale, collectFeatureFlagsAsync, collectSARFeatureFlags } from '../utils/analyticsSnapshot';
 import { normalizeApiConfig, normalizeApiPreset, isOpenCodeGoEndpoint, getOpenCodeSessionId } from '../utils/apiConfigNormalize';
 import { fetchLlm } from '../utils/anthropicApi';
+import { fetchOpenCodeGo } from '../utils/openCodeGoTransport';
 import { getCheckPhoneApi, setCheckPhoneApi } from '../utils/checkPhoneApi';
 import { markBackupDone } from '../utils/backupReminder';
 import { collectSARLocalBackup, restoreSARLocalBackup } from '../utils/vrWorld/sarBackup';
@@ -1282,7 +1284,8 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           }
 
           try {
-              let response = await fetchLlm(sendArgs[0], sendArgs[1], originalFetch, true);
+              const transport = isOpenCodeGoEndpoint(urlStr) && Capacitor.getPlatform() === 'android' ? fetchOpenCodeGo : originalFetch;
+              let response = await fetchLlm(sendArgs[0], sendArgs[1], transport, true);
 
               // /chat/completions 是可能已经开始计费的请求。拿到任何 HTTP 响应后都不在
               // 兼容层静默重发：中转站可能在返回错误前已经把任务交给上游，重发会让用户
