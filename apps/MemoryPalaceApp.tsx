@@ -5209,7 +5209,7 @@ create table if not exists memory_vectors (
                                         </div>
                                         <div style={{ fontSize: 10, color: '#92400e', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                             <RoomIcon room={node.room} size={12} style={{ color: ROOM_COLORS[node.room] }} />
-                                            <span>{getRoomLabel(node.room, userProfile?.name)} · 剩余 {daysLeft} 天</span>
+                                            <span>{getRoomLabel(node.room, userProfile?.name)} · {node.pinnedUntil === Number.MAX_SAFE_INTEGER ? '长期保留' : `剩余 ${daysLeft} 天`}</span>
                                         </div>
                                     </div>
                                     <button
@@ -6108,6 +6108,24 @@ create table if not exists memory_vectors (
                                 <div>创建: {new Date(selectedNode.createdAt).toLocaleString('zh-CN')}</div>
                                 <div>最后访问: {new Date(selectedNode.lastAccessedAt).toLocaleString('zh-CN')}</div>
                                 <div>访问次数: {selectedNode.accessCount}</div>
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        const isLocked = selectedNode.pinnedUntil === Number.MAX_SAFE_INTEGER;
+                                        const updated = { ...selectedNode, pinnedUntil: isLocked ? null : Number.MAX_SAFE_INTEGER };
+                                        await MemoryNodeDB.save(updated);
+                                        setSelectedNode(updated);
+                                        setPinnedNodes(prev => isLocked ? prev.filter(node => node.id !== updated.id) : [...prev.filter(node => node.id !== updated.id), updated]);
+                                        addToast(isLocked ? '已解除长期保留' : '已设为长期保留，不会被自动摘除', 'success');
+                                    }}
+                                    style={{
+                                        marginTop: 8, padding: '7px 11px', borderRadius: 8,
+                                        border: '1px solid #fde68a', background: '#fffbeb',
+                                        color: '#92400e', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                                    }}
+                                >
+                                    {selectedNode.pinnedUntil === Number.MAX_SAFE_INTEGER ? '🔒 取消长期保留' : '📌 长期保留这条记忆'}
+                                </button>
                                 {(selectedNode.revisionHistory || []).length > 0 && (
                                     <details style={{ marginTop: 10, padding: 10, borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
                                         <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#475569' }}>
