@@ -373,7 +373,9 @@ export const parseStandardWorldbook = (
         const uid = Number.isFinite(parsedUid) ? parsedUid : index;
         const primary = asStringArray(value.key ?? value.keys);
         const secondary = asStringArray(value.keysecondary ?? value.secondary_keys ?? value.secondaryKeys);
-        const insertionOrder = value.position ?? value.insertion_order ?? value.insertionOrder;
+        // SillyTavern separates prompt position from sorting priority:
+        // `position` chooses the prompt section; `insertion_order` only sorts entries.
+        const insertionPosition = value.position;
         const positionName = typeof insertionOrder === 'string'
             ? insertionOrder.trim().toLowerCase().replace(/[\s-]+/g, '_')
             : '';
@@ -386,9 +388,9 @@ export const parseStandardWorldbook = (
             before_example: 5, before_examples: 5, example_top: 5,
             after_example: 6, after_examples: 6, example_bottom: 6,
         };
-        const rawPosition = typeof insertionOrder === 'string'
-            ? positionAliases[positionName] ?? Number(insertionOrder)
-            : insertionOrder;
+        const rawPosition = typeof insertionPosition === 'string'
+            ? positionAliases[positionName] ?? Number(insertionPosition)
+            : insertionPosition;
 
         const position = clamp(rawPosition == null ? undefined : rawPosition, 0, 6, 1) as WorldbookPosition;
         const rawRole = value.role == null ? null : clamp(value.role, 0, 2, 0) as WorldbookDepthRole;
@@ -405,7 +407,11 @@ export const parseStandardWorldbook = (
             constant: value.constant === true,
             selective: value.selective === true || (value.selective == null && secondary.length > 0),
             selectiveLogic: clamp(value.selectiveLogic == null ? undefined : value.selectiveLogic, 0, 3, 0) as WorldbookSelectiveLogic,
-            order: Number.isFinite(rawOrder) ? rawOrder : Number.isFinite(Number(value.insertion_order)) ? Number(value.insertion_order) : 100,
+            order: Number.isFinite(rawOrder)
+                ? rawOrder
+                : Number.isFinite(Number(value.insertion_order ?? value.insertionOrder))
+                    ? Number(value.insertion_order ?? value.insertionOrder)
+                    : 100,
             position,
             disable: value.disable === true || value.enabled === false,
             probability: clamp(value.probability == null ? undefined : value.probability, 0, 100, 100),

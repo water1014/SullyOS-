@@ -200,6 +200,30 @@ describe('standard worldbook import', () => {
         });
     });
 
+    it('keeps insertion_order as sorting priority, not prompt position', () => {
+        const imported = parseStandardWorldbook(JSON.stringify({
+            entries: [{
+                uid: 91,
+                comment: '仅排序字段',
+                content: '应放在角色设定后',
+                key: ['排序测试'],
+                insertion_order: 250,
+            }],
+        }), '排序兼容', 1001);
+        expect(imported[0]).toMatchObject({ order: 250, position: 1 });
+    });
+
+    it('supports camelCase insertionOrder as sorting priority', () => {
+        const imported = parseStandardWorldbook(JSON.stringify({
+            entries: [{
+                comment: '驼峰排序字段',
+                content: '内容',
+                insertionOrder: 75,
+            }],
+        }), '排序兼容', 1002);
+        expect(imported[0]).toMatchObject({ order: 75, position: 1 });
+    });
+
     it('uses safe defaults when Tavern exports nullable numeric fields', () => {
         const imported = parseStandardWorldbook(JSON.stringify({
             entries: {
