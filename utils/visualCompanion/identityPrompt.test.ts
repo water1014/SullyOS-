@@ -57,7 +57,7 @@ describe('character appearance prompt', () => {
         expect(prompt).toContain('recognizable facial identity');
         expect(prompt).toContain('when the current scene explicitly requests a different hairstyle');
         expect(prompt).toContain('本次场景：短发，黑色皮衣');
-        expect(prompt).toContain('must not overwrite the saved permanent appearance profile');
+        expect(prompt).toContain('Do not let a temporary scene change overwrite the saved permanent appearance profile.');
     });
 
     it('keeps the scene prompt after the fixed identity block', () => {
