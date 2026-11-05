@@ -54,7 +54,7 @@ export async function executeChatImageTool(
       model,
       provider: cfg.naiProvider || 'official',
       baseUrl: cfg.naiBaseUrl || '',
-      customHeaders: cfg.naiCustomHeaders,
+      customHeaders: JSON.stringify(cfg.naiCustomHeaders || {}),
     }, positive, negative, {
       width: Math.max(512, Math.min(1536, Number(cfg.naiWidth) || 832)),
       height: Math.max(512, Math.min(1536, Number(cfg.naiHeight) || 1216)),
