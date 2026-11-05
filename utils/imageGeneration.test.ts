@@ -207,6 +207,10 @@ describe('image generation clients', () => {
     expect(eocd).toBeGreaterThan(0);
     // Corrupt the EOCD central-directory offset and local-header compressed size.
     damaged.fill(0xff, eocd + 16, eocd + 20);
+    const centralSize = damaged[eocd + 12] | (damaged[eocd + 13] << 8)
+      | (damaged[eocd + 14] << 16) | (damaged[eocd + 15] << 24);
+    const centralOffset = eocd - (centralSize >>> 0);
+    damaged.fill(0xff, centralOffset + 42, centralOffset + 46);
     damaged[eocd + 20] = 0x1b;
     damaged[eocd + 21] = 0x00;
     damaged.fill(0xff, 18, 22);
