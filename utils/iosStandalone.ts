@@ -204,6 +204,23 @@ export const installIOSStandaloneWorkaround = () => {
     if (hasInstalledIOSStandaloneWorkaround) return;
 
     hasInstalledIOSStandaloneWorkaround = true;
+
+    // Native Android uses Capacitor's Keyboard plugin to resize the body. The
+    // browser-only interactive-widget viewport policy would independently resize
+    // the WebView visual/layout viewport on modern Chromium, creating two competing
+    // IME resize paths and destabilizing focused inputs. Keep that policy for
+    // Android browsers/PWAs, but remove it before the native app mounts.
+    if (Capacitor.isNativePlatform() && isAndroidDevice()) {
+        const viewport = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+        if (viewport) {
+            const content = viewport.content
+                .split(',')
+                .map(part => part.trim())
+                .filter(part => !/^interactive-widget\s*=/i.test(part))
+                .join(', ');
+            if (content !== viewport.content) viewport.content = content;
+        }
+    }
     const useStandaloneFixes = isIOSStandaloneWebApp();
     // iOS 全屏 PWA 与安卓浏览器都需要这套键盘避让：可视区一变矮就挂 keyboard 类 + 锁外层滚动。
     // 安卓 Chrome/Edge 弹键盘时会把整页顶起，同样靠这套压回去。
