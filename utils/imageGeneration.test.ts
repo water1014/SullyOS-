@@ -189,6 +189,35 @@ describe('image generation clients', () => {
     });
   });
 
+  it('reports ZIP directory inconsistencies and transport headers for corrupted NAI responses', async () => {
+    const zip = new JSZip();
+    zip.file('image_0.png', 'nai-png');
+    const archive = await zip.generateAsync({ type: 'uint8array' });
+    const corrupted = new Uint8Array(archive);
+    // Damage the EOCD comment length while retaining its signature.
+    const eocd = corrupted.findIndex((value, index) =>
+      value === 0x50 && corrupted[index + 1] === 0x4b
+      && corrupted[index + 2] === 0x05 && corrupted[index + 3] === 0x06,
+    );
+    expect(eocd).toBeGreaterThanOrEqual(0);
+    corrupted[eocd + 20] = 0x4a;
+    corrupted[eocd + 21] = 0x00;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(corrupted, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Encoding': 'gzip',
+        'Content-Disposition': 'attachment; filename=images.zip',
+      },
+    })));
+    await expect(generateNaiImage(
+      { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      'blue hair',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
+    )).rejects.toThrow(/Content-Encoding=gzip.*ZIP注释长度声明\/实际=.*不一致/);
+  });
+
   it('accepts direct image responses from third-party NovelAI gateways', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Blob(['direct-image'], { type: 'image/webp' }), {
       status: 200,
