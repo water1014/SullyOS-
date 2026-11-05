@@ -46,13 +46,16 @@ describe('independent vision API', () => {
 
   it('uses the OpenCode Go zen endpoint and session header for vision recognition', async () => {
     let nativeOptions: Record<string, unknown> | undefined;
-    configureOpenCodeGoNativeTransport(true, async options => {
-      nativeOptions = options;
-      return {
-        status: 200,
-        data: JSON.stringify({ choices: [{ message: { content: '一只猫坐在窗台上。' } }] }),
-        headers: { 'content-type': 'application/json' },
+    configureOpenCodeGoNativeTransport(true, async (url, init) => {
+      nativeOptions = {
+        url,
+        method: init?.method,
+        headers: Object.fromEntries(new Headers(init?.headers).entries()),
       };
+      return new Response(JSON.stringify({ choices: [{ message: { content: '一只猫坐在窗台上。' } }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
     });
 
     const description = await describeImageWithVisionApi(image, {
@@ -77,13 +80,12 @@ describe('independent vision API', () => {
 
   it('keeps a stable vision session per character and isolates different characters', async () => {
     const sessionHeaders: string[] = [];
-    configureOpenCodeGoNativeTransport(true, async options => {
-      sessionHeaders.push(String((options.headers as Record<string, string>)['x-opencode-session']));
-      return {
+    configureOpenCodeGoNativeTransport(true, async (_url, init) => {
+      sessionHeaders.push(String(new Headers(init?.headers).get('x-opencode-session')));
+      return new Response(JSON.stringify({ choices: [{ message: { content: '识图完成。' } }] }), {
         status: 200,
-        data: JSON.stringify({ choices: [{ message: { content: '识图完成。' } }] }),
         headers: { 'content-type': 'application/json' },
-      };
+      });
     });
     const goConfig: VisionApiConfig = {
       enabled: true, baseUrl: 'https://opencode.ai/zen/go', apiKey: 'go-token',
