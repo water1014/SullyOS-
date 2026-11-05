@@ -35,6 +35,7 @@ type StudioConfig = {
 };
 type SavedImage = {
   id: string; blobId: string; engine: ImageEngine; prompt: string; negativePrompt: string;
+  requestPrompt?: string; requestNegativePrompt?: string;
   model: string; createdAt: number; mimeType: string; appearanceProfileVersion?: number;
   naiSettings?: { size: string; steps: number; scale: number; sampler: string; seed?: number };
   note?: string; category?: string; favorite?: boolean; backupSourceId?: string; sourceMessageId?: number;
@@ -164,6 +165,7 @@ const ImageStudioApp: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
   const [error, setError] = useState('');
+  const [lastNaiRequest, setLastNaiRequest] = useState<{ prompt: string; negativePrompt: string; model: string; options: NaiImageOptions; createdAt: number } | null>(null);
   const sharedImageConfig = apiConfig.chatImage;
   const hasSharedImageConfig = !!sharedImageConfig && (sharedImageConfig.engine === 'gpt'
     ? !!(sharedImageConfig.gptBaseUrl || sharedImageConfig.gptApiKey)
@@ -435,12 +437,13 @@ const ImageStudioApp: React.FC = () => {
     }
   };
 
-  const saveImage = useCallback(async (blob: Blob, generatedSeed?: number, profileVersion?: number) => {
+  const saveImage = useCallback(async (blob: Blob, generatedSeed?: number, profileVersion?: number, requestPrompt?: string, requestNegativePrompt?: string) => {
     const id = `studio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const blobId = `image-studio:${id}`;
     await DB.putBlobAsset(blobId, blob);
     const item: SavedImage = {
       id, blobId, engine, prompt: prompt.trim(), negativePrompt: engine === 'nai' ? negativePrompt.trim() : '',
+      ...(engine === 'nai' && requestPrompt !== undefined ? { requestPrompt, requestNegativePrompt: requestNegativePrompt || '' } : {}),
       model: engine === 'gpt' ? config.gpt.model : config.nai.model,
       ...(profileVersion !== undefined ? { appearanceProfileVersion: profileVersion } : {}),
       ...(engine === 'nai' ? { naiSettings: { size: naiSize, steps: naiSteps, scale: naiScale, sampler: naiSampler, ...(generatedSeed !== undefined ? { seed: generatedSeed } : {}) } } : {}),
@@ -527,12 +530,21 @@ const ImageStudioApp: React.FC = () => {
       const gptNegativeField = hasSharedImageConfig
         ? (gptNegativeMode === 'field' ? effectiveNegativePrompt : undefined)
         : effectiveNegativePrompt;
+      if (engine === 'nai') {
+        setLastNaiRequest({
+          prompt: effectivePrompt.trim(),
+          negativePrompt: effectiveNegativePrompt.trim(),
+          model: config.nai.model || 'nai-diffusion-4-5-full',
+          options: naiOptions,
+          createdAt: Date.now(),
+        });
+      }
       const blob = engine === 'gpt'
         ? effectiveReferenceImage
           ? await editGptImage(config.gpt, effectiveReferenceImage, gptRequestPrompt, { size: gptSize, quality: gptQuality, negativePrompt: gptNegativeField, signal: controller.signal })
           : await generateGptImage(config.gpt, gptRequestPrompt, { size: gptSize, quality: gptQuality, negativePrompt: gptNegativeField, signal: controller.signal })
         : await generateNaiImage(config.nai, effectivePrompt, effectiveNegativePrompt, naiOptions, controller.signal);
-      await saveImage(blob, effectiveNaiSeed, currentAppearanceProfile?.status === 'active' ? currentAppearanceProfile.version : undefined);
+      await saveImage(blob, effectiveNaiSeed, currentAppearanceProfile?.status === 'active' ? currentAppearanceProfile.version : undefined, engine === 'nai' ? effectivePrompt.trim() : undefined, engine === 'nai' ? effectiveNegativePrompt.trim() : undefined);
       addToast('图片已生成并保存到我的画廊', 'success');
     } catch (cause) {
       if (cause instanceof Error && cause.name === 'AbortError') {
@@ -1117,6 +1129,12 @@ const ImageStudioApp: React.FC = () => {
                 <textarea className="field min-h-[70px] resize-y" value={selected.note || ''} onChange={event => updateImageMetadata(selected.id, { note: event.target.value })} placeholder="记录创作想法、修改方向或灵感来源……"/>
                 <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">正向提示词</label><button onClick={() => copyPrompt(selected.prompt)} className="text-[10px] text-sky-700">复制</button></div>
                 <p className="text-xs leading-5 text-slate-600 whitespace-pre-wrap break-words rounded-xl bg-white/55 p-3">{selected.prompt}</p>
+                {selected.engine === 'nai' && selected.requestPrompt && <details className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 space-y-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-sky-800">查看实际发送给 NAI 的完整提示词</summary>
+                  <div className="flex items-center justify-between gap-2"><label className="text-[10px] font-semibold text-slate-600">最终正向提示词（含角色外貌与固定前后缀）</label><button type="button" onClick={() => copyPrompt(selected.requestPrompt || '')} className="text-[10px] text-sky-700">复制</button></div>
+                  <p className="text-[11px] leading-5 text-slate-700 whitespace-pre-wrap break-words">{selected.requestPrompt}</p>
+                  {selected.requestNegativePrompt && <><div className="flex items-center justify-between gap-2"><label className="text-[10px] font-semibold text-slate-600">最终负向提示词</label><button type="button" onClick={() => copyPrompt(selected.requestNegativePrompt || '')} className="text-[10px] text-sky-700">复制</button></div><p className="text-[11px] leading-5 text-slate-600 whitespace-pre-wrap break-words">{selected.requestNegativePrompt}</p></>}
+                </details>}
                 {activeCharacterId && <p className="text-[10px] leading-4 text-sky-700 bg-sky-50/70 rounded-xl px-3 py-2">可将这张作品设为当前角色的固定参考图。该图片仅在 GPT / OpenAI 兼容图像编辑流程中作为图像参考，NAI 仍使用文字形象描述。</p>}
                 {selected.negativePrompt && <>
                   <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">反向提示词</label><button onClick={() => copyPrompt(selected.negativePrompt)} className="text-[10px] text-sky-700">复制</button></div>
