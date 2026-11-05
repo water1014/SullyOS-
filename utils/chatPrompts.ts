@@ -1,4 +1,5 @@
 import {weatherForCharacter} from './characterWeather';
+import { readActiveTavernPromptPreset } from './tavernPromptPreset';
 import {secretNoteContext} from './secretNote';
 import { buildCharacterResponsePrinciples } from './characterResponsePrinciples';
 import { expandHomeContextHistory } from './homeContextSegments';
@@ -358,6 +359,13 @@ export const ChatPrompts = {
             layout: { deferVolatile: true },
         });
         let baseSystemPrompt = context.coreContext;
+        // 普通私聊使用用户在「提示词预设」App 中启用的酒馆预设。
+        // fire-pack 是延迟触发模板，不能把创建模板时的本机开关烤进去；
+        // appRules 非空表示其他聊天表面，避免把私聊预设串入群聊/特殊交互。
+        if (!forFirePack && promptOptions?.appRules === undefined) {
+            const activePresetPrompt = readActiveTavernPromptPreset();
+            if (activePresetPrompt) baseSystemPrompt += `\n\n${activePresetPrompt}`;
+        }
         timings.buildCoreContext = Math.round(performance.now() - coreT0);
 
         // ── 易变状态段（volatileState）──
