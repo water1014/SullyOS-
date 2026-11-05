@@ -99,6 +99,39 @@ export const toMountedWorldbook = (book: Worldbook): MountedWorldbook => ({
  * Install a complete worldbook group into one character cache. Existing entries
  * with the same ids are replaced, so retrying an install cannot create duplicates.
  */
+/**
+ * Reconcile a newly imported Tavern group with its previous import.
+ * Category scopes source UIDs to one imported file; occurrence order keeps
+ * malformed exports with duplicate UIDs from collapsing into one entry.
+ * Existing IDs and creation timestamps survive re-imports, while edited
+ * entry fields are refreshed and can then propagate to character mounts.
+ */
+export const mergeImportedWorldbooks = (
+    existing: Worldbook[] = [],
+    imported: Worldbook[] = [],
+): Worldbook[] => {
+    const existingBySource = new Map<string, Worldbook[]>();
+    for (const book of existing) {
+        if (!Number.isFinite(book.sourceUid)) continue;
+        const key = `${book.category}\u0000${book.sourceUid}`;
+        const group = existingBySource.get(key) || [];
+        group.push(book);
+        existingBySource.set(key, group);
+    }
+
+    const seen = new Map<string, number>();
+    return imported.map(book => {
+        if (!Number.isFinite(book.sourceUid)) return book;
+        const key = `${book.category}\u0000${book.sourceUid}`;
+        const occurrence = seen.get(key) || 0;
+        seen.set(key, occurrence + 1);
+        const previous = existingBySource.get(key)?.[occurrence];
+        return previous
+            ? { ...book, id: previous.id, createdAt: previous.createdAt }
+            : book;
+    });
+};
+
 export const upsertMountedWorldbooks = (
     current: MountedWorldbook[] = [],
     books: Worldbook[] = [],

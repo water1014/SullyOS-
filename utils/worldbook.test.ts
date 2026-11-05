@@ -125,6 +125,50 @@ describe('standard worldbook import', () => {
         });
     });
 
+    it('re-imports the same Tavern source without changing IDs and updates edited entries', () => {
+        const first = parseStandardWorldbook(JSON.stringify({
+            entries: [
+                { uid: 7, comment: '旧标题', content: '旧内容', key: ['旧关键词'] },
+                { uid: 8, comment: '另一条', content: '另一条内容' },
+            ],
+        }), '同一酒馆书', 100);
+        const edited = parseStandardWorldbook(JSON.stringify({
+            entries: [
+                { uid: 7, comment: '新标题', content: '新内容', key: ['新关键词'] },
+                { uid: 8, comment: '另一条', content: '另一条内容' },
+            ],
+        }), '同一酒馆书', 200);
+
+        const merged = mergeImportedWorldbooks(first, edited);
+        expect(merged.map(entry => entry.id)).toEqual(first.map(entry => entry.id));
+        expect(merged[0]).toMatchObject({
+            title: '新标题',
+            content: '新内容',
+            key: ['新关键词'],
+            createdAt: 100,
+            updatedAt: 200,
+        });
+        expect(merged).toHaveLength(first.length);
+    });
+
+    it('keeps distinct entries when a malformed Tavern export repeats a source UID', () => {
+        const existing = parseStandardWorldbook(JSON.stringify({
+            entries: [
+                { uid: 5, comment: '第一条', content: 'A' },
+                { uid: 5, comment: '第二条', content: 'B' },
+            ],
+        }), '重复 UID', 1);
+        const incoming = parseStandardWorldbook(JSON.stringify({
+            entries: [
+                { uid: 5, comment: '第一条更新', content: 'A2' },
+                { uid: 5, comment: '第二条更新', content: 'B2' },
+            ],
+        }), '重复 UID', 2);
+        const merged = mergeImportedWorldbooks(existing, incoming);
+        expect(merged.map(entry => entry.id)).toEqual(existing.map(entry => entry.id));
+        expect(merged.map(entry => entry.content)).toEqual(['A2', 'B2']);
+    });
+
     it('imports SillyTavern world_info wrappers and keeps the entry activation settings', () => {
         const imported = parseStandardWorldbook(JSON.stringify({
             name: '酒馆世界书',

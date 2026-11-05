@@ -11,6 +11,7 @@ import {
     WORLDBOOK_POSITION_LABELS,
     WORLDBOOK_ROLE_LABELS,
     upsertMountedWorldbooks,
+    mergeImportedWorldbooks,
 } from '../utils/worldbook';
 import { confirmExportSafety } from '../utils/exportGuard';
 import { shareOrDownloadFile } from '../utils/shareExport';
@@ -204,7 +205,8 @@ const WorldbookApp: React.FC = () => {
             const source = await readShareFile(file, 'worldbook');
             const text = await source.text();
             const category = source.name.replace(/\.json$/i, '').trim() || '导入世界书';
-            const imported = parseStandardWorldbook(text, category);
+            const parsedBooks = parseStandardWorldbook(text, category);
+            const imported = mergeImportedWorldbooks(worldbooks, parsedBooks);
             await addWorldbooks(imported);
             const activeCharacter = characters.find(character => character.id === activeCharacterId);
             if (activeCharacter) {
