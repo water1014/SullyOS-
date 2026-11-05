@@ -290,6 +290,32 @@ export interface APIConfig {
   maxTokens?: number;
   baseUrl: string;
   apiKey: string;
+  // 聊天共用生图配置：生图室与聊天生图读取同一份设置。
+  chatImage?: {
+    enabled?: boolean;
+    engine?: 'nai' | 'gpt';
+    naiProvider?: 'official' | 'thirdparty';
+    naiBaseUrl?: string;
+    naiApiKey?: string;
+    naiModel?: string;
+    naiCustomHeaders?: Record<string, string>;
+    naiPositivePrompt?: string;
+    naiNegativePrompt?: string;
+    naiWidth?: number;
+    naiHeight?: number;
+    naiSteps?: number;
+    naiScale?: number;
+    naiSampler?: string;
+    naiSeed?: string;
+    gptBaseUrl?: string;
+    gptApiKey?: string;
+    gptModel?: string;
+    gptCustomHeaders?: Record<string, string>;
+    gptPositivePrompt?: string;
+    gptNegativePrompt?: string;
+    gptSize?: string;
+    gptQuality?: string;
+  };
   // 可选识图中转：给不支持 image_url 的主模型补视觉能力。
   visionApi?: VisionApiConfig;
   minimaxApiKey?: string;
