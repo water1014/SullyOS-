@@ -142,7 +142,7 @@ async function extractImageFromJsZip(buffer: Uint8Array): Promise<Blob> {
     const mimeType = sniffImageMime(bytes);
     if (mimeType) return new Blob([bytes], { type: mimeType });
   }
-  throw new Error('ZIP 中没有有效的 PNG/JPEG/WebP 图片条目');
+  throw new Error('ZIP 中没有 PNG/JPEG/WebP 图片条目');
 }
 async function extractImageFromZipJs(buffer: Uint8Array): Promise<Blob> {
   const reader = new ZipReader(new Uint8ArrayReader(buffer));
@@ -226,13 +226,62 @@ function describeNaiZip(buffer: Uint8Array, response: Response): string {
   ].join('；');
 }
 
+function validateNaiZipDirectory(buffer: Uint8Array): string | null {
+  const readU16 = (offset: number) => offset >= 0 && offset + 2 <= buffer.length ? buffer[offset] | (buffer[offset + 1] << 8) : null;
+  const readU32 = (offset: number) => offset >= 0 && offset + 4 <= buffer.length
+    ? (buffer[offset] | (buffer[offset + 1] << 8) | (buffer[offset + 2] << 16) | (buffer[offset + 3] << 24)) >>> 0 : null;
+  let eocd = -1;
+  const searchStart = Math.max(0, buffer.length - 22 - 0xffff);
+  for (let offset = buffer.length - 22; offset >= searchStart; offset -= 1) {
+    if (buffer[offset] === 0x50 && buffer[offset + 1] === 0x4b && buffer[offset + 2] === 0x05 && buffer[offset + 3] === 0x06) {
+      eocd = offset;
+      break;
+    }
+  }
+  if (eocd < 0) return '缺少 ZIP 结束目录';
+  const commentLength = readU16(eocd + 20);
+  if (commentLength === null || eocd + 22 + commentLength !== buffer.length) return 'ZIP 注释长度与实际尾部长度不一致';
+  const entries = readU16(eocd + 10);
+  const centralSize = readU32(eocd + 12);
+  const centralOffset = readU32(eocd + 16);
+  if (entries === null || centralSize === null || centralOffset === null) return 'ZIP 结束目录字段不完整';
+  if (entries === 0xffff || centralSize === 0xffffffff || centralOffset === 0xffffffff) return '暂不支持 ZIP64 目录';
+  if (centralOffset + centralSize > eocd) return '中央目录偏移或大小越过结束目录';
+  let cursor = centralOffset;
+  for (let index = 0; index < entries; index += 1) {
+    if (cursor + 46 > eocd || buffer[cursor] !== 0x50 || buffer[cursor + 1] !== 0x4b
+      || buffer[cursor + 2] !== 0x01 || buffer[cursor + 3] !== 0x02) {
+      return '中央目录第 ' + (index + 1) + ' 条记录签名无效';
+    }
+    const nameLength = readU16(cursor + 28);
+    const extraLength = readU16(cursor + 30);
+    const entryCommentLength = readU16(cursor + 32);
+    if (nameLength === null || extraLength === null || entryCommentLength === null) return '中央目录记录长度字段不完整';
+    cursor += 46 + nameLength + extraLength + entryCommentLength;
+    if (cursor > eocd) return '中央目录记录长度超出结束目录';
+  }
+  if (cursor !== centralOffset + centralSize) return '中央目录记录总长度与声明大小不一致';
+  const gap = eocd - cursor;
+  if (gap > 0) {
+    const hasSignature = gap >= 6 && buffer[cursor] === 0x50 && buffer[cursor + 1] === 0x4b
+      && buffer[cursor + 2] === 0x05 && buffer[cursor + 3] === 0x05
+      && readU16(cursor + 4) === gap - 6;
+    if (!hasSignature) return '中央目录与结束目录之间存在无效间隔或签名记录';
+  }
+  return null;
+}
+
 async function parseNaiJsonResponse(buffer: Uint8Array): Promise<Blob> {
   const raw = new TextDecoder().decode(buffer);
   let payload: unknown;
   try { payload = JSON.parse(raw); }
   catch { throw new Error('NAI 返回文本，但不是有效 JSON：' + raw.slice(0, 180)); }
   const image = findNaiBase64(payload);
-  if (!image) throw new Error('NAI 服务返回 JSON，但没有可识别的图片 Base64 数据');
+  if (!image) {
+    const providerError = responseError(payload, '');
+    if (providerError) throw new Error(providerError.slice(0, 240));
+    throw new Error('NAI 服务返回 JSON，但没有可识别的图片 Base64 数据');
+  }
   return decodeBase64Image(image.encoded);
 }
 
@@ -246,6 +295,11 @@ export async function readNaiImageResponse(response: Response): Promise<Blob> {
   const prefix = new TextDecoder().decode(buffer.subarray(0, Math.min(buffer.length, 32))).trimStart();
   if (contentType.includes('json') || contentType.startsWith('text/') || prefix.startsWith('{') || prefix.startsWith('[')) return parseNaiJsonResponse(buffer);
   if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
+    const directoryError = validateNaiZipDirectory(buffer);
+    if (directoryError) {
+      throw new Error('NAI 返回 ZIP，但 ZIP 结构或图片校验失败：' + directoryError
+        + '。未修改响应元数据。响应诊断：' + describeNaiZip(buffer, response));
+    }
     let jsZipError = '';
     try { return await extractImageFromJsZip(buffer); }
     catch (error) { jsZipError = error instanceof Error ? error.message : String(error); }
