@@ -4,6 +4,7 @@ import type { MountedWorldbook, Worldbook } from '../types';
 import {
     injectWorldbookDepthEntries,
     isWorldbookEntryActive,
+    parseStandardWorldbook,
     resolveWorldbookEntries,
     serializeStandardWorldbook,
     splitWorldbookSections,
