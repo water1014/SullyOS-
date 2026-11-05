@@ -1,6 +1,6 @@
 import type { APIConfig } from '../types';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
-import { normalizeApiConfig } from './apiConfigNormalize';
+import { getOpenCodeSessionId, isOpenCodeGoEndpoint, normalizeApiConfig } from './apiConfigNormalize';
 
 const STORAGE_KEY = 'check_phone_api';
 
@@ -44,6 +44,7 @@ export async function requestCheckPhoneApi(
     const headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey || 'sk-none'}`,
+        ...(isOpenCodeGoEndpoint(url) ? { 'x-opencode-session': getOpenCodeSessionId('check-phone') } : {}),
     };
     if (!Capacitor.isNativePlatform()) {
         return fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
