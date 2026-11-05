@@ -939,7 +939,7 @@ const PhoneShell: React.FC = () => {
 
   const bgImageValue = getBgStyle(theme.wallpaper);
   const lockBgImageValue = getBgStyle(theme.lockWallpaper || theme.wallpaper);
-  const wallpaperIsCssImage = /^(?:url\\(|(?:repeating-)?(?:linear|radial|conic)-gradient\\()/i.test(bgImageValue);
+  const wallpaperIsCssImage = /^(?:url\(|(?:repeating-)?(?:linear|radial|conic)-gradient\()/i.test(bgImageValue);
   const contentColor = theme.contentColor || '#ffffff';
   const acnhSkin = theme.skin === 'animalcrossing'; // 动森彩蛋：锁屏换暖色草地点缀
   const storedCompanionFrame = theme.skin === 'companion' ? loadCompanionFrameStyle() : null;
