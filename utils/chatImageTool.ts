@@ -43,7 +43,7 @@ export async function executeChatImageTool(
   let model: string;
   if ((cfg.engine || 'nai') === 'nai') {
     engine = 'nai';
-    positive = reroll?.positivePrompt || joinPrompt(cfg.naiPositivePrompt, scene);
+    positive = reroll?.positivePrompt || joinPrompt(cfg.naiPositivePrompt, scene, cfg.naiPositiveSuffix);
     negative = reroll?.negativePrompt ?? (cfg.naiNegativePrompt || 'low quality, worst quality, blurry, bad anatomy').trim();
     model = cfg.naiModel || 'nai-diffusion-5-full';
     const seedText = reroll?.randomizeSeed ? '' : (cfg.naiSeed?.trim() || '');
@@ -65,7 +65,7 @@ export async function executeChatImageTool(
     }, signal);
   } else {
     engine = 'gpt';
-    positive = reroll?.positivePrompt || joinPrompt(cfg.gptPositivePrompt, scene);
+    positive = reroll?.positivePrompt || joinPrompt(cfg.gptPositivePrompt, scene, cfg.gptPositiveSuffix);
     negative = reroll?.negativePrompt ?? (cfg.gptNegativePrompt || '').trim();
     model = cfg.gptModel || 'gpt-image-1';
     const negativeMode = cfg.gptNegativePromptMode || 'append';
