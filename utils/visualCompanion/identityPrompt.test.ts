@@ -67,6 +67,19 @@ describe('character appearance prompt', () => {
         expect(rerolled.split('[Fixed character appearance]').length - 1).toBe(1);
         expect(rerolled).toContain('雨夜里的咖啡馆');
     });
+
+    it('replaces stale visual timeline blocks on reroll instead of accumulating history', () => {
+        const previous = mergeCharacterVisualContextPrompt('雨夜里的咖啡馆', profile, [
+            memory({ id: 'old', visualChangeKind: 'permanent', content: '旧的红色围巾' }),
+        ], 100);
+        const rerolled = mergeCharacterVisualContextPrompt(previous, profile, [
+            memory({ id: 'new', visualChangeKind: 'permanent', content: '新的蓝色围巾' }),
+        ], 101);
+        expect(rerolled).toContain('新的蓝色围巾');
+        expect(rerolled).not.toContain('旧的红色围巾');
+        expect(rerolled.split('[Confirmed permanent visual changes, newest first]').length - 1).toBe(1);
+        expect(rerolled).toContain('雨夜里的咖啡馆');
+    });
 });
 
 
