@@ -461,7 +461,7 @@ const ImageStudioApp: React.FC = () => {
       const blob = engine === 'gpt'
         ? effectiveReferenceImage
           ? await editGptImage(config.gpt, effectiveReferenceImage, effectivePrompt, { size: gptSize, quality: gptQuality, negativePrompt, signal: controller.signal })
-          : await generateGptImage(config.gpt, effectivePrompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
+          : await generateGptImage(config.gpt, effectivePrompt, { size: gptSize, quality: gptQuality, negativePrompt, signal: controller.signal })
         : await generateNaiImage(config.nai, effectivePrompt, negativePrompt, naiOptions, controller.signal);
       await saveImage(blob, effectiveNaiSeed, currentAppearanceProfile?.status === 'active' ? currentAppearanceProfile.version : undefined);
       addToast('图片已生成并保存到我的画廊', 'success');
