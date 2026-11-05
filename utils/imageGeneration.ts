@@ -1,5 +1,4 @@
 import JSZip from 'jszip';
-import { ZipReader, Uint8ArrayReader, Uint8ArrayWriter } from '@zip.js/zip.js';
 
 export type ImageEngine = 'gpt' | 'nai';
 
@@ -334,72 +333,59 @@ function findNaiBase64(value: unknown, depth = 0): { encoded: string; mimeType?:
 
 async function readNaiImageResponse(response: Response): Promise<Blob> {
   const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
-  const buffer = new Uint8Array(await response.arrayBuffer());
-  if (!buffer.length) throw new Error('NAI 服务返回了空内容');
+  if (contentType.startsWith('image/')) {
+    const image = await response.blob();
+    if (!image.size) throw new Error('NAI 服务返回了空图片');
+    return image;
+  }
 
-  const directMime = sniffImageMime(buffer);
-  if (directMime) return new Blob([buffer], { type: directMime });
+  const buffer = await response.arrayBuffer();
+  if (!buffer.byteLength) throw new Error('NAI 服务返回了空内容');
 
-  const raw = new TextDecoder().decode(buffer).trim();
-  if (contentType.startsWith('image/')) return new Blob([buffer], { type: contentType.split(';')[0] });
-  if (raw.startsWith('{') || raw.startsWith('[')) {
+  if (contentType.includes('json') || contentType.startsWith('text/')) {
+    const raw = new TextDecoder().decode(buffer);
     let payload: any;
     try { payload = JSON.parse(raw); }
-    catch { throw new Error(`NAI 返回了 JSON-like 内容但解析失败（Content-Type: ${contentType || '未知'}）：${raw.slice(0, 160)}`); }
-    const image = findNaiBase64(payload);
-    if (image) {
+    catch { throw new Error(`NAI 服务返回了无法识别的文本：${raw.slice(0, 180)}`); }
+    const encoded = payload?.image || payload?.image_base64 || payload?.data?.[0]?.b64_json;
+    if (typeof encoded === 'string' && encoded) {
+      const normalized = encoded.replace(/^data:image\/[^;]+;base64,/i, '');
       try {
-        const binary = atob(image.encoded);
+        const binary = atob(normalized);
         const bytes = new Uint8Array(binary.length);
         for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-        const detectedMime = sniffImageMime(bytes);
-        if (!detectedMime) throw new Error('Base64 字段解码成功，但内容不是 PNG、JPEG 或 WebP 图片');
-        return new Blob([bytes], { type: detectedMime || image.mimeType || 'image/png' });
-      } catch (error) {
-        throw new Error(error instanceof Error ? error.message : 'NAI 返回的 Base64 图片无法解码');
+        return new Blob([bytes], { type: payload?.mime_type || 'image/png' });
+      } catch {
+        throw new Error('NAI 服务返回了图片字段，但 Base64 内容无法解码');
       }
     }
     throw new Error(String(errorMessage(payload, 'NAI 服务返回 JSON，但没有可识别的图片数据')).slice(0, 240));
   }
 
-  if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
-    let jszipError = '';
-    try {
-      const archive = await JSZip.loadAsync(buffer);
-      const imageFile = Object.values(archive.files).find(file => !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name));
-      if (!imageFile) throw new Error('压缩包中没有 PNG/JPEG/WebP 图片条目');
-      const bytes = await imageFile.async('uint8array');
-      if (!bytes.length) throw new Error('图片条目解压后为空');
-      const extension = imageFile.name.toLowerCase().split('.').pop();
-      const mimeType = sniffImageMime(bytes) || (extension === 'webp' ? 'image/webp' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : 'image/png');
-      return new Blob([bytes], { type: mimeType });
-    } catch (error) {
-      jszipError = error instanceof Error ? error.message : String(error);
+  try {
+    const archive = await JSZip.loadAsync(buffer);
+    const imageFile = Object.values(archive.files).find(file =>
+      !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
+    );
+    if (!imageFile) throw new Error('NAI 返回成功，但压缩包中没有找到图片文件');
+    const bytes = await imageFile.async('uint8array');
+    const extension = imageFile.name.toLowerCase().split('.').pop();
+    const mimeType = extension === 'webp' ? 'image/webp' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : 'image/png';
+    if (!bytes.length) throw new Error('NAI 压缩包中的图片文件为空');
+    return new Blob([bytes], { type: mimeType });
+  } catch (error) {
+    if (error instanceof Error && /没有找到图片文件|图片文件为空/.test(error.message)) throw error;
+    const raw = new TextDecoder().decode(buffer).trim();
+    if (raw.startsWith('{') || raw.startsWith('[')) {
+      try {
+        const payload = JSON.parse(raw);
+        throw new Error(String(errorMessage(payload, 'NAI 第三方接口返回了无法识别的 JSON')).slice(0, 240));
+      } catch (jsonError) {
+        if (jsonError instanceof Error && !jsonError.message.includes('JSON')) throw jsonError;
+      }
     }
-
-    // Some NAI-compatible gateways emit ZIP variants that JSZip cannot read.
-    // Retry with the already-installed zip.js implementation before failing.
-    let zipReader: InstanceType<typeof ZipReader> | undefined;
-    try {
-      zipReader = new ZipReader(new Uint8ArrayReader(buffer));
-      const entries = await zipReader.getEntries();
-      const imageEntry = entries.find(entry => !entry.directory && /\.(png|webp|jpe?g)$/i.test(entry.filename));
-      if (!imageEntry) throw new Error('压缩包中没有 PNG/JPEG/WebP 图片条目');
-      const bytes = await imageEntry.getData(new Uint8ArrayWriter());
-      if (!bytes.length) throw new Error('图片条目解压后为空');
-      const extension = imageEntry.filename.toLowerCase().split('.').pop();
-      const mimeType = sniffImageMime(bytes) || (extension === 'webp' ? 'image/webp' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : 'image/png');
-      return new Blob([bytes], { type: mimeType });
-    } catch (fallbackError) {
-      const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-      throw new Error(`NAI ZIP 解包失败。JSZip：${jszipError.slice(0, 120)}；备用解析器：${fallbackMessage.slice(0, 120)}。响应诊断：${describeNaiZip(buffer, response)}`);
-    } finally {
-      await zipReader?.close().catch(() => undefined);
-    }
+    throw new Error('NAI 服务已返回内容，但既不是图片文件，也不是有效的 ZIP 图片包。请检查第三方接口的响应格式。');
   }
-
-  const preview = raw.replace(/[\\r\\n\\t]+/g, ' ').slice(0, 120);
-  throw new Error(`NAI 已返回 HTTP ${response.status} 内容，但不是可识别的图片、ZIP 或图片 JSON（Content-Type: ${contentType || '未知'}，长度: ${buffer.length} bytes）。响应开头：${preview || '二进制数据'}`);
 }
 
 export async function generateNaiImage(
