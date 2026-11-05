@@ -1652,7 +1652,6 @@ ${memberTimeline || '(暂无互动记录)'}
 
     const autoReply = useChatAutoReply({
         enabled: inputPreferences.autoReply,
-        delayMs: inputPreferences.autoReplyDelayMs,
         conversationId: activeGroup?.id || null,
         active: view === 'chat' && !!activeGroup,
         blocked: isInputFocused || !!input.trim() || showPanel !== 'none' || modalType !== 'none'

@@ -91,7 +91,7 @@ export function useChatAutoReply(options: Options) {
             current.current.onGenerate();
         }, delayMs);
         return () => { window.clearInterval(tick); window.clearTimeout(timer); };
-    }, [revision, visible, options.enabled, options.active, options.blocked, options.generating, options.conversationId, cancel]);
+    }, [revision, visible, options.enabled, options.delayMs, options.active, options.blocked, options.generating, options.conversationId, cancel]);
 
     return { seconds, beginSend, cancel };
 }

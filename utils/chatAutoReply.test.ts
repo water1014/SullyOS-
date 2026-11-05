@@ -37,6 +37,16 @@ afterEach(() => {
 });
 
 describe('two-second automatic reply', () => {
+    it('uses a configurable one-second delay', () => {
+        render({ delayMs: 1000 });
+        send();
+        expect(controls.seconds).toBe(1);
+        advance(999);
+        expect(options.onGenerate).not.toHaveBeenCalled();
+        advance(1);
+        expect(options.onGenerate).toHaveBeenCalledTimes(1);
+    });
+
     it('only generates after a successful new send and exactly two ready seconds', () => {
         advance(5000);
         expect(options.onGenerate).not.toHaveBeenCalled();
