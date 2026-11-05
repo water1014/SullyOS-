@@ -18,7 +18,7 @@ import java.util.concurrent.Executors;
 
 @CapacitorPlugin(name = "OpenCodeGoStream")
 public class OpenCodeGoStreamPlugin extends Plugin {
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final ExecutorService executor = Executors.newFixedThreadPool(3);
     private final Map<String, Task> tasks = new ConcurrentHashMap<>();
     private static final class Task {
         volatile HttpURLConnection connection;
@@ -58,7 +58,14 @@ public class OpenCodeGoStreamPlugin extends Plugin {
     private void runRequest(String id, Task task, String url, String method, JSObject headers, String body) {
         HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection) new URL(url).openConnection();
+            URL target = new URL(url);
+            if (!"https".equalsIgnoreCase(target.getProtocol())
+                || !"opencode.ai".equalsIgnoreCase(target.getHost())
+                || !(target.getPath().startsWith("/zen/go/") || target.getPath().equals("/zen/go")
+                    || target.getPath().startsWith("/inference/go/") || target.getPath().equals("/inference/go"))) {
+                throw new SecurityException("Only OpenCode Go HTTPS endpoints are allowed");
+            }
+            connection = (HttpURLConnection) target.openConnection();
             task.connection = connection;
             connection.setRequestMethod(method);
             connection.setConnectTimeout(30000);
