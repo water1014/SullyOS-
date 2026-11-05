@@ -64,7 +64,7 @@ const clamp = (value: unknown, min: number, max: number, fallback: number): numb
 const asStringArray = (value: unknown): string[] => {
     const values = Array.isArray(value)
         ? value
-        : typeof value === 'string' ? value.split(/[,，\\n]/) : [];
+        : typeof value === 'string' ? value.split(/[,，\r\n]+/) : [];
     return values.map(item => String(item).trim()).filter(Boolean);
 };
 
