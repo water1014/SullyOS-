@@ -18,6 +18,7 @@ import { shareOrDownloadFile } from '../utils/shareExport';
 import { readShareFile } from '../utils/pngShare';
 import { trackEvent } from '../utils/analytics';
 import { DB } from '../utils/db';
+import { parseTavernPromptPreset, type TavernPromptPreset } from '../utils/tavernPromptPreset';
 
 const WorldbookApp: React.FC = () => {
     const { closeApp, worldbooks, addWorldbook, addWorldbooks, updateWorldbook, updateWorldbooks, deleteWorldbook, deleteWorldbooks, addToast, characters, activeCharacterId, updateCharacter } = useOS();
@@ -50,6 +51,9 @@ const WorldbookApp: React.FC = () => {
     const [showCategoryPicker, setShowCategoryPicker] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showImportConfirm, setShowImportConfirm] = useState(false);
+    const [showPromptPresets, setShowPromptPresets] = useState(false);
+    const [promptPresets, setPromptPresets] = useState<TavernPromptPreset[]>(() => { try { return JSON.parse(localStorage.getItem('sully-tavern-prompt-presets:v1') || '[]'); } catch { return []; } });
+    const presetImportRef = useRef<HTMLInputElement>(null);
     const importRef = useRef<HTMLInputElement>(null);
     const [tempEnabled, setTempEnabled] = useState(true);
     const [tempConstant, setTempConstant] = useState(true);
@@ -234,6 +238,28 @@ const WorldbookApp: React.FC = () => {
     const confirmImport = () => {
         setShowImportConfirm(false);
         importRef.current?.click();
+    };
+
+    const handlePromptPresetImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+            const source = await readShareFile(file, 'worldbook');
+            const parsed = parseTavernPromptPreset(await source.text(), source.name);
+            const next = [parsed, ...promptPresets.filter(item => item.name !== parsed.name)];
+            setPromptPresets(next);
+            localStorage.setItem('sully-tavern-prompt-presets:v1', JSON.stringify(next));
+            setShowPromptPresets(true);
+            addToast(`已导入提示词预设「${parsed.name}」，共 ${parsed.prompts.length} 个提示词模块`, 'success');
+        } catch (error: any) {
+            addToast(error?.message || '提示词预设导入失败', 'error');
+        } finally { event.target.value = ''; }
+    };
+
+    const deletePromptPreset = (name: string) => {
+        const next = promptPresets.filter(item => item.name !== name);
+        setPromptPresets(next);
+        localStorage.setItem('sully-tavern-prompt-presets:v1', JSON.stringify(next));
     };
 
     const handleExportGroup = async (event: React.MouseEvent, category: string, books: Worldbook[]) => {
@@ -659,6 +685,9 @@ const WorldbookApp: React.FC = () => {
                                 </button>
                             )}
                             <input ref={importRef} type="file" accept=".json,.png,application/json,image/png" className="hidden" onChange={handleImport} />
+                            <input ref={presetImportRef} type="file" accept=".json,application/json" className="hidden" onChange={handlePromptPresetImport} />
+                            <button type="button" onClick={() => setShowPromptPresets(true)} className="w-9 h-9 bg-white/80 text-sky-600 border border-white rounded-full shadow-sm flex items-center justify-center active:scale-90 transition-transform" title="提示词预设管理"><BookOpen size={17} weight="bold" /></button>
+                            <button type="button" onClick={() => presetImportRef.current?.click()} className="w-9 h-9 bg-white/80 text-sky-600 border border-white rounded-full shadow-sm flex items-center justify-center active:scale-90 transition-transform" title="导入酒馆提示词预设"><UploadSimple size={17} weight="bold" /></button>
                             <button
                                 onClick={() => { setShowImportConfirm(true); trackEvent('打开导入世界书弹窗'); }}
                                 className="w-9 h-9 bg-white/80 text-indigo-500 border border-white rounded-full shadow-sm flex items-center justify-center active:scale-90 transition-transform"
@@ -881,6 +910,19 @@ const WorldbookApp: React.FC = () => {
                     </select></label>
                     <p className="text-xs leading-relaxed text-slate-400">修改本组全部 {groupedBooks[groupEditor.category]?.length || 0} 条，并同步到已经挂载它们的角色。保留原有条目、关键词和挂载关系；不会给其他角色新增挂载。停用的条目仍保持停用。</p>
                 </div>}
+            </Modal>
+
+            <Modal isOpen={showPromptPresets} title="提示词预设" onClose={() => setShowPromptPresets(false)}>
+                <div className="space-y-3">
+                    <p className="text-xs leading-relaxed text-slate-500">酒馆提示词预设与世界书是两种不同的数据。预设已独立保存，不会混入世界书条目。</p>
+                    {promptPresets.length === 0 ? <div className="py-8 text-center text-sm text-slate-400">还没有导入提示词预设</div> : promptPresets.map(preset => (
+                        <div key={preset.name} className="rounded-xl border border-slate-200 bg-white p-3 flex items-center gap-3">
+                            <div className="min-w-0 flex-1"><div className="font-semibold text-sm text-slate-700 truncate">{preset.name}</div><div className="text-xs text-slate-400 mt-1">{preset.prompts.length} 个提示词模块</div></div>
+                            <button type="button" onClick={() => deletePromptPreset(preset.name)} className="text-rose-500 text-xs font-semibold px-2 py-1">删除</button>
+                        </div>
+                    ))}
+                    <button type="button" onClick={() => presetImportRef.current?.click()} className="w-full rounded-xl bg-sky-600 text-white py-3 text-sm font-semibold">导入酒馆提示词预设 JSON</button>
+                </div>
             </Modal>
 
             <Modal
