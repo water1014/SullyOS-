@@ -342,8 +342,9 @@ const Character: React.FC = () => {
     setAvatarUrlDraft(/^https?:\/\/.+/i.test(av) ? av : '');
   }, [editingId]);
 
-  // EXTERNAL-UPDATE SYNC: pull in memories/refinedMemories written by other apps
-  // (e.g. Chat archive calling updateCharacter) so stale formData doesn't overwrite them.
+  // EXTERNAL-UPDATE SYNC: merge fields updated by other apps into the open editor.
+  // Worldbook library edits update both the global book and each character's cached mount.
+  // Without this merge, the editor's stale formData can later auto-save over the refreshed mount.
   useEffect(() => {
     if (!editingId || !formData || formData.id !== editingId) return;
     const latest = characters.find(c => c.id === editingId);
@@ -352,9 +353,17 @@ const Character: React.FC = () => {
     const localMemCount = formData.memories?.length ?? 0;
     const latestRefKeys = Object.keys(latest.refinedMemories || {}).length;
     const localRefKeys = Object.keys(formData.refinedMemories || {}).length;
-    if (latestMemCount > localMemCount || latestRefKeys > localRefKeys) {
+    const memoriesChanged = latestMemCount > localMemCount || latestRefKeys > localRefKeys;
+    const latestMounted = latest.mountedWorldbooks || [];
+    const localMounted = formData.mountedWorldbooks || [];
+    const mountsChanged = JSON.stringify(latestMounted) !== JSON.stringify(localMounted);
+    if (memoriesChanged || mountsChanged) {
         setFormData(prev => prev && prev.id === editingId
-            ? { ...prev, memories: latest.memories, refinedMemories: latest.refinedMemories }
+            ? {
+                ...prev,
+                ...(memoriesChanged ? { memories: latest.memories, refinedMemories: latest.refinedMemories } : {}),
+                ...(mountsChanged ? { mountedWorldbooks: latestMounted } : {}),
+            }
             : prev);
     }
   }, [characters, editingId]);
