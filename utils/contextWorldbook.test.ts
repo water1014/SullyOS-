@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ContextBuilder } from './context';
+import { parseStandardWorldbook, toMountedWorldbook } from './worldbook';
 import type { CharacterProfile, MountedWorldbook, UserProfile } from '../types';
 
 const user = { name: '用户甲', bio: '' } as UserProfile;
@@ -191,4 +192,24 @@ it('单次生成与空消息同样保留深度条目的角色，概率每次请�
         expect(empty[1]).toEqual({ role: 'user', content: 'WB_once_正文' });
         expect(random).toHaveBeenCalledTimes(2);
     } finally { random.mockRestore(); }
+});
+
+
+it('酒馆 JSON 导入后挂载到角色，关键词命中时会进入实际聊天上下文', async () => {
+    const imported = parseStandardWorldbook(JSON.stringify({
+        entries: [{
+            uid: 88, comment: '月港设定', content: '月港的灯塔只在满月时点亮。',
+            key: ['月港'], constant: false, position: 1,
+        }],
+    }), '酒馆导入', 123);
+    const character = char(imported.map(toMountedWorldbook));
+    const inactive = await ContextBuilder.buildCharacterContext({
+        char: character, user, history: [{ role: 'user', content: '今晚下雨' }],
+    });
+    expect(JSON.stringify(inactive.messages)).not.toContain('月港的灯塔');
+
+    const active = await ContextBuilder.buildCharacterContext({
+        char: character, user, history: [{ role: 'user', content: '我们去月港看看' }],
+    });
+    expect(active.coreContext).toContain('月港的灯塔只在满月时点亮。');
 });

@@ -204,7 +204,7 @@ const WorldbookApp: React.FC = () => {
             const category = source.name.replace(/\.json$/i, '').trim() || '导入世界书';
             const imported = parseStandardWorldbook(text, category);
             await addWorldbooks(imported);
-            addToast(`已导入 ${imported.length} 条世界书条目`, 'success');
+            addToast(`已导入 ${imported.length} 条。还需到角色编辑 → 世界书中挂载，聊天才会使用`, 'success');
             setExpandedCategory(category);
         } catch (error: any) {
             addToast(error?.message || '世界书导入失败', 'error');
