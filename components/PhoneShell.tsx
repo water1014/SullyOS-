@@ -835,7 +835,9 @@ const PhoneShell: React.FC = () => {
     if (!Capacitor.isNativePlatform()) return;
     const configureNativeWindow = async () => {
       try {
-        await CapStatusBar.setOverlaysWebView({ overlay: true });
+        // overlaysWebView is configured before the WebView starts in capacitor.config.json.
+        // Do not toggle SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN after first paint: it forces a
+        // decor/WebView inset relayout and can make third-party overlay surfaces flicker.
         await CapStatusBar.hide();
         await CapStatusBar.setStyle({ style: StatusBarStyle.Dark });
       } catch (error) {
