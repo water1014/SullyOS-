@@ -80,9 +80,10 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_VERSION_CODE: ${{ 30400 + github.run_number * 2 + 1 }}
-          ANDROID_VERSION_NAME: 3.16.1-migration
-        run: pnpm build:capacitor:migration
+        run: |
+          export ANDROID_VERSION_CODE=$((30400 + GITHUB_RUN_NUMBER * 2 + 1))
+          export ANDROID_VERSION_NAME=3.16.1-migration
+          pnpm build:capacitor:migration
 
       - name: Verify migration APK identity, signer, and debuggability
         run: |
@@ -104,9 +105,10 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_VERSION_CODE: ${{ 30400 + github.run_number * 2 + 2 }}
-          ANDROID_VERSION_NAME: 3.16.1
-        run: pnpm build:capacitor:release
+        run: |
+          export ANDROID_VERSION_CODE=$((30400 + GITHUB_RUN_NUMBER * 2 + 2))
+          export ANDROID_VERSION_NAME=3.16.1
+          pnpm build:capacitor:release
 
       - name: Verify final release package and signer
         run: |
