@@ -68,17 +68,21 @@ export async function executeChatImageTool(
     positive = reroll?.positivePrompt || joinPrompt(cfg.gptPositivePrompt, scene);
     negative = reroll?.negativePrompt ?? (cfg.gptNegativePrompt || '').trim();
     model = cfg.gptModel || 'gpt-image-1';
+    const negativeMode = cfg.gptNegativePromptMode || 'append';
+    const requestPrompt = negative && negativeMode === 'append'
+      ? `${positive}. Avoid: ${negative}`
+      : positive;
     blob = await generateGptImage({
       baseUrl: cfg.gptBaseUrl || '',
       apiKey: cfg.gptApiKey || '',
       model,
       customHeaders: JSON.stringify(cfg.gptCustomHeaders || {}),
-    }, positive, {
+    }, requestPrompt, {
       size: cfg.gptSize || '1024x1024',
       quality: cfg.gptQuality || 'high',
-      // Some OpenAI-compatible image providers reject negative_prompt. The normal
-      // generator currently forwards it only when configured; users can leave it blank.
-      negativePrompt: negative || undefined,
+      // The OpenAI Images API and many compatible providers do not accept negative_prompt.
+      // Only send that field when the user explicitly confirms their provider supports it.
+      negativePrompt: negative && negativeMode === 'field' ? negative : undefined,
       signal,
     });
   }
