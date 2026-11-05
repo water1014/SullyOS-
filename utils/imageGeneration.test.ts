@@ -207,6 +207,8 @@ describe('image generation clients', () => {
     expect(eocd).toBeGreaterThan(0);
     // Corrupt the EOCD central-directory offset and local-header compressed size.
     damaged.fill(0xff, eocd + 16, eocd + 20);
+    damaged[eocd + 20] = 0x1b;
+    damaged[eocd + 21] = 0x00;
     damaged.fill(0xff, 18, 22);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(damaged, {
       status: 200, headers: { 'Content-Type': 'application/zip' },
