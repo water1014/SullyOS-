@@ -263,7 +263,7 @@ const ScheduleApp: React.FC = () => {
         try {
             const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}`, ...(isOpenCodeGoEndpoint(apiConfig.baseUrl) ? { 'x-opencode-session': getOpenCodeSessionId(`schedule-app:${supervisor.id}`) } : {}) },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}`, ...(isOpenCodeGoEndpoint(apiConfig.baseUrl) ? { 'x-opencode-session': getOpenCodeSessionId(`schedule-app:${anni.id}`) } : {}) },
                 body: JSON.stringify({
                     model: apiConfig.model,
                     messages: (await ContextBuilder.buildCharacterRequest(characterContextInput, messages)),
