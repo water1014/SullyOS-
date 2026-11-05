@@ -60,7 +60,7 @@ async function main() {
   const appGradle = join(androidApp, 'build.gradle');
   if (buildSigned) {
     const versionCode = Number(process.env.ANDROID_VERSION_CODE || (buildMigration ? 30401 : 30402));
-    const versionName = String(process.env.ANDROID_VERSION_NAME || (buildMigration ? '3.17.0-migration' : '3.17.0')).trim();
+    const versionName = String(process.env.ANDROID_VERSION_NAME || (buildMigration ? '3.18.0-migration' : '3.18.0')).trim();
     if (!Number.isSafeInteger(versionCode) || versionCode < 2 || !versionName) throw new Error('Release version is invalid.');
     let gradle = readFileSync(appGradle, 'utf8');
     if (!/defaultConfig\s*\{/.test(gradle) || !/versionCode\s+\d+/.test(gradle) || !/versionName\s+['"][^'"]+['"]/.test(gradle)) {
