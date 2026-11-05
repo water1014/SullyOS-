@@ -153,20 +153,20 @@ describe('image generation clients', () => {
 
   it('accepts direct binary image responses from compatible providers', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(new Blob(['direct-image'], { type: 'image/webp' }), { status: 200 }),
+      new Response(new Blob([Uint8Array.from(atob('${png}'), char => char.charCodeAt(0))], { type: 'image/png' }), { status: 200 }),
     ));
     const blob = await generateGptImage(
       { baseUrl: 'https://api.example/v1', apiKey: 'test-key', model: 'compatible-image-model' },
       'a quiet lake',
       { size: '1024x1024', quality: 'high' },
     );
-    expect(blob.type).toBe('image/webp');
-    expect(await blob.text()).toBe('direct-image');
+    expect(blob.type).toBe('image/png');
+    expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
   });
 
   it('extracts the first image from NovelAI ZIP output', async () => {
     const zip = new JSZip();
-    zip.file('image_0.png', 'nai-png');
+    zip.file('image_0.png', Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0)));
     const archive = await zip.generateAsync({ type: 'uint8array' });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(archive, { status: 200 })));
 
@@ -177,7 +177,8 @@ describe('image generation clients', () => {
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 0 },
     );
 
-    expect(await blob.text()).toBe('nai-png');
+    expect(blob.type).toBe('image/png');
+    expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
     const [url, request] = vi.mocked(fetch).mock.calls[0];
     expect(url).toBe('https://nai-proxy.example/ai/generate-image');
     expect(new Headers(request.headers).get('Authorization')).toBe('Bearer thirdparty-token');
@@ -221,7 +222,7 @@ describe('image generation clients', () => {
   it('accepts direct image responses from third-party NovelAI gateways', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Blob(['direct-image'], { type: 'image/webp' }), {
       status: 200,
-      headers: { 'Content-Type': 'image/webp' },
+      headers: { 'Content-Type': 'image/png' },
     })));
     const blob = await generateNaiImage(
       { apiKey: 'proxy-token', model: 'nai-model', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
@@ -296,7 +297,7 @@ describe('image generation clients', () => {
       '1girl',
       '',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
-    )).rejects.toThrow('压缩包中没有找到图片文件');
+    )).rejects.toThrow('ZIP 中没有 PNG/JPEG/WebP 图片条目');
   });
 
   it('surfaces provider errors instead of silently returning an empty image', async () => {
