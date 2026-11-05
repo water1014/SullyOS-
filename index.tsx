@@ -57,10 +57,12 @@ initAnalytics();
 // insertBefore/removeChild 抛 NotFoundError 白屏。挂载前先打护栏。详见该 util 注释。
 installTranslateCrashGuard();
 
-// OpenCode Go does not expose reliable browser CORS headers. Only the installed native app
-// routes those inference calls through Capacitor's native HTTP bridge; web/PWA keeps fetch.
+// OpenCode Go does not expose reliable browser CORS headers. Android uses the
+// first-party streaming bridge; browser/PWA and other native platforms keep fetch.
 if (Capacitor.isNativePlatform()) {
-  configureOpenCodeGoNativeTransport(true, createOpenCodeGoNativeFetch());
+  if (Capacitor.getPlatform() === 'android') {
+    configureOpenCodeGoNativeTransport(true, createOpenCodeGoNativeFetch());
+  }
   void refreshAndroidSafeArea();
 }
 
