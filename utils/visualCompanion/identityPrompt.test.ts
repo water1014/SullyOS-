@@ -64,7 +64,7 @@ describe('character appearance prompt', () => {
         const rerolled = mergeCharacterVisualContextPrompt(previous, updatedProfile, []);
         expect(rerolled).toContain('银白色短发，琥珀色眼睛');
         expect(rerolled).not.toContain('黑色长发');
-        expect(rerolled.match(/\\[Fixed character appearance\\]/g)).toHaveLength(1);
+        expect(rerolled.split('[Fixed character appearance]').length - 1).toBe(1);
         expect(rerolled).toContain('雨夜里的咖啡馆');
     });
 });
