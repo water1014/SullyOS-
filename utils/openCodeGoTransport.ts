@@ -4,7 +4,7 @@ type NativeStreamingFetch = typeof fetch;
 
 // Resolve fetch at call time so tests, webviews, and host fetch instrumentation can replace it.
 const fallbackFetch: typeof fetch = (resource, init) => globalThis.fetch(resource, init);
-let activeTransport: typeof fetch = fallbackFetch;
+let activeTransport: typeof fetch = createOpenCodeGoTransport(false, fallbackFetch, fallbackFetch);
 
 /**
  * OpenCode Go does not expose browser CORS access consistently. The native app
@@ -15,9 +15,7 @@ export function configureOpenCodeGoNativeTransport(
   isNative: boolean,
   nativeFetch?: NativeStreamingFetch,
 ): void {
-  activeTransport = isNative && nativeFetch
-    ? createOpenCodeGoTransport(true, nativeFetch, fallbackFetch)
-    : fallbackFetch;
+  activeTransport = createOpenCodeGoTransport(isNative, nativeFetch || fallbackFetch, fallbackFetch);
 }
 
 /**
@@ -33,7 +31,7 @@ export function createOpenCodeGoTransport(
     const url = typeof resource === 'string'
       ? resource
       : resource instanceof URL ? resource.href : resource.url;
-    if (!(/opencode\\.ai\\/(?:inference\\/go|zen\\/go)(?:\\/|$)/i.test(url))) {
+    if (!(/opencode\.ai\/(?:inference\/go|zen\/go)(?:\/|$)/i.test(url))) {
       return fallback(resource, init);
     }
     const request = resource instanceof Request ? resource : undefined;
@@ -51,7 +49,7 @@ export function createOpenCodeGoTransport(
     const body = init?.body ?? (request && method !== 'GET' && method !== 'HEAD'
       ? await request.clone().text()
       : undefined);
-    if (body != null && typeof body !== 'string') return fallback(resource, init);
+    if (body != null && typeof body !== 'string') return fallback(resource, { ...(init || {}), headers });
     if (init?.signal?.aborted || request?.signal.aborted) {
       throw new DOMException('The operation was aborted.', 'AbortError');
     }
