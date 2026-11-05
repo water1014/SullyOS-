@@ -404,7 +404,8 @@ export const parseStandardWorldbook = (
             updatedAt: now,
             key: primary,
             keysecondary: secondary,
-            constant: value.constant === true,
+            // Older Tavern-compatible exports may omit `constant`; an empty primary key list is then a constant entry.
+            constant: value.constant == null ? primary.length === 0 : value.constant === true,
             selective: value.selective === true || (value.selective == null && secondary.length > 0),
             selectiveLogic: clamp(value.selectiveLogic == null ? undefined : value.selectiveLogic, 0, 3, 0) as WorldbookSelectiveLogic,
             order: Number.isFinite(rawOrder)

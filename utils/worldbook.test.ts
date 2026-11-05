@@ -177,6 +177,20 @@ describe('standard worldbook import', () => {
         });
     });
 
+    it('treats entries with no primary keys as constant when the export omits the constant flag', () => {
+        const imported = parseStandardWorldbook(JSON.stringify({
+            entries: [
+                { comment: '无关键词常驻条目', content: '这条设定应始终进入上下文。' },
+                { comment: '显式关闭常驻', content: '这条没有关键词也不应触发。', constant: false },
+            ],
+        }), '常驻兼容', 18);
+
+        expect(imported[0].constant).toBe(true);
+        expect(imported[1].constant).toBe(false);
+        expect(isWorldbookEntryActive(imported[0])).toBe(true);
+        expect(isWorldbookEntryActive(imported[1])).toBe(false);
+    });
+
     it('accepts UTF-8 BOM-prefixed Tavern exports', () => {
         const source = '\uFEFF' + JSON.stringify({
             entries: [{ uid: 17, comment: 'BOM 条目', content: '来自酒馆的设定。', key: ['月港'] }],
