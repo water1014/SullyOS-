@@ -44,8 +44,8 @@ export function createOpenCodeGoTransport(
       const scope = requestMeta?.charId ? `conversation:${requestMeta.charId}` : 'app-default';
       headers.set('x-opencode-session', getOpenCodeSessionId(`transport:${scope}`));
     }
-    if (!headers.has('user-agent')) headers.set('user-agent', 'SullyOS/1.0');
     if (!isNative) return fallback(resource, { ...(init || {}), headers });
+    if (!headers.has('user-agent')) headers.set('user-agent', 'SullyOS/1.0');
     const body = init?.body ?? (request && method !== 'GET' && method !== 'HEAD'
       ? await request.clone().text()
       : undefined);
