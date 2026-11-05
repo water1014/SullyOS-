@@ -332,8 +332,8 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
     if (!imageFile) throw new Error('NAI 返回成功，但压缩包中没有找到图片文件');
     const bytes = await imageFile.async('uint8array');
     if (!bytes.length) throw new Error('NAI 压缩包中的图片文件为空');
-    const mimeType = sniffImageMime(bytes);
-    if (!mimeType) throw new Error('NAI 压缩包内文件扩展名像图片，但文件内容无法识别');
+    const extension = imageFile.name.toLowerCase().split('.').pop();
+    const mimeType = sniffImageMime(bytes) || (extension === 'webp' ? 'image/webp' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : 'image/png');
     return new Blob([bytes], { type: mimeType });
   } catch (error) {
     if (error instanceof Error && /没有找到图片文件|图片文件为空|文件内容无法识别/.test(error.message)) throw error;
