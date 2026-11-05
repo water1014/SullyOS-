@@ -1022,7 +1022,7 @@ const WorldbookApp: React.FC = () => {
                                     <button type="button" onClick={() => setEditingPromptPreset(current => current === preset.name ? null : preset.name)} className="text-xs text-sky-700 font-semibold">{editingPromptPreset === preset.name ? '完成编辑' : '编辑预设'}</button>
                                 </div>
                                 {editingPromptPreset === preset.name && <label className="block text-xs text-slate-500">预设名称
-                                    <input value={preset.name} onChange={event => renamePromptPreset(preset.name, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700" />
+                                    <input defaultValue={preset.name} onBlur={event => renamePromptPreset(preset.name, event.target.value)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700" />
                                 </label>}
                                 {preset.prompts.map((prompt, index) => {
                                     const moduleId = prompt.identifier || prompt.name || String(index);
