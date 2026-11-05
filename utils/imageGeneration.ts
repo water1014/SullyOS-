@@ -349,6 +349,79 @@ function findNaiBase64(value: unknown, depth = 0): { encoded: string; mimeType?:
   return null;
 }
 
+function repairSingleEntryNaiZipMetadata(source: Uint8Array): Uint8Array | null {
+  const readU16 = (offset: number) => source[offset] | (source[offset + 1] << 8);
+  const readU32 = (offset: number) => (source[offset] | (source[offset + 1] << 8)
+    | (source[offset + 2] << 16) | (source[offset + 3] << 24)) >>> 0;
+  const writeU16 = (target: Uint8Array, offset: number, value: number) => {
+    target[offset] = value & 0xff;
+    target[offset + 1] = (value >>> 8) & 0xff;
+  };
+  const writeU32 = (target: Uint8Array, offset: number, value: number) => {
+    target[offset] = value & 0xff;
+    target[offset + 1] = (value >>> 8) & 0xff;
+    target[offset + 2] = (value >>> 16) & 0xff;
+    target[offset + 3] = (value >>> 24) & 0xff;
+  };
+  const hasSignature = (offset: number, a: number, b: number, c: number, d: number) =>
+    offset >= 0 && offset + 4 <= source.length
+    && source[offset] === a && source[offset + 1] === b
+    && source[offset + 2] === c && source[offset + 3] === d;
+
+  let eocd = -1;
+  for (let offset = source.length - 22; offset >= Math.max(0, source.length - 22 - 0xffff); offset -= 1) {
+    if (hasSignature(offset, 0x50, 0x4b, 0x05, 0x06)) { eocd = offset; break; }
+  }
+  if (eocd < 0 || readU16(eocd + 8) !== 1 || readU16(eocd + 10) !== 1) return null;
+
+  const centralSize = readU32(eocd + 12);
+  if (centralSize < 46 || centralSize > 0x10000) return null;
+  const centralOffset = eocd - centralSize;
+  if (!hasSignature(centralOffset, 0x50, 0x4b, 0x01, 0x02)) return null;
+
+  const nameLength = readU16(centralOffset + 28);
+  const extraLength = readU16(centralOffset + 30);
+  const commentLength = readU16(centralOffset + 32);
+  if (46 + nameLength + extraLength + commentLength !== centralSize || nameLength === 0) return null;
+
+  const flags = readU16(centralOffset + 8);
+  const method = readU16(centralOffset + 10);
+  const uncompressedSize = readU32(centralOffset + 24);
+  const localOffset = readU32(centralOffset + 42);
+  if ((flags & 0x0009) !== 0 || (method !== 0 && method !== 8)
+    || uncompressedSize === 0 || uncompressedSize > 100 * 1024 * 1024) return null;
+
+  if (localOffset !== 0 || !hasSignature(0, 0x50, 0x4b, 0x03, 0x04)) return null;
+  const localFlags = readU16(6);
+  const localMethod = readU16(8);
+  const localNameLength = readU16(26);
+  const localExtraLength = readU16(28);
+  if (localFlags !== flags || localMethod !== method || localNameLength !== nameLength) return null;
+
+  const dataStart = 30 + localNameLength + localExtraLength;
+  const dataEnd = centralOffset;
+  if (dataStart >= dataEnd) return null;
+  const inferredCompressedSize = dataEnd - dataStart;
+  if (inferredCompressedSize <= 0 || inferredCompressedSize > 0xffffffff) return null;
+
+  const localNameStart = 30;
+  const centralNameStart = centralOffset + 46;
+  for (let index = 0; index < nameLength; index += 1) {
+    if (source[localNameStart + index] !== source[centralNameStart + index]) return null;
+  }
+
+  const repaired = source.slice();
+  const crc = readU32(centralOffset + 16);
+  writeU32(repaired, 14, crc);
+  writeU32(repaired, 18, inferredCompressedSize);
+  writeU32(repaired, 22, uncompressedSize);
+  writeU32(repaired, centralOffset + 20, inferredCompressedSize);
+  writeU32(repaired, centralOffset + 42, 0);
+  writeU32(repaired, eocd + 16, centralOffset);
+  writeU16(repaired, eocd + 20, Math.max(0, source.length - eocd - 22));
+  return repaired;
+}
+
 async function readNaiImageResponse(response: Response): Promise<Blob> {
   const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
   const buffer = new Uint8Array(await response.arrayBuffer());
@@ -384,20 +457,25 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
   }
 
   if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
-    try {
-      const archive = await JSZip.loadAsync(buffer);
-      const imageFile = Object.values(archive.files).find(file =>
-        !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
-      );
-      if (!imageFile) throw new Error('ZIP 中没有 PNG/JPEG/WebP 图片条目');
-      const bytes = await imageFile.async('uint8array');
-      const mimeType = sniffImageMime(bytes);
-      if (!mimeType) throw new Error('ZIP 图片条目解压后不是有效的 PNG/JPEG/WebP 数据');
-      return new Blob([bytes], { type: mimeType });
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      throw new Error(`NAI 返回 ZIP，但解包失败：${detail.slice(0, 180)}。响应诊断：${describeNaiZip(buffer, response)}`);
+    let originalError = '';
+    const repaired = repairSingleEntryNaiZipMetadata(buffer);
+    const candidates = repaired ? [buffer, repaired] : [buffer];
+    for (const candidate of candidates) {
+      try {
+        const archive = await JSZip.loadAsync(candidate);
+        const imageFile = Object.values(archive.files).find(file =>
+          !file.dir && /\\.(png|webp|jpe?g)$/i.test(file.name),
+        );
+        if (!imageFile) throw new Error('ZIP 中没有 PNG/JPEG/WebP 图片条目');
+        const bytes = await imageFile.async('uint8array');
+        const mimeType = sniffImageMime(bytes);
+        if (!mimeType) throw new Error('ZIP 图片条目解压后不是有效的 PNG/JPEG/WebP 数据');
+        return new Blob([bytes], { type: mimeType });
+      } catch (error) {
+        if (!originalError) originalError = error instanceof Error ? error.message : String(error);
+      }
     }
+    throw new Error(`NAI 返回 ZIP，但解包失败：${originalError.slice(0, 180)}。已尝试安全修复单文件 ZIP 元数据；响应诊断：${describeNaiZip(buffer, response)}`);
   }
 
   const prefixHex = Array.from(buffer.subarray(0, 16), byte => byte.toString(16).padStart(2, '0')).join(' ');
