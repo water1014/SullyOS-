@@ -460,7 +460,7 @@ const ImageStudioApp: React.FC = () => {
       };
       const blob = engine === 'gpt'
         ? effectiveReferenceImage
-          ? await editGptImage(config.gpt, effectiveReferenceImage, effectivePrompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
+          ? await editGptImage(config.gpt, effectiveReferenceImage, effectivePrompt, { size: gptSize, quality: gptQuality, negativePrompt, signal: controller.signal })
           : await generateGptImage(config.gpt, effectivePrompt, { size: gptSize, quality: gptQuality, signal: controller.signal })
         : await generateNaiImage(config.nai, effectivePrompt, negativePrompt, naiOptions, controller.signal);
       await saveImage(blob, effectiveNaiSeed, currentAppearanceProfile?.status === 'active' ? currentAppearanceProfile.version : undefined);
@@ -907,7 +907,7 @@ const ImageStudioApp: React.FC = () => {
 
           <section className="glass rounded-[24px] p-4 space-y-3">
             <div className="flex items-center justify-between"><div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">YOUR IMAGINATION</div><div className="text-sm font-semibold mt-1">描述你想要的画面</div></div><span className="text-[10px] text-slate-400">PROMPT</span></div>
-            <textarea className="field min-h-[132px] resize-y leading-6" value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={engine === 'gpt' ? (referenceImage ? '描述你希望如何修改这张参考图……' : '例如：雨后的玻璃花房，蓝色月光落在白色花瓣上，电影感构图……') : 'masterpiece, best quality, 1girl, ...'} />
+            <div className="space-y-2"><label className="block text-xs font-semibold text-slate-600">正向提示词</label><textarea className="field min-h-[132px] resize-y leading-6" value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={engine === 'gpt' ? (referenceImage ? '描述你希望如何修改这张参考图……' : '例如：雨后的玻璃花房，蓝色月光落在白色花瓣上，电影感构图……') : 'masterpiece, best quality, 1girl, ...'} /></div>{engine === 'gpt' && <div className="space-y-2"><label className="block text-xs font-semibold text-slate-600">负向提示词 <span className="font-normal text-slate-400">· 可选</span></label><textarea className="field min-h-[84px] resize-y leading-6" value={negativePrompt} onChange={event => setNegativePrompt(event.target.value)} placeholder="填写希望避免的内容，例如：模糊、文字、水印、畸形结构……" /></div>}
             {activeCharacterId && (
               <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-[11px] text-sky-800 flex items-center gap-2">
                 <Sparkle size={14}/>
