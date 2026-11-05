@@ -306,6 +306,7 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
   if (directMime) return new Blob([buffer], { type: directMime });
 
   const raw = new TextDecoder().decode(buffer).trim();
+  if (contentType.startsWith('image/')) return new Blob([buffer], { type: contentType.split(';')[0] });
   if (raw.startsWith('{') || raw.startsWith('[')) {
     let payload: any;
     try { payload = JSON.parse(raw); }
@@ -328,7 +329,7 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
 
   try {
     const archive = await JSZip.loadAsync(buffer);
-    const imageFile = Object.values(archive.files).find(file => !file.dir && /\\.(png|webp|jpe?g)$/i.test(file.name));
+    const imageFile = Object.values(archive.files).find(file => !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name));
     if (!imageFile) throw new Error('NAI 返回成功，但压缩包中没有找到图片文件');
     const bytes = await imageFile.async('uint8array');
     if (!bytes.length) throw new Error('NAI 压缩包中的图片文件为空');
