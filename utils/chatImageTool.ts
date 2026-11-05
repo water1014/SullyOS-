@@ -56,8 +56,8 @@ export async function executeChatImageTool(
       baseUrl: cfg.naiBaseUrl || '',
       customHeaders: JSON.stringify(cfg.naiCustomHeaders || {}),
     }, positive, negative, {
-      width: Math.max(512, Math.min(1536, Number(cfg.naiWidth) || 832)),
-      height: Math.max(512, Math.min(1536, Number(cfg.naiHeight) || 1216)),
+      width: Math.round(Math.max(512, Math.min(1536, Number(cfg.naiWidth) || 832)) / 64) * 64,
+      height: Math.round(Math.max(512, Math.min(1536, Number(cfg.naiHeight) || 1216)) / 64) * 64,
       steps: Math.max(10, Math.min(50, Number(cfg.naiSteps) || 28)),
       scale: Math.max(1, Math.min(12, Number(cfg.naiScale) || 5)),
       sampler: cfg.naiSampler || 'k_euler_ancestral',
