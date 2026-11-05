@@ -1419,13 +1419,22 @@ const Settings: React.FC = () => {
   const updateChatImageConfig = (patch: NonNullable<APIConfig['chatImage']>) => {
     updateApiConfig({ chatImage: { ...apiConfig.chatImage, ...patch } });
   };
-  const parseImageHeaders = (value: string): Record<string, string> => {
+  const parseImageHeaders = (value: string): Record<string, string> | null => {
+    if (!value.trim()) return {};
     try {
       const parsed = JSON.parse(value);
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-        ? Object.fromEntries(Object.entries(parsed).filter(([key, item]) => key.trim() && typeof item === 'string'))
-        : {};
-    } catch { return {}; }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+      if (Object.values(parsed).some(item => typeof item !== 'string')) return null;
+      return Object.fromEntries(Object.entries(parsed).filter(([key]) => key.trim()));
+    } catch { return null; }
+  };
+  const saveImageHeaders = (value: string, key: 'naiCustomHeaders' | 'gptCustomHeaders') => {
+    const parsed = parseImageHeaders(value);
+    if (parsed === null) {
+      addToast('自定义请求头不是有效 JSON 对象，原设置已保留', 'error');
+      return;
+    }
+    updateChatImageConfig({ [key]: parsed });
   };
 
   const selectSttProvider = (provider: SttProvider) => {
@@ -3003,7 +3012,7 @@ const Settings: React.FC = () => {
                 </div>
                 <label className="block text-xs text-slate-500">Sampler<input value={chatImageConfig.naiSampler || 'k_euler_ancestral'} onChange={e => updateChatImageConfig({ naiSampler: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"/></label>
                 <label className="block text-xs text-slate-500">固定 Seed（留空则每次随机）<input value={chatImageConfig.naiSeed || ''} onChange={e => updateChatImageConfig({ naiSeed: e.target.value })} placeholder="留空 = 每次随机" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"/></label>
-                <label className="block text-xs text-slate-500">自定义请求头（JSON，可选）<textarea rows={2} defaultValue={JSON.stringify(chatImageConfig.naiCustomHeaders || {}, null, 2)} onBlur={e => updateChatImageConfig({ naiCustomHeaders: parseImageHeaders(e.target.value) })} placeholder={'{"X-Custom-Header":"value"}'} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono"/></label>
+                <label className="block text-xs text-slate-500">自定义请求头（JSON，可选）<textarea rows={2} defaultValue={JSON.stringify(chatImageConfig.naiCustomHeaders || {}, null, 2)} onBlur={e => saveImageHeaders(e.target.value, 'naiCustomHeaders')} placeholder={'{"X-Custom-Header":"value"}'} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono"/></label>
             </div> : <div className="space-y-3 mt-4">
                 <label className="block text-xs text-slate-500">API Base URL<input value={chatImageConfig.gptBaseUrl || ''} onChange={e => updateChatImageConfig({ gptBaseUrl: e.target.value })} placeholder="https://.../v1" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label>
                 <label className="block text-xs text-slate-500">API Key<input type="password" value={chatImageConfig.gptApiKey || ''} onChange={e => updateChatImageConfig({ gptApiKey: e.target.value })} autoComplete="off" className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"/></label>
@@ -3016,7 +3025,7 @@ const Settings: React.FC = () => {
                     <label className="text-xs text-slate-500">画幅<select value={chatImageConfig.gptSize || '1024x1024'} onChange={e => updateChatImageConfig({ gptSize: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="1024x1024">正方形</option><option value="1024x1536">竖版</option><option value="1536x1024">横版</option></select></label>
                     <label className="text-xs text-slate-500">质量<select value={chatImageConfig.gptQuality || 'high'} onChange={e => updateChatImageConfig({ gptQuality: e.target.value })} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="low">快速</option><option value="medium">标准</option><option value="high">高质量</option></select></label>
                 </div>
-                <label className="block text-xs text-slate-500">自定义请求头（JSON，可选）<textarea rows={2} defaultValue={JSON.stringify(chatImageConfig.gptCustomHeaders || {}, null, 2)} onBlur={e => updateChatImageConfig({ gptCustomHeaders: parseImageHeaders(e.target.value) })} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono"/></label>
+                <label className="block text-xs text-slate-500">自定义请求头（JSON，可选）<textarea rows={2} defaultValue={JSON.stringify(chatImageConfig.gptCustomHeaders || {}, null, 2)} onBlur={e => saveImageHeaders(e.target.value, 'gptCustomHeaders')} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono"/></label>
             </div>}
             <p className="text-[10px] text-slate-400 mt-3">设置会自动保存到本机。Token 仅用于向你填写的生图服务商发起请求。</p>
         </SettingsSection>
