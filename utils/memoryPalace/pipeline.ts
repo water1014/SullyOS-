@@ -1901,7 +1901,7 @@ async function extractAndStoreMemories(
         // 所有需要保留的批次均提取成功后再摘除便利贴；严格模式下避免半成功副作用。
         for (const unpinId of allUnpinIds) {
             const node = allCharNodes.find(n => n.id === unpinId);
-            if (node) {
+            if (node && node.pinnedUntil !== Number.MAX_SAFE_INTEGER) {
                 node.pinnedUntil = null;
                 await MemoryNodeDB.save(node);
             }
