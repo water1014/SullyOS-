@@ -30,6 +30,7 @@ export async function executeChatImageTool(
   charName: string,
   args: { scene_description?: string; reason?: string },
   signal?: AbortSignal,
+  reroll?: { positivePrompt?: string; negativePrompt?: string; randomizeSeed?: boolean },
 ) {
   const cfg = api.chatImage;
   if (!cfg?.enabled) throw new Error('聊天生图尚未启用，请先到设置中开启');
@@ -42,10 +43,10 @@ export async function executeChatImageTool(
   let model: string;
   if ((cfg.engine || 'nai') === 'nai') {
     engine = 'nai';
-    positive = joinPrompt(cfg.naiPositivePrompt, scene);
-    negative = (cfg.naiNegativePrompt || 'low quality, worst quality, blurry, bad anatomy').trim();
+    positive = reroll?.positivePrompt || joinPrompt(cfg.naiPositivePrompt, scene);
+    negative = reroll?.negativePrompt ?? (cfg.naiNegativePrompt || 'low quality, worst quality, blurry, bad anatomy').trim();
     model = cfg.naiModel || 'nai-diffusion-5-full';
-    const seedText = cfg.naiSeed?.trim() || '';
+    const seedText = reroll?.randomizeSeed ? '' : (cfg.naiSeed?.trim() || '');
     const seed = seedText ? Number(seedText) : undefined;
     if (seedText && (!Number.isSafeInteger(seed) || seed! < 0 || seed! > 4294967295)) throw new Error('NAI 固定 Seed 必须是 0 到 4294967295 之间的整数');
     blob = await generateNaiImage({
@@ -64,8 +65,8 @@ export async function executeChatImageTool(
     }, signal);
   } else {
     engine = 'gpt';
-    positive = joinPrompt(cfg.gptPositivePrompt, scene);
-    negative = (cfg.gptNegativePrompt || '').trim();
+    positive = reroll?.positivePrompt || joinPrompt(cfg.gptPositivePrompt, scene);
+    negative = reroll?.negativePrompt ?? (cfg.gptNegativePrompt || '').trim();
     model = cfg.gptModel || 'gpt-image-1';
     blob = await generateGptImage({
       baseUrl: cfg.gptBaseUrl || '',
