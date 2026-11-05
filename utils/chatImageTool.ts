@@ -30,7 +30,7 @@ export async function executeChatImageTool(
   charName: string,
   args: { scene_description?: string; reason?: string },
   signal?: AbortSignal,
-  reroll?: { positivePrompt?: string; negativePrompt?: string; randomizeSeed?: boolean },
+  reroll?: { positivePrompt?: string; negativePrompt?: string; randomizeSeed?: boolean; targetMessageId?: number },
 ) {
   const cfg = api.chatImage;
   if (!cfg?.enabled) throw new Error('聊天生图尚未启用，请先到设置中开启');
@@ -83,23 +83,40 @@ export async function executeChatImageTool(
     });
   }
   const blobRef = await putImageBlob(blob);
-  const messageId = await DB.saveMessage({
-    charId,
-    role: 'assistant',
-    type: 'image',
-    content: blobRef,
-    metadata: {
-      chatImageGeneration: {
-        engine, model, positivePrompt: positive, negativePrompt: negative,
-        sceneDescription: scene, reason: args.reason || '', createdAt: Date.now(),
-        naiSettings: engine === 'nai' ? {
-          width: cfg.naiWidth || 832, height: cfg.naiHeight || 1216,
-          steps: cfg.naiSteps || 28, scale: cfg.naiScale || 5,
-          sampler: cfg.naiSampler || 'k_euler_ancestral',
-          seed: cfg.naiSeed || '',
-        } : undefined,
+  const generation = {
+    engine, model, positivePrompt: positive, negativePrompt: negative,
+    sceneDescription: scene, reason: args.reason || '', createdAt: Date.now(),
+    naiSettings: engine === 'nai' ? {
+      width: cfg.naiWidth || 832, height: cfg.naiHeight || 1216,
+      steps: cfg.naiSteps || 28, scale: cfg.naiScale || 5,
+      sampler: cfg.naiSampler || 'k_euler_ancestral',
+      seed: reroll?.randomizeSeed ? '' : (cfg.naiSeed || ''),
+    } : undefined,
+  };
+  let messageId: number;
+  if (reroll?.targetMessageId) {
+    messageId = reroll.targetMessageId;
+    await DB.updateMessageMetadata(messageId, (previous: any) => {
+      const variants = Array.isArray(previous?.chatImageVariants) ? previous.chatImageVariants : [];
+      return {
+        ...(previous || {}),
+        chatImageGeneration: previous?.chatImageGeneration || generation,
+        chatImageVariants: [...variants, blobRef],
+        activeChatImageVariant: variants.length,
+      };
+    });
+  } else {
+    messageId = await DB.saveMessage({
+      charId,
+      role: 'assistant',
+      type: 'image',
+      content: blobRef,
+      metadata: {
+        chatImageGeneration: generation,
+        chatImageVariants: [blobRef],
+        activeChatImageVariant: 0,
       },
-    },
-  } as any);
+    } as any);
+  }
   return { messageId, blobRef, engine, model, sceneDescription: scene };
 }
