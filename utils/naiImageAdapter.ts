@@ -135,7 +135,7 @@ function decodeBase64Image(encoded: string): Blob {
   return new Blob([bytes], { type: mimeType });
 }
 async function extractImageFromJsZip(buffer: Uint8Array): Promise<Blob> {
-  const archive = await JSZip.loadAsync(buffer);
+  const archive = await JSZip.loadAsync(buffer, { checkCRC32: true });
   for (const file of Object.values(archive.files)) {
     if (file.dir) continue;
     const bytes = await file.async('uint8array');
@@ -159,18 +159,73 @@ async function extractImageFromZipJs(buffer: Uint8Array): Promise<Blob> {
     await reader.close().catch(() => undefined);
   }
 }
-function zipDiagnostics(buffer: Uint8Array, response: Response): string {
-  let eocd = -1;
-  const start = Math.max(0, buffer.length - 22 - 0xffff);
-  for (let i = buffer.length - 22; i >= start; i -= 1) {
-    if (buffer[i] === 0x50 && buffer[i + 1] === 0x4b && buffer[i + 2] === 0x05 && buffer[i + 3] === 0x06) { eocd = i; break; }
+function describeNaiZip(buffer: Uint8Array, response: Response): string {
+  const hex = (bytes: Uint8Array) => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(' ');
+  const signature = (offset: number) => offset >= 0 && offset + 4 <= buffer.length && buffer[offset] === 0x50 && buffer[offset + 1] === 0x4b;
+  let eocdOffset = -1;
+  const searchStart = Math.max(0, buffer.length - 22 - 0xffff);
+  for (let offset = buffer.length - 22; offset >= searchStart; offset -= 1) {
+    if (buffer[offset] === 0x50 && buffer[offset + 1] === 0x4b && buffer[offset + 2] === 0x05 && buffer[offset + 3] === 0x06) {
+      eocdOffset = offset;
+      break;
+    }
   }
-  const tail = Array.from(buffer.subarray(Math.max(0, buffer.length - 24)), byte => byte.toString(16).padStart(2, '0')).join(' ');
-  return ['实际读取=' + buffer.length + ' bytes', 'Content-Length=' + (response.headers.get('content-length') || '未提供'),
-    'Content-Encoding=' + (response.headers.get('content-encoding') || '未提供/identity'),
-    'Content-Disposition=' + (response.headers.get('content-disposition') || '未提供'),
-    'ZIP结束目录=' + (eocd >= 0 ? '存在(offset ' + eocd + ')' : '缺失'), '末尾24字节=' + tail].join('；');
+  const flags = buffer.length >= 8 && signature(0) ? buffer[6] | (buffer[7] << 8) : null;
+  const method = buffer.length >= 10 && signature(0) ? buffer[8] | (buffer[9] << 8) : null;
+  const compressedSize = buffer.length >= 22 && signature(0)
+    ? (buffer[18] | (buffer[19] << 8) | (buffer[20] << 16) | (buffer[21] << 24)) >>> 0 : null;
+  const localHeader = signature(0) && buffer[2] === 0x03 && buffer[3] === 0x04;
+  const descriptorMode = flags !== null && (flags & 0x0008) !== 0;
+  const tail = buffer.subarray(Math.max(0, buffer.length - 24));
+  const readU16 = (offset: number) => offset >= 0 && offset + 2 <= buffer.length ? buffer[offset] | (buffer[offset + 1] << 8) : null;
+  const readU32 = (offset: number) => offset >= 0 && offset + 4 <= buffer.length
+    ? (buffer[offset] | (buffer[offset + 1] << 8) | (buffer[offset + 2] << 16) | (buffer[offset + 3] << 24)) >>> 0 : null;
+  const eocdCommentLength = eocdOffset >= 0 ? readU16(eocdOffset + 20) : null;
+  const eocdCommentAvailable = eocdOffset >= 0 ? buffer.length - (eocdOffset + 22) : null;
+  const centralDirectorySize = eocdOffset >= 0 ? readU32(eocdOffset + 12) : null;
+  const centralDirectoryOffset = eocdOffset >= 0 ? readU32(eocdOffset + 16) : null;
+  const entryCount = eocdOffset >= 0 ? readU16(eocdOffset + 10) : null;
+  const centralCandidate = eocdOffset >= 0 && centralDirectorySize !== null ? eocdOffset - centralDirectorySize : -1;
+  const centralHeader = centralCandidate >= 0 && signature(centralCandidate) && buffer[centralCandidate + 2] === 0x01 && buffer[centralCandidate + 3] === 0x02;
+  const centralScanHits: number[] = [];
+  if (eocdOffset >= 0) {
+    for (let offset = Math.max(0, eocdOffset - 0x10000 - 46); offset <= eocdOffset - 46; offset += 1) {
+      if (!signature(offset) || buffer[offset + 2] !== 0x01 || buffer[offset + 3] !== 0x02) continue;
+      const nameLength = readU16(offset + 28) ?? -1;
+      const extraLength = readU16(offset + 30) ?? -1;
+      const entryCommentLength = readU16(offset + 32) ?? -1;
+      const entryEnd = offset + 46 + nameLength + extraLength + entryCommentLength;
+      const gap = eocdOffset - entryEnd;
+      const validGap = gap === 0 || (gap >= 6 && signature(entryEnd) && buffer[entryEnd + 2] === 0x05
+        && buffer[entryEnd + 3] === 0x05 && readU16(entryEnd + 4) === gap - 6);
+      if (nameLength > 0 && extraLength >= 0 && entryCommentLength >= 0 && entryEnd <= eocdOffset && validGap) centralScanHits.push(offset);
+    }
+  }
+  const centralCompressedSize = centralHeader ? readU32(centralCandidate + 20) : null;
+  const centralUncompressedSize = centralHeader ? readU32(centralCandidate + 24) : null;
+  const centralLocalOffset = centralHeader ? readU32(centralCandidate + 42) : null;
+  const centralCrc = centralHeader ? readU32(centralCandidate + 16) : null;
+  const commentMismatch = eocdCommentLength !== null && eocdCommentAvailable !== null && eocdCommentLength !== eocdCommentAvailable;
+  return [
+    '实际读取=' + buffer.length + ' bytes',
+    'Content-Length=' + (response.headers.get('Content-Length') || '未提供/不可见') + '（线路声明值；Fetch 自动解码后与实际读取不同不一定异常）',
+    'Content-Encoding=' + (response.headers.get('Content-Encoding') || '未提供/identity'),
+    'Content-Disposition=' + (response.headers.get('Content-Disposition') || '未提供'),
+    'ZIP结束目录=' + (eocdOffset >= 0 ? '存在(offset ' + eocdOffset + ')' : '缺失'),
+    'ZIP条目数=' + (entryCount ?? '未知'),
+    '中央目录大小/偏移=' + (centralDirectorySize ?? '未知') + '/' + (centralDirectoryOffset ?? '未知'),
+    '中央目录记录=' + (centralHeader ? '有效（压缩=' + centralCompressedSize + '，解压=' + centralUncompressedSize + '，本地偏移=' + centralLocalOffset + '，CRC=' + centralCrc?.toString(16) + '）' : '无法定位或签名无效'),
+    '中央目录扫描=' + (centralScanHits.length ? centralScanHits.join(',') : '未发现有效单文件记录'),
+    'ZIP注释长度声明/实际=' + (eocdCommentLength ?? '未知') + '/' + (eocdCommentAvailable ?? '未知') + (commentMismatch ? '（不一致，疑似截断或字节损坏）' : ''),
+    '本地文件头=' + (localHeader ? 'PK0304' : '非PK0304'),
+    'flags=' + (flags === null ? '未知' : '0x' + flags.toString(16)),
+    '压缩方法=' + (method === null ? '未知' : method),
+    '本地头压缩大小=' + (compressedSize === null ? '未知' : compressedSize),
+    'data-descriptor模式=' + (descriptorMode ? '是' : '否'),
+    '末尾24字节=' + hex(tail),
+  ].join('；');
 }
+
 async function parseNaiJsonResponse(buffer: Uint8Array): Promise<Blob> {
   const raw = new TextDecoder().decode(buffer);
   let payload: unknown;
@@ -194,11 +249,13 @@ export async function readNaiImageResponse(response: Response): Promise<Blob> {
     let jsZipError = '';
     try { return await extractImageFromJsZip(buffer); }
     catch (error) { jsZipError = error instanceof Error ? error.message : String(error); }
-    let zipJsError = '';
-    try { return await extractImageFromZipJs(buffer); }
-    catch (error) { zipJsError = error instanceof Error ? error.message : String(error); }
-    throw new Error('NAI 返回 ZIP，但 ZIP 结构或图片校验失败。JSZip：' + jsZipError.slice(0, 120)
-      + '；zip.js：' + zipJsError.slice(0, 120) + '。响应诊断：' + zipDiagnostics(buffer, response));
+    let zipJsError = '因 CRC/校验失败，未尝试第二解析器';
+    if (!/(crc|checksum)/i.test(jsZipError)) {
+      try { return await extractImageFromZipJs(buffer); }
+      catch (error) { zipJsError = error instanceof Error ? error.message : String(error); }
+    }
+    throw new Error('NAI 返回 ZIP，但 ZIP 结构或图片校验失败：' + jsZipError.slice(0, 160)
+      + '；zip.js：' + zipJsError.slice(0, 120) + '。未修改响应元数据。响应诊断：' + describeNaiZip(buffer, response));
   }
   const preview = new TextDecoder().decode(buffer.subarray(0, Math.min(buffer.length, 160))).replace(/[^\x20-\x7e\u4e00-\u9fff]/g, '.');
   throw new Error('NAI 返回了无法识别的数据（Content-Type: ' + (contentType || '未知') + '，长度: ' + buffer.length + ' bytes）。响应开头：' + (preview || '二进制数据'));
