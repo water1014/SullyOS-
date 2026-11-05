@@ -104,6 +104,8 @@ describe('OpenCode Go transport', () => {
     const response = await transport('https://opencode.ai/zen/go/v1/models');
     expect(native).not.toHaveBeenCalled();
     expect(fallback).toHaveBeenCalledOnce();
+    const [, request] = fallback.mock.calls[0];
+    expect(new Headers(request?.headers).get('x-opencode-session')).toBeTruthy();
     expect(await response.json()).toEqual({ ok: true });
   });
 });
