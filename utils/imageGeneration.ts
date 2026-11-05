@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { crc32, unzipSync } from 'fflate';
 
 export type ImageEngine = 'gpt' | 'nai';
 
@@ -514,6 +515,23 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
         );
         if (!imageFile) throw new Error('ZIP 中没有 PNG/JPEG/WebP 图片条目');
         const bytes = await imageFile.async('uint8array');
+        const mimeType = sniffImageMime(bytes);
+        if (!mimeType) throw new Error('ZIP 图片条目解压后不是有效的 PNG/JPEG/WebP 数据');
+        return new Blob([bytes], { type: mimeType });
+      } catch (error) {
+        if (!originalError) originalError = error instanceof Error ? error.message : String(error);
+      }
+
+      // 柏宝绘同样使用 fflate。作为第二套独立解码器，兼容 JSZip 不接受的
+      // ZIP 变体；同时校验本地头 CRC，避免把损坏的压缩数据误报为成功。
+      try {
+        const files = unzipSync(candidate);
+        const imageName = Object.keys(files).find(name => /\.(png|webp|jpe?g)$/i.test(name));
+        if (!imageName) throw new Error('ZIP 中没有 PNG/JPEG/WebP 图片条目');
+        const bytes = files[imageName];
+        const expectedCrc = (candidate[14] | (candidate[15] << 8)
+          | (candidate[16] << 16) | (candidate[17] << 24)) >>> 0;
+        if ((crc32(bytes) >>> 0) !== expectedCrc) throw new Error('ZIP 图片 CRC 校验失败，响应数据可能已损坏');
         const mimeType = sniffImageMime(bytes);
         if (!mimeType) throw new Error('ZIP 图片条目解压后不是有效的 PNG/JPEG/WebP 数据');
         return new Blob([bytes], { type: mimeType });
