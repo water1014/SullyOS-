@@ -45,7 +45,7 @@ import { Signal, getMyAuthorship, setSignalWhisper, hasSignalNoticeAck, ackSigna
 import type { SignalPoem, SignalBooklet } from '../types';
 import { getVRApi, setVRApi, getVRApiLog, clearVRApiLog, type VRApiCall } from '../utils/vrWorld/vrApi';
 import { safeFetchJson } from '../utils/safeApi';
-import { buildApiRequestHeaders, getOpenCodeSessionId } from '../utils/apiConfigNormalize';
+import { buildApiRequestHeaders, getOpenCodeSessionId, normalizeApiConfig } from '../utils/apiConfigNormalize';
 import {
     patchSARClubState,
     readSARClubState,
@@ -4025,14 +4025,15 @@ const VRApiSettings: React.FC<{ apiPresets: ApiPreset[]; chatApi: APIConfig; add
         if (!cfg?.baseUrl) { setTestResult('当前没有可用的 API'); return; }
         setTesting(true); setTestResult(null);
         try {
-            const baseUrl = cfg.baseUrl.replace(/\/+$/, '');
+            const normalized = normalizeApiConfig(cfg);
+            const baseUrl = normalized.baseUrl.replace(/\/+$/, '');
             const data = await safeFetchJson(`${baseUrl}/chat/completions`, {
                 method: 'POST',
-                headers: buildApiRequestHeaders(cfg.apiKey || 'sk-none', cfg.customHeaders, {
-                    baseUrl: cfg.baseUrl,
+                headers: buildApiRequestHeaders(normalized.apiKey || 'sk-none', normalized.customHeaders, {
+                    baseUrl: normalized.baseUrl,
                     sessionId: getOpenCodeSessionId('vr-api-connection-test'),
                 }),
-                body: JSON.stringify({ model: cfg.model, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 5, stream: false }),
+                body: JSON.stringify({ model: normalized.model, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 5, stream: false }),
             }, 0, 60_000, { appName: '彼方', purpose: 'API 连接测试' });
             const reply = data.choices?.[0]?.message?.content || '';
             setTestResult(`连接成功 — 模型回复:"${reply.slice(0, 24)}"`);
