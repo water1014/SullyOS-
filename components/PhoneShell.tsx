@@ -1077,7 +1077,7 @@ const PhoneShell: React.FC = () => {
        {/* 壁纸底层：进 App 时只柔和虚化/压暗作背景，不再做缩放「过场」——
           进 App 的过渡感统一交给 App 容器的淡入（见下方 animate-fade-in 包裹层）。 */}
        <div
-         className="absolute inset-0 bg-cover bg-center transition-all duration-500 ease-[cubic-bezier(0.25,0.1,0.25,1)]"
+         className={`absolute inset-0 bg-cover bg-center ${isNativeAndroid ? '' : 'transition-all duration-500 ease-[cubic-bezier(0.25,0.1,0.25,1)]'}`}
          style={{
              backgroundImage: bgImageValue,
              // Android 系统悬浮窗覆盖时，WebView 的大面积滤镜合成层容易触发额外 Surface 重绘。
@@ -1085,11 +1085,11 @@ const PhoneShell: React.FC = () => {
              filter: activeApp !== AppID.Launcher && !isNativeAndroid ? 'blur(10px)' : 'none',
              opacity: activeApp !== AppID.Launcher ? 0.6 : 1,
              backfaceVisibility: 'hidden',
-             contain: useIOSStandaloneLayout ? undefined : 'strict'
+             contain: useIOSStandaloneLayout || isNativeAndroid ? undefined : 'strict'
          }}
        />
        
-       <div className={`absolute inset-0 transition-all duration-500 ${activeApp === AppID.Launcher ? 'bg-transparent' : isNativeAndroid ? 'bg-white/50' : 'bg-white/50 backdrop-blur-3xl'}`} />
+       <div className={`absolute inset-0 ${isNativeAndroid ? '' : 'transition-all duration-500'} ${activeApp === AppID.Launcher ? 'bg-transparent' : isNativeAndroid ? 'bg-white/50' : 'bg-white/50 backdrop-blur-3xl'}`} />
        
        {/* 外壳安全区两种策略：
           - 未迁移 App：外壳铺满 body（含 --app-height 多出的 +safe-bottom 溢出区），用 padding 让位安全区，
@@ -1106,7 +1106,7 @@ const PhoneShell: React.FC = () => {
       >
           <FirstUseGuide />
           {/* App Container */}
-          <div className="flex-1 relative overflow-hidden" style={{ contain: useIOSStandaloneLayout ? undefined : 'layout style paint' }}>
+          <div className="flex-1 relative overflow-hidden" style={{ contain: useIOSStandaloneLayout || isNativeAndroid ? undefined : 'layout style paint' }}>
             <AppErrorBoundary onCloseApp={closeApp} resetKey={`${activeApp}:${activeCharacterId || 'none'}`}>
               <Suspense fallback={<AppLoadingFallback onReturn={closeApp} animationEnabled={theme.appLoadingAnimationEnabled !== false} />}>
                 {/* 统一「淡入」过渡：每次切换 App 时 key 变化 → 重新挂载并淡入，
@@ -1114,7 +1114,7 @@ const PhoneShell: React.FC = () => {
                     关键：只动 opacity、不做 scale/translate —— 否则会把整棵（常含大量头像图片的）
                     App 子树栅格化进 transform 图层，角色列表类 App 首帧会卡顿一下（停顿一秒）。
                     时长也压短，进重 App 时不至于多等。 */}
-                <div key={activeApp} className="w-full h-full" style={{ animation: 'appEnterFade 200ms ease-out both' }}>
+                <div key={activeApp} className="w-full h-full" style={isNativeAndroid ? undefined : { animation: 'appEnterFade 200ms ease-out both' }}>
                   <style>{`@keyframes appEnterFade{from{opacity:0}to{opacity:1}}`}</style>
                   {renderApp()}
                 </div>
