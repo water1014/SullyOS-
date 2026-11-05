@@ -184,6 +184,25 @@ describe('image generation clients', () => {
     expect(body.parameters).toHaveProperty('ucPreset', 3);
   });
 
+  it('decodes NovelAI JSON base64 image responses from third-party gateways', async () => {
+    const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII=';
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      images: [{ image: pngBase64, index: 0, seed: 123 }],
+    }), { status: 201, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const blob = await generateNaiImage(
+      { apiKey: 'thirdparty-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      '1girl, blue hair',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 123 },
+    );
+
+    expect(blob.type).toBe('image/png');
+    expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Accept')).toContain('application/json');
+  });
+
   it('extracts the first image from NovelAI ZIP output', async () => {
     const zip = new JSZip();
     zip.file('image_0.png', Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0)));
@@ -203,7 +222,7 @@ describe('image generation clients', () => {
     expect(url).toBe('https://nai-proxy.example/ai/generate-image');
     expect(new Headers(request.headers).get('Authorization')).toBe('Bearer thirdparty-token');
     expect(new Headers(request.headers).get('x-provider')).toBe('studio-test');
-    expect(new Headers(request.headers).get('Accept')).toBe('*/*');
+    expect(new Headers(request.headers).get('Accept')).toBe('application/json, application/zip, */*');
     expect(JSON.parse(String(request.body))).toMatchObject({
       action: 'generate',
       use_new_shared_trial: true,
