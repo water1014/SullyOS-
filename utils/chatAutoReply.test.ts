@@ -36,9 +36,8 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-describe('two-second automatic reply', () => {
-    it('uses a configurable one-second delay', () => {
-        render({ delayMs: 1000 });
+describe('one-second automatic reply default', () => {
+    it('uses a one-second delay by default', () => {
         send();
         expect(controls.seconds).toBe(1);
         advance(999);
@@ -47,15 +46,13 @@ describe('two-second automatic reply', () => {
         expect(options.onGenerate).toHaveBeenCalledTimes(1);
     });
 
-    it('only generates after a successful new send and exactly two ready seconds', () => {
+    it('only generates after a successful new send and exactly one ready second', () => {
         advance(5000);
         expect(options.onGenerate).not.toHaveBeenCalled();
         send(false);
         advance(5000);
         expect(options.onGenerate).not.toHaveBeenCalled();
         send();
-        expect(controls.seconds).toBe(2);
-        advance(1000);
         expect(controls.seconds).toBe(1);
         advance(999);
         expect(options.onGenerate).not.toHaveBeenCalled();
@@ -65,17 +62,17 @@ describe('two-second automatic reply', () => {
         expect(options.onGenerate).toHaveBeenCalledTimes(1);
     });
 
-    it('waits through editing, drafts and any open panel, then starts a fresh two seconds', () => {
+    it('waits through editing, drafts and any open panel, then starts a fresh one second', () => {
         render({ blocked: true });
         send();
         advance(5000);
         expect(controls.seconds).toBeNull();
         render({ blocked: false });
-        advance(1500);
+        advance(500);
         render({ blocked: true });
         advance(5000);
         render({ blocked: false });
-        advance(1999);
+        advance(999);
         expect(options.onGenerate).not.toHaveBeenCalled();
         advance(1);
         expect(options.onGenerate).toHaveBeenCalledTimes(1);
@@ -83,7 +80,7 @@ describe('two-second automatic reply', () => {
 
     it('waits for every overlapping text, image or emoji save and resets on the latest completion', () => {
         send();
-        advance(1500);
+        advance(500);
         let finishImage!: (sent: boolean) => void;
         let finishEmoji!: (sent: boolean) => void;
         act(() => { finishImage = controls.beginSend('a'); finishEmoji = controls.beginSend('a'); });
@@ -132,7 +129,7 @@ describe('two-second automatic reply', () => {
 
     it('manual or external generation consumes the wait; fresh sends during generation can queue', () => {
         send();
-        advance(1000);
+        advance(500);
         render({ generating: true });
         render({ generating: false });
         advance(5000);
@@ -147,7 +144,7 @@ describe('two-second automatic reply', () => {
 
     it('does not generate while the page is hidden and restarts the delay on return', () => {
         send();
-        advance(1000);
+        advance(500);
         vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
         act(() => document.dispatchEvent(new Event('visibilitychange')));
         advance(5000);
