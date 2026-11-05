@@ -22,7 +22,7 @@ import { trackEvent } from '../utils/analytics';
 import { buildPhoneEvidenceChatCard, normalizePhoneEvidence, phoneFieldToText } from '../utils/phoneEvidence';
 import { normalizePhoneAiSession } from '../utils/phoneTranscript';
 import { CharacterGroupFilterBar, filterCharactersByGroup, GROUP_FILTER_ALL } from '../components/character/CharacterGroupFilter';
-import { getCheckPhoneApi, resolveCheckPhoneApi, setCheckPhoneApi } from '../utils/checkPhoneApi';
+import { getCheckPhoneApi, resolveCheckPhoneApi, setCheckPhoneApi, requestCheckPhoneApi } from '../utils/checkPhoneApi';
 import {
     User, Phone, ChatCircleDots, ChatCircle, ShoppingBag, Hamburger, Compass, GearSix,
     Plus, SignOut, CaretLeft, CaretRight, Cloud, ImagesSquare, LockSimple, Package,
@@ -501,19 +501,16 @@ const CheckPhone: React.FC = () => {
         setTestingPhoneApi(true);
         setPhoneApiTestResult(null);
         try {
-            const response = await fetch(`${config.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${config.apiKey || 'sk-none'}`,
-                },
-                body: JSON.stringify({
+            const response = await requestCheckPhoneApi(
+                `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`,
+                config.apiKey || 'sk-none',
+                {
                     model: config.model,
                     messages: [{ role: 'user', content: 'Hi' }],
                     max_tokens: 5,
                     stream: false,
-                }),
-            });
+                },
+            );
             if (!response.ok) {
                 const detail = await response.text().catch(() => '');
                 setPhoneApiTestResult(`HTTP ${response.status}${detail ? `：${detail.slice(0, 80)}` : ''}`);
@@ -840,15 +837,15 @@ ${realCharRule}
 
             const fullPrompt = `\n\n### [你和用户「${userProfile.name}」的最近聊天（仅背景参考）]\n${recentMsgs}\n\n${perspectiveLock}\n\n### [Task]\n${promptInstruction}\n请结合上面的「当前时间 / 距离上次联系」和人设调整生成内容的时间戳和情绪。如果很久没联系，记录可能是近期的独处状态；如果刚聊过，记录可能与聊天内容相关。`;
 
-            const response = await fetch(`${effectiveApiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${effectiveApiConfig.apiKey}` },
-                body: JSON.stringify({
+            const response = await requestCheckPhoneApi(
+                `${effectiveApiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`,
+                effectiveApiConfig.apiKey,
+                {
                     model: effectiveApiConfig.model,
                     messages: (await ContextBuilder.buildCharacterRequest(characterContextInput, [{ role: "user", content: fullPrompt }])),
                     temperature: 0.8
-                })
-            });
+                },
+            );
 
             if (!response.ok) throw new Error('API Error');
             const data = await safeResponseJson(response);
@@ -986,11 +983,11 @@ ${realCharRule}
         const messages = withCharacter && targetChar ? (await ContextBuilder.buildCharacterRequest({
             char: targetChar, user: userProfile, timeOptions: { lastInteractionTs: recent[recent.length - 1]?.timestamp },
         }, [{ role: 'user', content: prompt }])) : [{ role: 'user', content: prompt }];
-        const response = await fetch(`${effectiveApiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${effectiveApiConfig.apiKey}` },
-            body: JSON.stringify({ model: effectiveApiConfig.model, messages, temperature }),
-        });
+        const response = await requestCheckPhoneApi(
+            `${effectiveApiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`,
+            effectiveApiConfig.apiKey,
+            { model: effectiveApiConfig.model, messages, temperature },
+        );
         if (!response.ok) throw new Error('API Error');
         const data = await safeResponseJson(response);
         // 用 extractContent 而非裸读 message.content：兼容 Claude/思考类模型把正文放在
