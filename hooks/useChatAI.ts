@@ -1545,6 +1545,29 @@ export const useChatAI = ({
             console.log(`⏱ [API call] ${Math.round(performance.now() - apiT0)}ms`);
             updateTokenUsage(data, historyMsgCount, 'initial');
 
+            // 聊天生图诊断：区分模型拒绝/内容过滤与下游 NAI 请求失败。
+            // 只有显式 refusal 或 provider content_filter 才提示，避免把普通未调用工具误报成拒绝。
+            if (chatImageToolInjected) {
+                const firstChoice = data.choices?.[0];
+                const firstMessage = firstChoice?.message;
+                const toolCalls = Array.isArray(firstMessage?.tool_calls) ? firstMessage.tool_calls : [];
+                const requestedChatImage = toolCalls.some((call: any) =>
+                    (call?.function?.name || call?.name || '') === CHAT_IMAGE_TOOL_NAME
+                );
+                const explicitRefusal = !!firstMessage?.refusal
+                    || firstChoice?.finish_reason === 'content_filter';
+                console.info('[Chat Image Diagnostic]', JSON.stringify({
+                    model: data.model || baseReqBody.model,
+                    finishReason: firstChoice?.finish_reason || null,
+                    toolNames: toolCalls.map((call: any) => call?.function?.name || call?.name || 'unknown'),
+                    chatImageToolRequested: requestedChatImage,
+                    explicitRefusal,
+                }));
+                if (explicitRefusal && !requestedChatImage) {
+                    addToast('本轮聊天模型拒绝了请求或触发内容过滤，生图工具没有执行，NAI 没有收到生图请求。', 'info');
+                }
+            }
+
             // MCP 多阶段展示：工具前的角色文字先落库，最终工具结果回复仍走统一后处理。
             const displayedMcpLeadIns = new Set<string>();
             const persistMcpLeadIn = async (raw: string, fakedCalls: FakedMcpCall[] = []): Promise<void> => {
