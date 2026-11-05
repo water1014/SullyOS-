@@ -2,6 +2,48 @@ import { describe, expect, it, vi } from 'vitest';
 import { createOpenCodeGoTransport } from './openCodeGoTransport';
 
 describe('OpenCode Go transport', () => {
+  it('adds a stable session header to Go requests that forgot to provide one', async () => {
+    const native = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => Response.json({
+      session: new Headers(init?.headers).get('x-opencode-session'),
+    }));
+    const fallback = vi.fn(async () => new Response('fallback'));
+    const transport = createOpenCodeGoTransport(true, native, fallback);
+
+    const first = await transport('https://opencode.ai/zen/go/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'deepseek-v4.1-flash', messages: [{ role: 'user', content: 'hi' }] }),
+      __sullyMeta: { charId: 'character-1' } as any,
+    } as RequestInit);
+    const second = await transport('https://opencode.ai/zen/go/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'deepseek-v4.1-flash', messages: [{ role: 'user', content: 'again' }] }),
+      __sullyMeta: { charId: 'character-1' } as any,
+    } as RequestInit);
+    const other = await transport('https://opencode.ai/zen/go/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({ model: 'deepseek-v4.1-flash', messages: [{ role: 'user', content: 'other' }] }),
+      __sullyMeta: { charId: 'character-2' } as any,
+    } as RequestInit);
+
+    const firstSession = (await first.json()).session;
+    expect(firstSession).toBeTruthy();
+    expect((await second.json()).session).toBe(firstSession);
+    expect((await other.json()).session).not.toBe(firstSession);
+  });
+
+  it('preserves an explicitly supplied OpenCode Go session header', async () => {
+    const native = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => Response.json({
+      session: new Headers(init?.headers).get('x-opencode-session'),
+    }));
+    const transport = createOpenCodeGoTransport(true, native, vi.fn(async () => new Response('fallback')));
+    const response = await transport('https://opencode.ai/zen/go/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'x-opencode-session': 'explicit-session' },
+      body: '{}',
+    });
+    expect((await response.json()).session).toBe('explicit-session');
+  });
+
   it('routes zen/go requests through the native HTTP bridge', async () => {
     const native = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response('{"choices":[{"message":{"content":"ok"}}]}', {
       status: 200,
