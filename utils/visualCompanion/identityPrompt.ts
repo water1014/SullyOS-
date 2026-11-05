@@ -85,5 +85,12 @@ export function mergeCharacterVisualContextPrompt(
 ): string {
     const identity = buildCharacterAppearancePrompt(profile);
     const changes = buildCharacterVisualChangePrompt(memories, now);
-    return [identity, changes, scenePrompt.trim()].filter(Boolean).join('\n\n');
+    // Reroll controls may pass the previous fully-composed positive prompt.
+    // Strip its old identity/timeline blocks so the latest confirmed profile is
+    // injected exactly once and edits to the profile take effect immediately.
+    const priorContextMarker = '[Fixed character appearance]';
+    const sceneOnly = scenePrompt.includes(priorContextMarker)
+        ? (scenePrompt.split('【本次场景】').slice(1).join('【本次场景】').trim() || scenePrompt.trim())
+        : scenePrompt.trim();
+    return [identity, changes, sceneOnly].filter(Boolean).join('\n\n');
 }
