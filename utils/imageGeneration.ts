@@ -278,10 +278,28 @@ function describeNaiZip(buffer: Uint8Array, response: Response): string {
   const descriptorMode = flags !== null && (flags & 0x0008) !== 0;
   const tail = buffer.subarray(Math.max(0, buffer.length - 24));
   const contentLength = response.headers.get('Content-Length');
+  const contentEncoding = response.headers.get('Content-Encoding');
+  const contentDisposition = response.headers.get('Content-Disposition');
+  const readU16 = (offset: number) => offset >= 0 && offset + 2 <= buffer.length
+    ? buffer[offset] | (buffer[offset + 1] << 8) : null;
+  const readU32 = (offset: number) => offset >= 0 && offset + 4 <= buffer.length
+    ? (buffer[offset] | (buffer[offset + 1] << 8) | (buffer[offset + 2] << 16) | (buffer[offset + 3] << 24)) >>> 0 : null;
+  const eocdCommentLength = eocdOffset >= 0 ? readU16(eocdOffset + 20) : null;
+  const eocdCommentAvailable = eocdOffset >= 0 ? buffer.length - (eocdOffset + 22) : null;
+  const centralDirectorySize = eocdOffset >= 0 ? readU32(eocdOffset + 12) : null;
+  const centralDirectoryOffset = eocdOffset >= 0 ? readU32(eocdOffset + 16) : null;
+  const entryCount = eocdOffset >= 0 ? readU16(eocdOffset + 10) : null;
+  const commentMismatch = eocdCommentLength !== null && eocdCommentAvailable !== null
+    && eocdCommentLength !== eocdCommentAvailable;
   return [
     `实际读取=${buffer.length} bytes`,
     `Content-Length=${contentLength || '未提供/不可见'}`,
+    `Content-Encoding=${contentEncoding || '未提供/identity'}`,
+    `Content-Disposition=${contentDisposition || '未提供'}`,
     `ZIP结束目录=${eocdOffset >= 0 ? `存在(offset ${eocdOffset})` : '缺失'}`,
+    `ZIP条目数=${entryCount ?? '未知'}`,
+    `中央目录大小/偏移=${centralDirectorySize ?? '未知'}/${centralDirectoryOffset ?? '未知'}`,
+    `ZIP注释长度声明/实际=${eocdCommentLength ?? '未知'}/${eocdCommentAvailable ?? '未知'}${commentMismatch ? '（不一致，疑似截断或字节损坏）' : ''}`,
     `本地文件头=${localHeader ? 'PK0304' : '非PK0304'}`,
     `flags=${flags === null ? '未知' : `0x${flags.toString(16)}`}`,
     `压缩方法=${method === null ? '未知' : method}`,
