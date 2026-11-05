@@ -24,9 +24,12 @@ function run(command, args, cwd = root, envOverrides = {}) {
 }
 
 async function main() {
+  const buildMigration = process.argv.includes('--migration');
   const buildRelease = process.argv.includes('--release');
-  const buildApk = process.argv.includes('--apk') || buildRelease;
-  if (buildRelease) {
+  if (buildMigration && buildRelease) throw new Error('Choose either --migration or --release, not both.');
+  const buildSigned = buildMigration || buildRelease;
+  const buildApk = process.argv.includes('--apk') || buildSigned;
+  if (buildSigned) {
     const required = ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD'];
     const missing = required.filter(name => !process.env[name]);
     if (missing.length) throw new Error(`Missing release signing environment: ${missing.join(', ')}`);
@@ -55,9 +58,9 @@ async function main() {
   }
 
   const appGradle = join(androidApp, 'build.gradle');
-  if (buildRelease) {
-    const versionCode = Number(process.env.ANDROID_VERSION_CODE || 30403);
-    const versionName = String(process.env.ANDROID_VERSION_NAME || '3.16.1').trim();
+  if (buildSigned) {
+    const versionCode = Number(process.env.ANDROID_VERSION_CODE || (buildMigration ? 30401 : 30402));
+    const versionName = String(process.env.ANDROID_VERSION_NAME || (buildMigration ? '3.16.1-migration' : '3.16.1')).trim();
     if (!Number.isSafeInteger(versionCode) || versionCode < 2 || !versionName) throw new Error('Release version is invalid.');
     let gradle = readFileSync(appGradle, 'utf8');
     if (!/defaultConfig\s*\{/.test(gradle) || !/versionCode\s+\d+/.test(gradle) || !/versionName\s+['"][^'"]+['"]/.test(gradle)) {
@@ -86,6 +89,10 @@ android {
     }
     buildTypes {
         release { signingConfig signingConfigs.release }
+        debug {
+            signingConfig signingConfigs.release
+            debuggable true
+        }
     }
 }
 `, 'utf8');
@@ -98,8 +105,8 @@ android {
   const apkPath = join(androidApp, 'build', 'outputs', 'apk', variant, apkName);
   if (!existsSync(apkPath)) throw new Error(`Gradle reported success but the ${variant} APK was not found.`);
   const sha256 = createHash('sha256').update(readFileSync(apkPath)).digest('hex');
-  process.stdout.write(`\n${buildRelease ? 'Signed release' : 'Debug test'} APK compiled: ${apkPath}\nSHA-256: ${sha256}\n`);
-  if (buildRelease) run(process.env.APKSIGNER_PATH || 'apksigner', ['verify', '--verbose', '--print-certs', apkPath]);
+  process.stdout.write(`\n${buildMigration ? 'Signed debuggable migration' : buildRelease ? 'Signed release' : 'Debug test'} APK compiled: ${apkPath}\nSHA-256: ${sha256}\n`);
+  if (buildSigned) run(process.env.APKSIGNER_PATH || 'apksigner', ['verify', '--verbose', '--print-certs', apkPath]);
 
 }
 

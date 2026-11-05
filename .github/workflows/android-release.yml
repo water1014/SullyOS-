@@ -1,4 +1,4 @@
-name: Build signed Android release
+name: Build signed Android migration and release APKs
 
 on:
   workflow_dispatch:
@@ -11,9 +11,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release-apk:
+  android-packages:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout feature branch
         uses: actions/checkout@v4
@@ -70,26 +70,55 @@ jobs:
           chmod 600 "$RUNNER_TEMP/sullyos-signing/release.jks"
           keytool -list -keystore "$RUNNER_TEMP/sullyos-signing/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/sullyos-signing/release.jks" >> "$GITHUB_ENV"
-          echo "ANDROID_VERSION_CODE=$((30400 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
-          echo "ANDROID_VERSION_NAME=3.16.1" >> "$GITHUB_ENV"
           echo "APKSIGNER_PATH=$ANDROID_HOME/build-tools/35.0.0/apksigner" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build signed release APK
+      - name: Build signed debuggable migration APK
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_VERSION_CODE: ${{ 30400 + github.run_number * 2 + 1 }}
+          ANDROID_VERSION_NAME: 3.16.1-migration
+        run: pnpm build:capacitor:migration
+
+      - name: Verify migration APK identity, signer, and debuggability
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.aetheros.simulator'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "application-debuggable"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
+
+      - name: Upload migration APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sullyos-migration-${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build signed final release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_VERSION_CODE: ${{ 30400 + github.run_number * 2 + 2 }}
+          ANDROID_VERSION_NAME: 3.16.1
         run: pnpm build:capacitor:release
 
-      - name: Verify package identity and certificate
+      - name: Verify final release package and signer
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging android/app/build/outputs/apk/release/app-release.apk | grep -F "package: name='com.aetheros.simulator'"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs android/app/build/outputs/apk/release/app-release.apk
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.aetheros.simulator'"
+          if "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "application-debuggable"; then
+            echo "::error::Final release APK must not be debuggable"
+            exit 1
+          fi
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$APK"
 
-      - name: Upload signed APK for testing
+      - name: Upload final release APK
         uses: actions/upload-artifact@v4
         with:
           name: sullyos-android-release-${{ github.run_number }}
