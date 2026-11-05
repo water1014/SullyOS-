@@ -120,7 +120,7 @@ const keywordMatches = (
     // Word boundaries are not meaningful between CJK characters. Tavern exports can
     // carry matchWholeWords=true even for Chinese/Japanese lorebooks; using Latin-style
     // boundaries there silently prevents ordinary in-sentence keywords from matching.
-    const containsCjk = /[\\p{Script=Han}\\p{Script=Hiragana}\\p{Script=Katakana}\\p{Script=Hangul}]/u.test(keyword);
+    const containsCjk = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(keyword);
     if (!wholeWords || containsCjk) {
         return caseSensitive
             ? text.includes(keyword)
