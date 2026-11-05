@@ -188,7 +188,14 @@ describe('image generation clients', () => {
       action: 'generate',
       use_new_shared_trial: true,
       model: 'nai-diffusion-5-full',
-      parameters: { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 0, negative_prompt: 'blurry' },
+      parameters: {
+        width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral',
+        seed: 0, negative_prompt: 'blurry', stream: 'msgpack', ucPreset: 3,
+        dynamic_thresholding: false, controlnet_strength: 1, legacy: false,
+        legacy_uc: false, add_original_image: true, legacy_v3_extend: false,
+        reference_strength_multiple: [], normalize_reference_strength_multiple: true,
+        use_coords: false, reference_image_multiple_cached: [], characterPrompts: [],
+      },
     });
   });
 
