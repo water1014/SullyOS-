@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isTavernPromptPreset, parseTavernPromptPreset } from './tavernPromptPreset';
+import { isTavernPromptPreset, parseTavernPromptPreset, renderTavernPromptPreset } from './tavernPromptPreset';
 
 describe('SillyTavern prompt preset import', () => {
     const sample = {
@@ -38,6 +38,27 @@ describe('SillyTavern prompt preset import', () => {
             { identifier: 'dialogueExamples', enabled: false },
         ]);
         expect(imported.raw).toMatchObject({ temperature: 2, wi_format: '{0}', extensions: {} });
+    });
+
+    it('honors prompt_order enabled flags in the editor model and generated prompt', () => {
+        const source = {
+            name: '开关测试',
+            prompts: [
+                { identifier: 'keep', name: '保留模块', role: 'system', content: '应该发送' },
+                { identifier: 'skip', name: '关闭模块', role: 'system', content: '不应该发送' },
+            ],
+            prompt_order: [
+                { character_id: 100000, order: [
+                    { identifier: 'keep', enabled: true },
+                    { identifier: 'skip', enabled: false },
+                ] },
+            ],
+        };
+        const preset = parseTavernPromptPreset(JSON.stringify(source));
+        expect(preset.prompts.map(prompt => prompt.enabled)).toEqual([true, false]);
+        const rendered = renderTavernPromptPreset(preset);
+        expect(rendered).toContain('应该发送');
+        expect(rendered).not.toContain('不应该发送');
     });
 
     it('gives a clear message when a worldbook is passed to the preset importer', () => {
