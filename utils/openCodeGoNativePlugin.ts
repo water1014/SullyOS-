@@ -86,6 +86,10 @@ export function createOpenCodeGoNativeFetch(plugin: StreamPlugin = nativePlugin)
         fail(new DOMException('The operation was aborted.', 'AbortError'));
       };
       signal?.addEventListener('abort', abortHandler, { once: true });
+      if (signal?.aborted) {
+        abortHandler();
+        throw new DOMException('The operation was aborted.', 'AbortError');
+      }
       await plugin.start({
         requestId,
         url,

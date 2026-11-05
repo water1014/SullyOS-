@@ -31,7 +31,7 @@ export function createOpenCodeGoTransport(
     const url = typeof resource === 'string'
       ? resource
       : resource instanceof URL ? resource.href : resource.url;
-    if (!isNative || !(/opencode\\.ai\\/(?:inference\\/go|zen\\/go)(?:\\/|$)/i.test(url))) {
+    if (!isNative || !(/opencode\.ai\/(?:inference\/go|zen\/go)(?:\/|$)/i.test(url))) {
       return fallback(resource, init);
     }
     const request = resource instanceof Request ? resource : undefined;
