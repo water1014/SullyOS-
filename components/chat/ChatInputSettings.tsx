@@ -27,7 +27,7 @@ const ChatInputSettings: React.FC<ChatInputSettingsProps> = ({ value, onChange, 
                 {
                     key: 'autoReply',
                     label: '发完后自动生成回复',
-                    help: '发过文字、图片或表情后，等输入框没有草稿和光标、加号等底部面板全部收起，再等 2 秒让对方回复。继续输入、打开面板或发送新消息，就重新等待。倒计时可以取消。' + (scope === 'group' ? '群聊沿用本群的导演或轮询模式；退出群聊会取消等待。' : ''),
+                    help: `发过文字、图片或表情后，等输入框没有草稿和光标、加号等底部面板全部收起，再等 ${value.autoReplyDelaySeconds || 1} 秒让对方回复。继续输入、打开面板或发送新消息，就重新等待。倒计时可以取消。` + (scope === 'group' ? '群聊沿用本群的导演或轮询模式；退出群聊会取消等待。' : ''),
                 },
                 {
                     key: 'emojiSuggestions',
@@ -68,6 +68,19 @@ const ChatInputSettings: React.FC<ChatInputSettingsProps> = ({ value, onChange, 
                     <p id={`chat-input-help-${key}`} hidden={openHelp !== key} className="rounded-xl bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">{help}</p>
                 </div>
             ))}
+            <div className="flex min-h-11 items-center justify-between gap-3 pl-1">
+                <label htmlFor="chat-auto-reply-delay" className="text-xs font-bold text-slate-600">自动回复等待时间</label>
+                <select
+                    id="chat-auto-reply-delay"
+                    aria-label="自动回复等待时间"
+                    value={value.autoReplyDelaySeconds || 1}
+                    onChange={event => onChange({ ...value, autoReplyDelaySeconds: Number(event.target.value) as ChatInputPreferences['autoReplyDelaySeconds'] })}
+                    disabled={!value.autoReply}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 disabled:opacity-40"
+                >
+                    {[1, 2, 3, 5, 10].map(seconds => <option key={seconds} value={seconds}>{seconds} 秒</option>)}
+                </select>
+            </div>
         </div>
     );
 };
