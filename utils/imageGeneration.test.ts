@@ -213,7 +213,7 @@ describe('image generation clients', () => {
     // The damaged response retains two trailing comment bytes, as in the phone diagnostic.
     const withTrailingBytes = new Uint8Array(damaged.length + 2);
     withTrailingBytes.set(damaged);
-    withTrailingBytes.set([0xef, 0xbf], damaged.length);
+    withTrailingBytes.set([0x00, 0x00], damaged.length);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(withTrailingBytes, {
       status: 200, headers: { 'Content-Type': 'application/zip' },
     })));
