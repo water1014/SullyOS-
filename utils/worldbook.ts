@@ -369,7 +369,7 @@ export const parseStandardWorldbook = (
         const secondary = asStringArray(value.keysecondary ?? value.secondary_keys ?? value.secondaryKeys);
         const insertionOrder = value.position ?? value.insertion_order ?? value.insertionOrder;
         const positionName = typeof insertionOrder === 'string'
-            ? insertionOrder.trim().toLowerCase().replace(/[\\s-]+/g, '_')
+            ? insertionOrder.trim().toLowerCase().replace(/[\s-]+/g, '_')
             : '';
         const positionAliases: Record<string, number> = {
             before: 0, before_char: 0, before_character: 0, world: 0,

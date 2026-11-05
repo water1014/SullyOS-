@@ -280,6 +280,24 @@ describe('mounted worldbook synchronization', () => {
         expect(resolveWorldbookEntries(retried, [{ content: '我们去钟楼看看' }]).map(entry => entry.book.id)).toEqual(['generated-1', 'generated-2', 'existing']);
     });
 
+    it('normalizes named insertion positions containing spaces and hyphens', () => {
+        const names = [
+            ['before character', 0],
+            ['after-character', 1],
+            ['top of AN', 2],
+            ['bottom-of-AN', 3],
+            ['at depth', 4],
+            ['before-example', 5],
+            ['after example', 6],
+        ] as const;
+        for (const [position, expected] of names) {
+            const imported = parseStandardWorldbook(JSON.stringify({
+                entries: [{ comment: position, content: '位置测试', position }],
+            }), '位置兼容', 101);
+            expect(imported[0].position).toBe(expected);
+        }
+    });
+
     it('accepts named Tavern insertion positions as well as numeric positions', () => {
         const names = [
             ['before_char', 0], ['after_char', 1], ['top_of_an', 2],
