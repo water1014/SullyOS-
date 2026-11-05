@@ -95,6 +95,9 @@ const PromptPresetsApp: React.FC = () => {
         updatePreset(presetName, preset => ({
             ...preset,
             prompts: preset.prompts.map((prompt, i) => i === index ? { ...prompt, ...patch } : prompt),
+            // 用户在界面手动改模块开关/内容后，以本机编辑状态为准，
+            // 不再被导入 JSON 中旧的 prompt_order.enabled 覆盖。
+            manualOrder: true,
         }));
     };
 
