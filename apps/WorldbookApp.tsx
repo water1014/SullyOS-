@@ -208,7 +208,13 @@ const WorldbookApp: React.FC = () => {
             const parsedBooks = parseStandardWorldbook(text, category);
             const imported = mergeImportedWorldbooks(worldbooks, parsedBooks);
             await addWorldbooks(imported);
-            const activeCharacter = characters.find(character => character.id === activeCharacterId);
+            // Re-imports update the global records first. Refresh every existing mount
+            // from the just-saved library records in one IndexedDB transaction, not
+            // only the currently active character.
+            await updateWorldbooks(imported.map(book => book.id), {});
+            const activeCharacter = activeCharacterId
+                ? await DB.getCharacter(activeCharacterId)
+                : undefined;
             if (activeCharacter) {
                 const mountedWorldbooks = upsertMountedWorldbooks(activeCharacter.mountedWorldbooks || [], imported);
                 await DB.saveCharacter({ ...activeCharacter, mountedWorldbooks });
