@@ -828,51 +828,67 @@ const PhoneShell: React.FC = () => {
     };
   }, []);
 
-  // Capacitor Native Handling
+  // Native window configuration is process-level, not page-level.
+  // Reapplying setOverlaysWebView()/hide() whenever activeApp changes can repeatedly
+  // toggle Android system-UI/window insets while third-party overlay windows are visible.
   useEffect(() => {
-    const initNative = async () => {
-        if (!deploymentNotice.blocked && Capacitor.isNativePlatform()) {
-            try {
-                await CapStatusBar.setOverlaysWebView({ overlay: true });
-                await CapStatusBar.hide();
-                await CapStatusBar.setStyle({ style: StatusBarStyle.Dark });
-
-                const permStatus = await LocalNotifications.checkPermissions();
-                if (permStatus.display !== 'granted') {
-                    await LocalNotifications.requestPermissions();
-                }
-            } catch (e) {
-                console.error("Native init failed", e);
-            }
-        }
+    if (!Capacitor.isNativePlatform()) return;
+    let disposed = false;
+    const configureNativeWindow = async () => {
+      try {
+        await CapStatusBar.setOverlaysWebView({ overlay: true });
+        await CapStatusBar.hide();
+        await CapStatusBar.setStyle({ style: StatusBarStyle.Dark });
+      } catch (error) {
+        console.error("Native window configuration failed", error);
+      }
     };
-    initNative();
+    void configureNativeWindow();
+    return () => { disposed = true; };
+  }, []);
 
-    // Handle Android Hardware Back Button
-    const setupBackButton = async () => {
-        if (Capacitor.isNativePlatform()) {
-            try {
-                await CapApp.removeAllListeners();
-                CapApp.addListener('backButton', ({ canGoBack }) => {
-                    if (deploymentNotice.blocked) return;
-                    if (isLocked) {
-                        CapApp.exitApp();
-                    } else {
-                        handleBack(); // Delegate to OSContext logic
-                    }
-                });
-            } catch (e) { console.log('Back button listener setup failed'); }
+  // Ask for notification permission only after startup gating has cleared.
+  // The permission request is one-shot and must not be coupled to app navigation.
+  const notificationPermissionRequested = useRef(false);
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || deploymentNotice.blocked || notificationPermissionRequested.current) return;
+    notificationPermissionRequested.current = true;
+    void (async () => {
+      try {
+        const permStatus = await LocalNotifications.checkPermissions();
+        if (permStatus.display !== 'granted') {
+          await LocalNotifications.requestPermissions();
         }
-    };
+      } catch (error) {
+        console.error("Native notification permission check failed", error);
+      }
+    })();
+  }, [deploymentNotice.blocked]);
 
-    setupBackButton();
-
+  // Own only this component's back-button listener. removeAllListeners() also
+  // tears down unrelated appStateChange listeners registered by safe-area and plugins.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let disposed = false;
+    let backButtonHandle: { remove: () => Promise<void> } | undefined;
+    void CapApp.addListener('backButton', () => {
+      if (deploymentNotice.blocked) return;
+      if (isLocked) {
+        CapApp.exitApp();
+      } else {
+        handleBack();
+      }
+    }).then(handle => {
+      if (disposed) void handle.remove();
+      else backButtonHandle = handle;
+    }).catch(error => {
+      console.warn('Back button listener setup failed', error);
+    });
     return () => {
-        if (Capacitor.isNativePlatform()) {
-            CapApp.removeAllListeners().catch(() => {});
-        }
+      disposed = true;
+      if (backButtonHandle) void backButtonHandle.remove();
     };
-  }, [activeApp, isLocked, closeApp, handleBack, deploymentNotice.blocked]);
+  }, [isLocked, handleBack, deploymentNotice.blocked]);
 
   // Force scroll to top when app changes to prevent "push up" glitches on iOS
   useEffect(() => {
