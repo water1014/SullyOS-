@@ -69,7 +69,7 @@ async function patchCapacitorAndroidKeyboard() {
   }
 
   if (source.includes('SullyOS Android 16 IME inset fix')) return;
-  const legacyMethod = /private int computeUsableHeight\\(\\) \\{\\s*Rect r = new Rect\\(\\);\\s*mChildOfContent\\.getWindowVisibleDisplayFrame\\(r\\);\\s*return isOverlays\\(\\) \\? r\\.bottom : r\\.height\\(\\);\\s*\\}/;
+  const legacyMethod = /private int computeUsableHeight\(\) \{\s*Rect r = new Rect\(\);\s*mChildOfContent\.getWindowVisibleDisplayFrame\(r\);\s*return isOverlays\(\) \? r\.bottom : r\.height\(\);\s*\}/;
   if (!legacyMethod.test(source)) {
     throw new Error('Capacitor Keyboard computeUsableHeight() changed. Review the upstream plugin before building; no unverified patch was applied.');
   }
@@ -92,7 +92,7 @@ async function patchCapacitorAndroidKeyboard() {
     }`;
   source = source.replace(legacyMethod, modernMethod);
   await writeFile(keyboardJavaPath, source, 'utf8');
-  process.stdout.write('Capacitor Android keyboard resize patched to use WindowInsetsCompat IME bounds.\\n');
+  process.stdout.write('Capacitor Android keyboard resize patched to use WindowInsetsCompat IME bounds.\n');
 }
 
 async function main() {
