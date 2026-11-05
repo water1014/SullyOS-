@@ -81,9 +81,9 @@ jobs:
             exit 1
           fi
           echo "Decoded keystore file size: $KEYSTORE_SIZE bytes."
-          if ! keytool -list -keystore "$RUNNER_TEMP/sullyos-signing/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" >/dev/null 2>"$RUNNER_TEMP/sullyos-signing/keytool-store.log"; then
-            echo "::error::Keystore could not be opened. The keystore file may be incomplete, or ANDROID_KEYSTORE_PASSWORD may not match. Secret values were not printed."
-            sed -E 's/(password|passphrase)[^:]*:.*/\1: [redacted]/I' "$RUNNER_TEMP/sullyos-signing/keytool-store.log" | tail -n 8
+          if ! keytool -list -keystore "$RUNNER_TEMP/sullyos-signing/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" >"$RUNNER_TEMP/sullyos-signing/keytool-store.log" 2>&1; then
+            echo "::error::Keystore could not be opened. Check the diagnostic below; no secret values are printed."
+            tail -n 12 "$RUNNER_TEMP/sullyos-signing/keytool-store.log"
             exit 1
           fi
           if ! keytool -list -keystore "$RUNNER_TEMP/sullyos-signing/release.jks" -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null 2>"$RUNNER_TEMP/sullyos-signing/keytool-alias.log"; then
