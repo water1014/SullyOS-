@@ -131,6 +131,7 @@ export async function executeChatImageTool(
       const existing = await DB.findGalleryImageBySourceMessageId(charId, messageId);
       if (existing) {
         await DB.saveGalleryImage({ ...existing, url: galleryUrl, timestamp: Date.now() });
+        window.dispatchEvent(new CustomEvent('sully-gallery-images-changed', { detail: { charId, messageId } }));
       } else {
         await DB.saveGalleryImage({
           id: `chat-image-${messageId}`,
@@ -168,6 +169,7 @@ export async function executeChatImageTool(
         timestamp: Date.now(),
         sourceMessageId: messageId,
       });
+      window.dispatchEvent(new CustomEvent('sully-gallery-images-changed', { detail: { charId, messageId } }));
     } catch (error) {
       console.warn('[ChatImageTool] generated image gallery sync failed', error);
     }
