@@ -64,13 +64,13 @@ export const parseTavernPromptPreset = (
         throw new Error('不是受支持的酒馆提示词预设：未找到 prompts 提示词列表。世界书请在「世界书」中导入。');
     }
 
-    const prompts = (parsed.prompts as unknown[]).filter(isRecord) as TavernPresetPrompt[];
-    if (prompts.length === 0) {
+    const rawPrompts = (parsed.prompts as unknown[]).filter(isRecord) as TavernPresetPrompt[];
+    if (rawPrompts.length === 0) {
         throw new Error('提示词预设中没有有效的 prompts 条目');
     }
 
     const promptOrder = Array.isArray(parsed.prompt_order)
-        ? parsed.prompt_order.filter(isRecord).map((item): TavernPresetPromptOrder => ({
+        ? parsed.prompt_order.filter(isRecord).map((item): TavernPromptPresetOrder => ({
             ...item,
             order: Array.isArray(item.order)
                 ? item.order.filter(isRecord).filter(entry => typeof entry.identifier === 'string').map(entry => ({
@@ -81,6 +81,19 @@ export const parseTavernPromptPreset = (
                 : [],
         }))
         : [];
+
+    // SillyTavern commonly stores each module's enabled switch in prompt_order,
+    // not in prompts[]. Mirror that state into the editable module model so the
+    // app's checkboxes and the generated chat prompt agree immediately after import.
+    const firstOrder = promptOrder.find(group => group.order.length)?.order || [];
+    const orderEnabled = new Map(firstOrder.map(item => [item.identifier, item.enabled]));
+    const prompts = rawPrompts.map(prompt => {
+        const identifier = prompt.identifier || prompt.name;
+        const orderState = identifier ? orderEnabled.get(identifier) : undefined;
+        return orderState === undefined
+            ? prompt
+            : { ...prompt, enabled: prompt.enabled !== false && orderState };
+    });
 
     const baseName = fileName.replace(/\.json$/i, '').trim();
     return {
@@ -102,15 +115,24 @@ export const renderTavernPromptPreset = (preset: TavernPromptPreset): string => 
         prompt,
     ]));
     const order = preset.prompt_order.find(group => group.order?.length)?.order;
+    const orderEnabled = new Map((order || []).map(item => [item.identifier, item.enabled]));
     const orderedFromOrder = order?.length
         ? order.filter(item => item.enabled).map(item => byId.get(item.identifier)).filter((item): item is TavernPresetPrompt => !!item)
         : [];
-    // Preserve modules absent from prompt_order (including modules added in the editor).
+    // Preserve only modules absent from prompt_order. A disabled order entry must
+    // never be appended back as an unlisted module.
     const ordered = !preset.manualOrder && order?.length
-        ? [...orderedFromOrder, ...preset.prompts.filter(prompt => !orderedFromOrder.includes(prompt))]
+        ? [...orderedFromOrder, ...preset.prompts.filter(prompt => {
+            const identifier = prompt.identifier || prompt.name;
+            return !identifier || !orderEnabled.has(identifier);
+        })]
         : preset.prompts;
     const sections = ordered
-        .filter(prompt => prompt.enabled !== false && !prompt.marker && typeof prompt.content === 'string' && prompt.content.trim())
+        .filter(prompt => {
+            const identifier = prompt.identifier || prompt.name;
+            return prompt.enabled !== false && (!identifier || orderEnabled.get(identifier) !== false) &&
+                !prompt.marker && typeof prompt.content === 'string' && prompt.content.trim();
+        })
         .map(prompt => {
             const role = typeof prompt.role === 'string' && prompt.role.trim() ? prompt.role.trim() : 'system';
             const name = prompt.name || prompt.identifier || '提示词模块';
