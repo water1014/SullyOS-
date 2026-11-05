@@ -3,6 +3,8 @@ import { DB } from './db';
 import { putImageBlob } from './blobRef';
 import { generateNaiImage, generateGptImage } from './imageGeneration';
 import { upsertChatImageStudioItem } from './imageStudioIndex';
+import { mergeCharacterVisualContextPrompt } from './visualCompanion/identityPrompt';
+import { visualCompanionRepository } from './visualCompanion/repository';
 
 export const CHAT_IMAGE_TOOL_NAME = 'generate_chat_image';
 
@@ -38,6 +40,11 @@ export async function executeChatImageTool(
   if (!cfg?.enabled) throw new Error('聊天生图尚未启用，请先到设置中开启');
   const scene = String(args.scene_description || '').trim();
   if (!scene) throw new Error('模型没有提供场景描述，无法生成图片');
+  // Chat image generation previously bypassed the visual identity repository.
+  // Load the current character's confirmed appearance and visual timeline before
+  // composing either provider prompt; fail closed rather than silently inventing identity.
+  const appearanceProfile = await visualCompanionRepository.getProfile('visual_profile_' + encodeURIComponent(charId));
+  const visualMemories = await visualCompanionRepository.listMemories(charId);
   let blob: Blob;
   let engine: 'nai' | 'gpt';
   let positive: string;
@@ -45,7 +52,11 @@ export async function executeChatImageTool(
   let model: string;
   if ((cfg.engine || 'nai') === 'nai') {
     engine = 'nai';
-    positive = reroll?.positivePrompt || joinPrompt(cfg.naiPositivePrompt, scene, cfg.naiPositiveSuffix);
+    positive = mergeCharacterVisualContextPrompt(
+      reroll?.positivePrompt || joinPrompt(cfg.naiPositivePrompt, scene, cfg.naiPositiveSuffix),
+      appearanceProfile,
+      visualMemories,
+    );
     negative = reroll?.negativePrompt ?? (cfg.naiNegativePrompt || 'low quality, worst quality, blurry, bad anatomy').trim();
     model = cfg.naiModel || 'nai-diffusion-5-full';
     const seedText = reroll?.randomizeSeed ? '' : (cfg.naiSeed?.trim() || '');
@@ -67,7 +78,11 @@ export async function executeChatImageTool(
     }, signal);
   } else {
     engine = 'gpt';
-    positive = reroll?.positivePrompt || joinPrompt(cfg.gptPositivePrompt, scene, cfg.gptPositiveSuffix);
+    positive = mergeCharacterVisualContextPrompt(
+      reroll?.positivePrompt || joinPrompt(cfg.gptPositivePrompt, scene, cfg.gptPositiveSuffix),
+      appearanceProfile,
+      visualMemories,
+    );
     negative = reroll?.negativePrompt ?? (cfg.gptNegativePrompt || '').trim();
     model = cfg.gptModel || 'gpt-image-1';
     const negativeMode = cfg.gptNegativePromptMode || 'append';
