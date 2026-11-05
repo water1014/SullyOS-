@@ -313,6 +313,7 @@ export interface APIConfig {
     gptCustomHeaders?: Record<string, string>;
     gptPositivePrompt?: string;
     gptNegativePrompt?: string;
+    gptNegativePromptMode?: 'append' | 'field' | 'omit';
     gptSize?: string;
     gptQuality?: string;
   };
