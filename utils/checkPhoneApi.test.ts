@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getCheckPhoneApi, resolveCheckPhoneApi, setCheckPhoneApi } from './checkPhoneApi';
+import { getCheckPhoneApi, resolveCheckPhoneApi, setCheckPhoneApi, requestCheckPhoneApi } from './checkPhoneApi';
 
 const chatDefault = {
     baseUrl: 'https://chat.example/v1',
@@ -12,6 +12,25 @@ const chatDefault = {
 
 afterEach(() => {
     vi.unstubAllGlobals();
+});
+
+describe('查手机 API 请求通道', () => {
+    it('浏览器环境保留标准 fetch，并发送 OpenAI-compatible JSON 请求', async () => {
+        const fetchMock = vi.fn().mockResolvedValue(new Response('{"choices":[{"message":{"content":"ok"}}]}', {
+            status: 200, headers: { 'Content-Type': 'application/json' },
+        }));
+        vi.stubGlobal('fetch', fetchMock);
+        const response = await requestCheckPhoneApi('https://api.example/v1/chat/completions', 'phone-key', {
+            model: 'test-model', messages: [{ role: 'user', content: 'Hi' }],
+        });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ choices: [{ message: { content: 'ok' } }] });
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(fetchMock.mock.calls[0][1]).toMatchObject({
+            method: 'POST',
+            headers: { Authorization: 'Bearer phone-key', 'Content-Type': 'application/json' },
+        });
+    });
 });
 
 describe('查手机独立 API', () => {
