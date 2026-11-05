@@ -257,32 +257,70 @@ export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'officia
   return parsed.toString().replace(/\/$/, '');
 }
 
+function sniffImageMime(bytes: Uint8Array): string | null {
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  if (bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP') return 'image/webp';
+  return null;
+}
+
+function findNaiBase64(value: unknown, depth = 0): { encoded: string; mimeType?: string } | null {
+  if (depth > 5 || !value || typeof value !== 'object') return null;
+  const object = value as Record<string, unknown>;
+  const mimeType = typeof object.mime_type === 'string' ? object.mime_type
+    : typeof object.mimeType === 'string' ? object.mimeType : undefined;
+  for (const key of ['image', 'image_base64', 'base64', 'b64_json', 'output', 'result']) {
+    const candidate = object[key];
+    if (typeof candidate === 'string' && candidate.trim()) {
+      const match = candidate.trim().match(/^(?:data:(image\\/[a-z0-9.+-]+);base64,)?([a-z0-9+/=_-\\s]+)$/i);
+      if (match && match[2].replace(/\\s/g, '').length > 64) {
+        return { encoded: match[2].replace(/\\s/g, '').replace(/-/g, '+').replace(/_/g, '/'), mimeType: match[1] || mimeType };
+      }
+    }
+    if (candidate && typeof candidate === 'object') {
+      const nested = findNaiBase64(candidate, depth + 1);
+      if (nested) return nested;
+    }
+  }
+  for (const key of ['data', 'images', 'artifacts', 'response']) {
+    const candidate = object[key];
+    if (Array.isArray(candidate)) {
+      for (const item of candidate) {
+        const nested = findNaiBase64(item, depth + 1);
+        if (nested) return nested;
+      }
+    } else if (candidate && typeof candidate === 'object') {
+      const nested = findNaiBase64(candidate, depth + 1);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
 async function readNaiImageResponse(response: Response): Promise<Blob> {
   const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
-  if (contentType.startsWith('image/')) {
-    const image = await response.blob();
-    if (!image.size) throw new Error('NAI 服务返回了空图片');
-    return image;
-  }
+  const buffer = new Uint8Array(await response.arrayBuffer());
+  if (!buffer.length) throw new Error('NAI 服务返回了空内容');
 
-  const buffer = await response.arrayBuffer();
-  if (!buffer.byteLength) throw new Error('NAI 服务返回了空内容');
+  const directMime = sniffImageMime(buffer);
+  if (directMime) return new Blob([buffer], { type: directMime });
 
-  if (contentType.includes('json') || contentType.startsWith('text/')) {
-    const raw = new TextDecoder().decode(buffer);
+  const raw = new TextDecoder().decode(buffer).trim();
+  if (raw.startsWith('{') || raw.startsWith('[')) {
     let payload: any;
     try { payload = JSON.parse(raw); }
-    catch { throw new Error(`NAI 服务返回了无法识别的文本：${raw.slice(0, 180)}`); }
-    const encoded = payload?.image || payload?.image_base64 || payload?.data?.[0]?.b64_json;
-    if (typeof encoded === 'string' && encoded) {
-      const normalized = encoded.replace(/^data:image\/[^;]+;base64,/i, '');
+    catch { throw new Error(`NAI 返回了 JSON-like 内容但解析失败（Content-Type: ${contentType || '未知'}）：${raw.slice(0, 160)}`); }
+    const image = findNaiBase64(payload);
+    if (image) {
       try {
-        const binary = atob(normalized);
+        const binary = atob(image.encoded);
         const bytes = new Uint8Array(binary.length);
         for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-        return new Blob([bytes], { type: payload?.mime_type || 'image/png' });
-      } catch {
-        throw new Error('NAI 服务返回了图片字段，但 Base64 内容无法解码');
+        const detectedMime = sniffImageMime(bytes);
+        if (!detectedMime) throw new Error('Base64 字段解码成功，但内容不是 PNG、JPEG 或 WebP 图片');
+        return new Blob([bytes], { type: detectedMime || image.mimeType || 'image/png' });
+      } catch (error) {
+        throw new Error(error instanceof Error ? error.message : 'NAI 返回的 Base64 图片无法解码');
       }
     }
     throw new Error(String(errorMessage(payload, 'NAI 服务返回 JSON，但没有可识别的图片数据')).slice(0, 240));
@@ -290,27 +328,17 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
 
   try {
     const archive = await JSZip.loadAsync(buffer);
-    const imageFile = Object.values(archive.files).find(file =>
-      !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
-    );
+    const imageFile = Object.values(archive.files).find(file => !file.dir && /\\.(png|webp|jpe?g)$/i.test(file.name));
     if (!imageFile) throw new Error('NAI 返回成功，但压缩包中没有找到图片文件');
     const bytes = await imageFile.async('uint8array');
-    const extension = imageFile.name.toLowerCase().split('.').pop();
-    const mimeType = extension === 'webp' ? 'image/webp' : extension === 'jpg' || extension === 'jpeg' ? 'image/jpeg' : 'image/png';
     if (!bytes.length) throw new Error('NAI 压缩包中的图片文件为空');
+    const mimeType = sniffImageMime(bytes);
+    if (!mimeType) throw new Error('NAI 压缩包内文件扩展名像图片，但文件内容无法识别');
     return new Blob([bytes], { type: mimeType });
   } catch (error) {
-    if (error instanceof Error && /没有找到图片文件|图片文件为空/.test(error.message)) throw error;
-    const raw = new TextDecoder().decode(buffer).trim();
-    if (raw.startsWith('{') || raw.startsWith('[')) {
-      try {
-        const payload = JSON.parse(raw);
-        throw new Error(String(errorMessage(payload, 'NAI 第三方接口返回了无法识别的 JSON')).slice(0, 240));
-      } catch (jsonError) {
-        if (jsonError instanceof Error && !jsonError.message.includes('JSON')) throw jsonError;
-      }
-    }
-    throw new Error('NAI 服务已返回内容，但既不是图片文件，也不是有效的 ZIP 图片包。请检查第三方接口的响应格式。');
+    if (error instanceof Error && /没有找到图片文件|图片文件为空|文件内容无法识别/.test(error.message)) throw error;
+    const preview = raw.replace(/[\\r\\n\\t]+/g, ' ').slice(0, 120);
+    throw new Error(`NAI 已返回 HTTP ${response.status} 内容，但无法识别为图片/ZIP/图片 JSON（Content-Type: ${contentType || '未知'}，长度: ${buffer.length} bytes）。响应开头：${preview || '二进制数据'}`);
   }
 }
 
