@@ -130,7 +130,7 @@ export const renderTavernPromptPreset = (preset: TavernPromptPreset): string => 
     const sections = ordered
         .filter(prompt => {
             const identifier = prompt.identifier || prompt.name;
-            return prompt.enabled !== false && (!identifier || orderEnabled.get(identifier) !== false) &&
+            return prompt.enabled !== false && (preset.manualOrder || !identifier || orderEnabled.get(identifier) !== false) &&
                 !prompt.marker && typeof prompt.content === 'string' && prompt.content.trim();
         })
         .map(prompt => {
