@@ -477,9 +477,12 @@ const ImageStudioApp: React.FC = () => {
       const scenePrompt = mergeCharacterVisualContextPrompt(prompt, currentAppearanceProfile, visualMemories);
       const fixedPositive = engine === 'nai'
         ? (hasSharedImageConfig ? sharedImageConfig.naiPositivePrompt : '')
-        : (sharedImageConfig?.enabled ? sharedImageConfig.gptPositivePrompt : '');
-      const effectivePrompt = [fixedPositive, scenePrompt].map(part => (part || '').trim()).filter(Boolean).join(', ');
-      const effectiveNegativePrompt = sharedImageConfig?.enabled
+        : (hasSharedImageConfig ? sharedImageConfig.gptPositivePrompt : '');
+      const fixedSuffix = engine === 'nai'
+        ? (hasSharedImageConfig ? sharedImageConfig.naiPositiveSuffix : '')
+        : (hasSharedImageConfig ? sharedImageConfig.gptPositiveSuffix : '');
+      const effectivePrompt = [fixedPositive, scenePrompt, fixedSuffix].map(part => (part || '').trim()).filter(Boolean).join(', ');
+      const effectiveNegativePrompt = hasSharedImageConfig
         ? (engine === 'nai' ? (sharedImageConfig.naiNegativePrompt || negativePrompt) : (sharedImageConfig.gptNegativePrompt || ''))
         : negativePrompt;
       // GPT 生图优先使用用户本次上传的参考图；未上传时回退到角色档案的基础形象图。
