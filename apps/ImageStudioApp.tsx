@@ -165,8 +165,11 @@ const ImageStudioApp: React.FC = () => {
   const generationAbortRef = useRef<AbortController | null>(null);
   const [error, setError] = useState('');
   const sharedImageConfig = apiConfig.chatImage;
+  const hasSharedImageConfig = !!sharedImageConfig && (sharedImageConfig.engine === 'gpt'
+    ? !!(sharedImageConfig.gptBaseUrl || sharedImageConfig.gptApiKey)
+    : !!(sharedImageConfig.naiApiKey || sharedImageConfig.naiBaseUrl));
   useEffect(() => {
-    if (!sharedImageConfig?.enabled) return;
+    if (!hasSharedImageConfig || !sharedImageConfig) return;
     const sharedEngine = sharedImageConfig.engine || 'nai';
     setEngine(sharedEngine);
     setNegativePrompt(sharedEngine === 'nai'
@@ -473,7 +476,7 @@ const ImageStudioApp: React.FC = () => {
         : [];
       const scenePrompt = mergeCharacterVisualContextPrompt(prompt, currentAppearanceProfile, visualMemories);
       const fixedPositive = engine === 'nai'
-        ? (sharedImageConfig?.enabled ? sharedImageConfig.naiPositivePrompt : '')
+        ? (hasSharedImageConfig ? sharedImageConfig.naiPositivePrompt : '')
         : (sharedImageConfig?.enabled ? sharedImageConfig.gptPositivePrompt : '');
       const effectivePrompt = [fixedPositive, scenePrompt].map(part => (part || '').trim()).filter(Boolean).join(', ');
       const effectiveNegativePrompt = sharedImageConfig?.enabled
