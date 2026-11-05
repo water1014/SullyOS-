@@ -236,7 +236,7 @@ const ChatHeaderShell: React.FC<ChatHeaderShellProps> = ({
     // 刘海段就是顶栏自己的颜色，和其余 App 统一无缝（取代旧的「透明 spacer」方案）。
     // minHeight 是地板不是固定高度——border-box 下 padding 在它之上叠加把元素撑高、不挤压内容（区别于固定 h-NN 会劈开）。
     // Chat 在 SELF_SAFE_AREA_APPS 名单里，外壳不再加 safe-top，这里加一次不会重复。
-    const headerSafeStyle: React.CSSProperties = { minHeight: `calc(${headerBaseHeight} + 12px)`, paddingTop: 'calc(var(--safe-top) + 12px)' };
+    const headerSafeStyle: React.CSSProperties = { minHeight: `calc(${headerBaseHeight} + 24px)`, paddingTop: 'calc(var(--safe-top) + 24px)' };
     const primaryTextClass = acnh ? 'text-[#6b5a3e]' : isDarkHeader ? 'text-white' : isPixelHeader ? 'text-[#fff7ed]' : 'text-slate-800';
     const secondaryTextClass = acnh ? 'text-[#5a9e7a]' : isDarkHeader ? 'text-slate-400' : isPixelHeader ? 'text-[#f3ddc7]' : 'text-slate-400';
     const iconButtonClass = acnh
