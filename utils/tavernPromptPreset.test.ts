@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isTavernPromptPreset, parseTavernPromptPreset, renderTavernPromptPreset } from './tavernPromptPreset';
+import { isTavernPromptPreset, parseTavernPromptPreset, readActiveTavernPromptPreset, renderTavernPromptPreset } from './tavernPromptPreset';
 
 describe('SillyTavern prompt preset import', () => {
     const sample = {
@@ -59,6 +59,27 @@ describe('SillyTavern prompt preset import', () => {
         const rendered = renderTavernPromptPreset(preset);
         expect(rendered).toContain('应该发送');
         expect(rendered).not.toContain('不应该发送');
+    });
+
+
+    it('reads only the locally selected preset for chat injection', () => {
+        localStorage.clear();
+        const first = parseTavernPromptPreset(JSON.stringify({
+            name: '已启用',
+            prompts: [{ identifier: 'a', name: '核心补充', role: 'system', content: '注入内容' }],
+            prompt_order: [{ order: [{ identifier: 'a', enabled: true }] }],
+        }));
+        const second = parseTavernPromptPreset(JSON.stringify({
+            name: '未启用',
+            prompts: [{ identifier: 'b', name: '不应注入', role: 'system', content: '不应出现' }],
+            prompt_order: [{ order: [{ identifier: 'b', enabled: true }] }],
+        }));
+        localStorage.setItem('sully-tavern-prompt-presets:v1', JSON.stringify([first, second]));
+        localStorage.setItem('sully-tavern-prompt-preset-active:v1', '已启用');
+
+        expect(readActiveTavernPromptPreset()).toContain('注入内容');
+        expect(readActiveTavernPromptPreset()).not.toContain('不应出现');
+        localStorage.clear();
     });
 
     it('gives a clear message when a worldbook is passed to the preset importer', () => {
