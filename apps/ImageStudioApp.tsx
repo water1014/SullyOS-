@@ -529,15 +529,6 @@ const ImageStudioApp: React.FC = () => {
       const gptNegativeField = hasSharedImageConfig
         ? (gptNegativeMode === 'field' ? effectiveNegativePrompt : undefined)
         : effectiveNegativePrompt;
-      if (engine === 'nai') {
-        setLastNaiRequest({
-          prompt: effectivePrompt.trim(),
-          negativePrompt: effectiveNegativePrompt.trim(),
-          model: config.nai.model || 'nai-diffusion-4-5-full',
-          options: naiOptions,
-          createdAt: Date.now(),
-        });
-      }
       const blob = engine === 'gpt'
         ? effectiveReferenceImage
           ? await editGptImage(config.gpt, effectiveReferenceImage, gptRequestPrompt, { size: gptSize, quality: gptQuality, negativePrompt: gptNegativeField, signal: controller.signal })
