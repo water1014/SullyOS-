@@ -89,7 +89,7 @@ describe('one-second automatic reply default', () => {
         advance(5000);
         expect(options.onGenerate).not.toHaveBeenCalled();
         act(() => finishImage(true));
-        advance(1999);
+        advance(999);
         expect(options.onGenerate).not.toHaveBeenCalled();
         advance(1);
         expect(options.onGenerate).toHaveBeenCalledTimes(1);
@@ -151,7 +151,7 @@ describe('one-second automatic reply default', () => {
         expect(options.onGenerate).not.toHaveBeenCalled();
         vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
         act(() => document.dispatchEvent(new Event('visibilitychange')));
-        advance(1999);
+        advance(999);
         expect(options.onGenerate).not.toHaveBeenCalled();
         advance(1);
         expect(options.onGenerate).toHaveBeenCalledTimes(1);
