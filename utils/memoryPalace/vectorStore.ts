@@ -131,6 +131,13 @@ export async function updateStoredMemoryNode(
         return { node: updated, reembedded: false };
     }
 
+    // 正文改写前先保留旧版本，避免手动纠错时误删原始记忆。
+    // 快照随 MemoryNode 一起持久化和导出，最多保留最近 5 版。
+    updated.revisionHistory = [
+        ...(existing.revisionHistory || []),
+        { content: existing.content, editedAt: Date.now() },
+    ].slice(-5);
+
     if (!embeddingConfig?.baseUrl || !embeddingConfig.apiKey || !embeddingConfig.model) {
         throw new Error('请先配置 Embedding API，修改正文后需要同步更新向量');
     }
