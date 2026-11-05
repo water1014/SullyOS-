@@ -105,8 +105,8 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          export ANDROID_VERSION_CODE=$((30400 + GITHUB_RUN_NUMBER * 2 + 1))
-          export ANDROID_VERSION_NAME=3.18.0-migration
+          export ANDROID_VERSION_CODE=$((30500 + GITHUB_RUN_NUMBER * 2 + 1))
+          export ANDROID_VERSION_NAME=3.19.0-migration
           pnpm build:capacitor:migration
 
       - name: Verify migration APK identity, signer, and debuggability
@@ -130,8 +130,8 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          export ANDROID_VERSION_CODE=$((30400 + GITHUB_RUN_NUMBER * 2 + 2))
-          export ANDROID_VERSION_NAME=3.18.0
+          export ANDROID_VERSION_CODE=$((30500 + GITHUB_RUN_NUMBER * 2 + 2))
+          export ANDROID_VERSION_NAME=3.19.0
           pnpm build:capacitor:release
 
       - name: Verify final release package and signer
