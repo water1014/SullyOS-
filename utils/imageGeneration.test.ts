@@ -275,6 +275,27 @@ describe('image generation clients', () => {
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(png.slice(0, 8));
   });
 
+  it('rejects a ZIP whose compressed image bytes fail CRC validation', async () => {
+    const zip = new JSZip();
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0));
+    zip.file('image_0.png', png);
+    const damaged = new Uint8Array(await zip.generateAsync({ type: 'uint8array' }));
+    const nameLength = damaged[26] | (damaged[27] << 8);
+    const extraLength = damaged[28] | (damaged[29] << 8);
+    const dataStart = 30 + nameLength + extraLength;
+    damaged[dataStart + 2] ^= 0x40;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(damaged, {
+      status: 200, headers: { 'Content-Type': 'application/zip' },
+    })));
+
+    await expect(generateNaiImage(
+      { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      'blue hair',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
+    )).rejects.toThrow('NAI 返回 ZIP，但解包失败');
+  });
+
   it('reports ZIP directory inconsistencies and transport headers for corrupted NAI responses', async () => {
     const zip = new JSZip();
     zip.file('image_0.png', Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0)));
