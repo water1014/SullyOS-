@@ -204,6 +204,35 @@ describe('image generation clients', () => {
     expect(await blob.text()).toBe('direct-image');
   });
 
+  it('decodes nested Base64 image payloads even when the gateway labels them as octet-stream', async () => {
+    const pngBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    let binary = '';
+    pngBytes.forEach(byte => { binary += String.fromCharCode(byte); });
+    const encoded = btoa(binary);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      result: { images: [{ image_base64: `data:image/png;base64,${encoded}` }] },
+    }), { status: 200, headers: { 'Content-Type': 'application/octet-stream' } })));
+
+    const blob = await generateNaiImage(
+      { apiKey: 'proxy-token', model: 'nai-model', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      'blue hair', '', { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
+    );
+    expect(blob.type).toBe('image/png');
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(pngBytes);
+  });
+
+  it('recognizes raw PNG bytes even when the third-party gateway omits the image content type', async () => {
+    const pngBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(pngBytes, {
+      status: 200, headers: { 'Content-Type': 'application/octet-stream' },
+    })));
+    const blob = await generateNaiImage(
+      { apiKey: 'proxy-token', model: 'nai-model', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      'blue hair', '', { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
+    );
+    expect(blob.type).toBe('image/png');
+  });
+
   it('surfaces JSON error details from gateways that return HTTP 200', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       error: { message: 'model is not enabled for this account' },
