@@ -15,7 +15,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOS } from '../context/OSContext';
 import {
     MemoryRoom, MemoryNode, ROOM_CONFIGS, ROOM_LABELS, getRoomLabel,
-    MemoryNodeDB, AnticipationDB, MemoryLinkDB, EventBoxDB,
+    MemoryNodeDB, AnticipationDB, MemoryLinkDB, EventBoxDB, hybridSearch,
     migrateOldMemories, runCognitiveDigestion, getAvailableMonths, getAvailableChunks,
     detectPersonalityStyle,
     manuallyBindMemories, removeMemoryFromBox, unbindAllLiveMemories,
@@ -863,7 +863,17 @@ export default function MemoryPalaceApp() {
     // 全局搜索状态
     const [globalSearchQuery, setGlobalSearchQuery] = useState('');
     const [globalSearchResults, setGlobalSearchResults] = useState<MemoryNode[]>([]);
+    const [globalSearchStatus, setGlobalSearchStatus] = useState<'idle' | 'searching' | 'semantic' | 'keyword' | 'error'>('idle');
     const globalSearchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const globalSearchRequestRef = React.useRef(0);
+
+    useEffect(() => {
+        globalSearchRequestRef.current += 1;
+        if (globalSearchTimerRef.current) clearTimeout(globalSearchTimerRef.current);
+        setGlobalSearchQuery('');
+        setGlobalSearchResults([]);
+        setGlobalSearchStatus('idle');
+    }, [char?.id]);
 
     // 全自动记忆（自动归档）catch-up 状态：按角色 id 分别记录
     const [autoArchiveSyncingId, setAutoArchiveSyncingId] = useState<string | null>(null);
@@ -5053,20 +5063,68 @@ create table if not exists memory_vectors (
                             value={globalSearchQuery}
                             onChange={(e) => {
                                 const q = e.target.value;
+                                const requestId = ++globalSearchRequestRef.current;
                                 setGlobalSearchQuery(q);
                                 if (globalSearchTimerRef.current) clearTimeout(globalSearchTimerRef.current);
-                                if (q.trim().length < 2) { setGlobalSearchResults([]); return; }
+                                if (q.trim().length < 2) {
+                                    setGlobalSearchResults([]);
+                                    setGlobalSearchStatus('idle');
+                                    return;
+                                }
+                                setGlobalSearchStatus('searching');
                                 globalSearchTimerRef.current = setTimeout(async () => {
-                                    const allNodes = await MemoryNodeDB.getByCharId(char!.id);
-                                    const keywords = q.trim().toLowerCase().split(/\s+/);
-                                    const filtered = allNodes
-                                        .filter(n => {
-                                            const text = (n.content + ' ' + n.tags.join(' ') + ' ' + n.mood).toLowerCase();
-                                            return keywords.every(kw => text.includes(kw));
-                                        })
-                                        .sort((a, b) => b.importance - a.importance)
-                                        .slice(0, 20);
-                                    setGlobalSearchResults(filtered);
+                                    const query = q.trim();
+                                    const queryLower = query.toLocaleLowerCase();
+                                    try {
+                                        const allNodes = await MemoryNodeDB.getByCharId(char!.id);
+                                        const keywords = queryLower.split(/\s+/).filter(Boolean);
+                                        const scoreKeyword = (node: MemoryNode) => {
+                                            const searchable = (node.content + ' ' + node.tags.join(' ') + ' ' + node.mood + ' ' + (node.entities || []).map(entity => entity.name).join(' ')).toLocaleLowerCase();
+                                            const matched = keywords.filter(keyword => searchable.includes(keyword)).length;
+                                            return matched + (searchable.includes(queryLower) ? keywords.length + 2 : 0);
+                                        };
+                                        const lexical = allNodes
+                                            .map(node => ({ node, score: scoreKeyword(node) }))
+                                            .filter(item => item.score > 0)
+                                            .sort((a, b) => b.score - a.score || b.node.importance - a.node.importance)
+                                            .map(item => item.node);
+
+                                        let semantic: MemoryNode[] = [];
+                                        let usedSemantic = false;
+                                        if (hasEmbeddingConfig) {
+                                            try {
+                                                const recalled = await hybridSearch(
+                                                    query,
+                                                    char!.id,
+                                                    memoryPalaceConfig.embedding,
+                                                    20,
+                                                    remoteVectorConfig,
+                                                );
+                                                semantic = recalled.map(item => item.node);
+                                                usedSemantic = true;
+                                            } catch (error) {
+                                                console.warn('[MemoryPalace] 语义搜索暂不可用，回退关键词搜索:', error);
+                                            }
+                                        }
+
+                                        if (requestId !== globalSearchRequestRef.current) return;
+                                        const merged: MemoryNode[] = [];
+                                        const seen = new Set<string>();
+                                        // 精确关键词命中优先，其次是语义召回，最后补充部分关键词命中。
+                                        for (const node of [...lexical.filter(node => node.content.toLocaleLowerCase().includes(queryLower)), ...semantic, ...lexical]) {
+                                            if (seen.has(node.id)) continue;
+                                            seen.add(node.id);
+                                            merged.push(node);
+                                            if (merged.length >= 20) break;
+                                        }
+                                        setGlobalSearchResults(merged);
+                                        setGlobalSearchStatus(usedSemantic ? 'semantic' : 'keyword');
+                                    } catch (error) {
+                                        if (requestId !== globalSearchRequestRef.current) return;
+                                        console.error('[MemoryPalace] 记忆搜索失败:', error);
+                                        setGlobalSearchResults([]);
+                                        setGlobalSearchStatus('error');
+                                    }
                                 }, 300);
                             }}
                             placeholder="搜索记忆（关键词、标签、情绪...）"
@@ -5177,10 +5235,13 @@ create table if not exists memory_vectors (
                 {/* 搜索结果 or 七个房间 */}
                 {globalSearchQuery.trim().length >= 2 ? (
                     <div style={{ marginBottom: 20 }}>
-                        <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8 }}>
-                            {globalSearchResults.length > 0
-                                ? `找到 ${globalSearchResults.length} 条记忆`
-                                : '没有找到匹配的记忆'}
+                        <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                            <span>
+                                {globalSearchStatus === 'searching' ? '正在搜索记忆…' :
+                                    globalSearchStatus === 'error' ? '搜索失败，请稍后重试' :
+                                    globalSearchResults.length > 0 ? `找到 ${globalSearchResults.length} 条记忆` : '没有找到匹配的记忆'}
+                            </span>
+                            <span>{globalSearchStatus === 'semantic' ? '语义 + 关键词' : globalSearchStatus === 'keyword' ? '关键词模式' : ''}</span>
                         </div>
                         {globalSearchResults.map(node => {
                             const color = ROOM_COLORS[node.room];
