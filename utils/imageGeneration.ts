@@ -616,10 +616,10 @@ export async function generateNaiImage(
         noise_schedule: 'karras',
         cfg_rescale: 0,
         qualityToggle: true,
-        // Match the NAI-compatible request shape used by 柏宝绘 and other
-        // third-party gateways: the sync ZIP endpoint expects the msgpack
-        // stream hint in parameters even though the response is still a ZIP.
-        stream: 'msgpack',
+        // Some NAI-compatible third-party gateways require this compatibility
+        // hint on the synchronous ZIP route. The official API uses a separate
+        // streaming endpoint, so never send this hint to the official ZIP route.
+        ...(provider === 'thirdparty' ? { stream: 'msgpack' } : {}),
         ucPreset: 3,
         params_version: isV5 ? 4 : 3,
         dynamic_thresholding: false,
