@@ -580,6 +580,7 @@ export const useChatAI = ({
                         positivePrompt: detail.generation.positivePrompt,
                         negativePrompt: detail.generation.negativePrompt,
                         randomizeSeed: true,
+                        targetMessageId: Number(detail.messageId),
                     },
                 );
                 setMessages(await DB.getRecentMessagesByCharId(char.id, 200));
@@ -591,8 +592,25 @@ export const useChatAI = ({
                 setSearchStatus('');
             }
         };
+        const selectVariant = async (event: Event) => {
+            const detail = (event as CustomEvent).detail;
+            if (!char?.id || detail?.charId !== char.id || !Number.isFinite(Number(detail?.messageId))) return;
+            try {
+                await DB.updateMessageMetadata(Number(detail.messageId), (previous: any) => ({
+                    ...(previous || {}),
+                    activeChatImageVariant: Math.max(0, Number(detail.index) || 0),
+                }));
+                setMessages(await DB.getRecentMessagesByCharId(char.id, 200));
+            } catch (error: any) {
+                addToast(`切换图片版本失败：${error?.message || String(error)}`, 'error');
+            }
+        };
         window.addEventListener('sully:chat-image-reroll', handler);
-        return () => window.removeEventListener('sully:chat-image-reroll', handler);
+        window.addEventListener('sully:chat-image-select-variant', selectVariant);
+        return () => {
+            window.removeEventListener('sully:chat-image-reroll', handler);
+            window.removeEventListener('sully:chat-image-select-variant', selectVariant);
+        };
     }, [char?.id, char?.name, apiConfig, setMessages, addToast]);
 
     // beforeunload 保护：记忆宫殿后台处理中时，阻止用户意外关闭页面
