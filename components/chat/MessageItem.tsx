@@ -3122,6 +3122,9 @@ const MessageItem = React.memo(({
                         selectionMode={selectionMode}
                         eager={isLatestMessage}
                         onLoad={() => onMediaLoad?.(m.id)}
+                        generation={(m as any).metadata?.chatImageGeneration}
+                        messageId={m.id}
+                        charId={m.charId}
                     />
                 ) : (
                     <div className="px-4 py-6 rounded-2xl bg-slate-100 text-slate-400 text-xs italic text-center min-w-[120px]">[图片已丢失]</div>
