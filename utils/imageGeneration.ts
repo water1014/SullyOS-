@@ -258,6 +258,40 @@ export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'officia
   return parsed.toString().replace(/\/$/, '');
 }
 
+function describeNaiZip(buffer: Uint8Array, response: Response): string {
+  const hex = (bytes: Uint8Array) => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(' ');
+  const signature = (offset: number) => offset >= 0 && offset + 4 <= buffer.length
+    && buffer[offset] === 0x50 && buffer[offset + 1] === 0x4b;
+  let eocdOffset = -1;
+  const searchStart = Math.max(0, buffer.length - 22 - 0xffff);
+  for (let offset = buffer.length - 22; offset >= searchStart; offset -= 1) {
+    if (buffer[offset] === 0x50 && buffer[offset + 1] === 0x4b
+      && buffer[offset + 2] === 0x05 && buffer[offset + 3] === 0x06) {
+      eocdOffset = offset;
+      break;
+    }
+  }
+  const flags = buffer.length >= 8 && signature(0) ? buffer[6] | (buffer[7] << 8) : null;
+  const method = buffer.length >= 10 && signature(0) ? buffer[8] | (buffer[9] << 8) : null;
+  const compressedSize = buffer.length >= 22 && signature(0)
+    ? (buffer[18] | (buffer[19] << 8) | (buffer[20] << 16) | (buffer[21] << 24)) >>> 0 : null;
+  const localHeader = signature(0) && buffer[2] === 0x03 && buffer[3] === 0x04;
+  const descriptorMode = flags !== null && (flags & 0x0008) !== 0;
+  const tail = buffer.subarray(Math.max(0, buffer.length - 24));
+  const contentLength = response.headers.get('Content-Length');
+  return [
+    `实际读取=${buffer.length} bytes`,
+    `Content-Length=${contentLength || '未提供/不可见'}`,
+    `ZIP结束目录=${eocdOffset >= 0 ? `存在(offset ${eocdOffset})` : '缺失'}`,
+    `本地文件头=${localHeader ? 'PK0304' : '非PK0304'}`,
+    `flags=${flags === null ? '未知' : `0x${flags.toString(16)}`}`,
+    `压缩方法=${method === null ? '未知' : method}`,
+    `本地头压缩大小=${compressedSize === null ? '未知' : compressedSize}`,
+    `data-descriptor模式=${descriptorMode ? '是' : '否'}`,
+    `末尾24字节=${hex(tail)}`,
+  ].join('；');
+}
+
 function sniffImageMime(bytes: Uint8Array): string | null {
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
@@ -358,7 +392,7 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
       return new Blob([bytes], { type: mimeType });
     } catch (fallbackError) {
       const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-      throw new Error(`NAI ZIP 解包失败。JSZip：${jszipError.slice(0, 160)}；备用解析器：${fallbackMessage.slice(0, 160)}`);
+      throw new Error(`NAI ZIP 解包失败。JSZip：${jszipError.slice(0, 120)}；备用解析器：${fallbackMessage.slice(0, 120)}。响应诊断：${describeNaiZip(buffer, response)}`);
     } finally {
       await zipReader?.close().catch(() => undefined);
     }
