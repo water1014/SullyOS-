@@ -14,8 +14,9 @@ import { installIOSStandaloneWorkaround } from './utils/iosStandalone';
 import { installIOSStatusBarEdge } from './utils/iosStatusBarEdge';
 import { installWakeListener } from './utils/proactivePushConfig';
 import { initAnalytics } from './utils/analytics';
-import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 import { configureOpenCodeGoNativeTransport } from './utils/openCodeGoTransport';
+import { createOpenCodeGoNativeFetch } from './utils/openCodeGoNativePlugin';
 import { refreshAndroidSafeArea } from './utils/androidSafeArea';
 
 // 默认构建不开启时 Rollup 会整段裁掉；普通浏览器/PWA 不加载原生插件、不申请权限。
@@ -59,7 +60,7 @@ installTranslateCrashGuard();
 // OpenCode Go does not expose reliable browser CORS headers. Only the installed native app
 // routes those inference calls through Capacitor's native HTTP bridge; web/PWA keeps fetch.
 if (Capacitor.isNativePlatform()) {
-  configureOpenCodeGoNativeTransport(true, options => CapacitorHttp.request(options as any));
+  configureOpenCodeGoNativeTransport(true, createOpenCodeGoNativeFetch());
   void refreshAndroidSafeArea();
 }
 
