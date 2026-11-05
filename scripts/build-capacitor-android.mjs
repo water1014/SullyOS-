@@ -51,6 +51,22 @@ async function main() {
   run(pnpmCommand, ['prepare:android']);
   run(pnpmCommand, ['exec', 'cap', 'sync', 'android']);
 
+  // Hosted runners can take longer than Gradle Wrapper's 10-second default to
+  // fetch the full distribution. The build needs binaries only, not Gradle sources.
+  const wrapperProperties = join(androidRoot, 'gradle', 'wrapper', 'gradle-wrapper.properties');
+  if (!existsSync(wrapperProperties)) throw new Error('Generated Gradle wrapper properties were not found.');
+  let wrapperConfig = readFileSync(wrapperProperties, 'utf8');
+  wrapperConfig = wrapperConfig.replace(
+    /distributionUrl=(.+?)gradle-([0-9.]+)-all\\.zip/,
+    (_match, prefix, version) => `distributionUrl=${prefix}gradle-${version}-bin.zip`,
+  );
+  if (/^networkTimeout=/m.test(wrapperConfig)) {
+    wrapperConfig = wrapperConfig.replace(/^networkTimeout=.*$/m, 'networkTimeout=120000');
+  } else {
+    wrapperConfig = wrapperConfig.trimEnd() + '\\nnetworkTimeout=120000\\n';
+  }
+  writeFileSync(wrapperProperties, wrapperConfig, 'utf8');
+
   if (!buildApk) {
     process.stdout.write('\nCapacitor Android project is ready. APK compilation was skipped.\n');
     process.stdout.write('Use the separate build:capacitor:apk command only when a debug APK is explicitly needed.\n');
