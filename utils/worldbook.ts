@@ -376,8 +376,8 @@ export const parseStandardWorldbook = (
         // SillyTavern separates prompt position from sorting priority:
         // `position` chooses the prompt section; `insertion_order` only sorts entries.
         const insertionPosition = value.position;
-        const positionName = typeof insertionOrder === 'string'
-            ? insertionOrder.trim().toLowerCase().replace(/[\s-]+/g, '_')
+        const positionName = typeof insertionPosition === 'string'
+            ? insertionPosition.trim().toLowerCase().replace(/[\s-]+/g, '_')
             : '';
         const positionAliases: Record<string, number> = {
             before: 0, before_char: 0, before_character: 0, world: 0,
