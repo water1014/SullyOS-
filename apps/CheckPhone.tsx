@@ -847,7 +847,10 @@ ${realCharRule}
                 },
             );
 
-            if (!response.ok) throw new Error('API Error');
+            if (!response.ok) {
+            const detail = await response.text().catch(() => '');
+            throw new Error(`API Error ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}`);
+        }
             const data = await safeResponseJson(response);
             // extractContent + extractJson：兼容 Claude 返回格式（正文在 reasoning_content、
             // 包 ```json 代码块、夹散文、尾逗号、内层未转义引号…），裸 JSON.parse 解不出来会丢空。
@@ -988,7 +991,10 @@ ${realCharRule}
             effectiveApiConfig.apiKey,
             { model: effectiveApiConfig.model, messages, temperature },
         );
-        if (!response.ok) throw new Error('API Error');
+        if (!response.ok) {
+            const detail = await response.text().catch(() => '');
+            throw new Error(`API Error ${response.status}${detail ? `: ${detail.slice(0, 240)}` : ''}`);
+        }
         const data = await safeResponseJson(response);
         // 用 extractContent 而非裸读 message.content：兼容 Claude/思考类模型把正文放在
         // reasoning_content、或正文里夹 <think> 块的情况，否则前端拿到空串（"后台出字前端没内容"）。
