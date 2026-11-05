@@ -1,4 +1,5 @@
 import type { APIConfig } from '../types';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { normalizeApiConfig } from './apiConfigNormalize';
 
 const STORAGE_KEY = 'check_phone_api';
@@ -27,3 +28,38 @@ export function resolveCheckPhoneApi(independent: APIConfig | null, chatDefault:
     return independent?.baseUrl ? independent : chatDefault;
 }
 
+
+
+/**
+ * OpenAI-compatible request used by the Check Phone app.
+ * Android WebView fetch is subject to browser CORS; CapacitorHttp performs the
+ * same request through the native HTTP stack and returns a Fetch Response so
+ * existing parsing/error handling stays shared. Web builds retain fetch.
+ */
+export async function requestCheckPhoneApi(
+    url: string,
+    apiKey: string,
+    payload: Record<string, unknown>,
+): Promise<Response> {
+    const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey || 'sk-none'}`,
+    };
+    if (!Capacitor.isNativePlatform()) {
+        return fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+    }
+    const result = await CapacitorHttp.request({
+        url,
+        method: 'POST',
+        headers,
+        data: payload,
+        connectTimeout: 30_000,
+        readTimeout: 90_000,
+        responseType: 'json',
+    });
+    const body = typeof result.data === 'string' ? result.data : JSON.stringify(result.data ?? {});
+    return new Response(body, {
+        status: result.status || 200,
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    });
+}
