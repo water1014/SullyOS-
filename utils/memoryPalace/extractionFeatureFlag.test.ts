@@ -70,6 +70,40 @@ describe('memory extraction smart-context compatibility gate', () => {
         expect(Object.prototype.hasOwnProperty.call(result.memories[0], 'entities')).toBe(false);
     });
 
+    it('retries malformed batch output by splitting messages and preserves extracted memories', async () => {
+        const secondMessage: Message = {
+            ...messages[0],
+            id: 2,
+            content: '后来我们又去了杭州。',
+            timestamp: messages[0].timestamp + 60_000,
+        };
+        mockedSafeFetchJson
+            .mockResolvedValueOnce({ choices: [{ message: { content: '这不是 JSON' }, finish_reason: 'stop' }] } as any)
+            .mockResolvedValueOnce(extractionReply() as any)
+            .mockResolvedValueOnce(extractionReply() as any);
+
+        const result = await extractMemoriesFromBuffer(
+            [messages[0], secondMessage], 'char-extraction-flags', '测试角色', llmConfig, undefined, '用户',
+        );
+
+        expect(mockedSafeFetchJson).toHaveBeenCalledTimes(3);
+        expect(result.memories).toHaveLength(2);
+        expect(result.memories.every(memory => memory.content.length > 0)).toBe(true);
+    });
+
+    it('accepts an explicit empty JSON array without retrying', async () => {
+        mockedSafeFetchJson.mockResolvedValueOnce({
+            choices: [{ message: { content: '[]' }, finish_reason: 'stop' }],
+        } as any);
+
+        const result = await extractMemoriesFromBuffer(
+            messages, 'char-extraction-flags', '测试角色', llmConfig, undefined, '用户',
+        );
+
+        expect(mockedSafeFetchJson).toHaveBeenCalledTimes(1);
+        expect(result.memories).toEqual([]);
+    });
+
     it('adds and stores entities only after recallRouter is enabled', async () => {
         localStorage.setItem('os_memory_palace_config', JSON.stringify({
             featureFlags: { recallRouter: true },
