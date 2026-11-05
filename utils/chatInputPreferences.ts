@@ -3,6 +3,7 @@ export interface ChatInputPreferences {
     sendButtonGenerates: boolean;
     enterToSend: boolean;
     autoReply: boolean;
+    autoReplyDelaySeconds: 1 | 2 | 3 | 5 | 10;
     emojiSuggestions: boolean;
     linkCards?: boolean;
     xhsCards?: boolean;
@@ -16,6 +17,7 @@ export const DEFAULT_CHAT_INPUT_PREFERENCES: ChatInputPreferences = {
     sendButtonGenerates: false,
     enterToSend: true,
     autoReply: false,
+    autoReplyDelaySeconds: 1,
     emojiSuggestions: false,
     linkCards: true,
     xhsCards: true,
@@ -30,6 +32,7 @@ export const normalizeChatInputPreferences = (value: unknown): ChatInputPreferen
         sendButtonGenerates: saved.sendButtonGenerates === true,
         enterToSend: saved.enterToSend !== false,
         autoReply: saved.autoReply === true,
+        autoReplyDelaySeconds: ([1, 2, 3, 5, 10].includes(Number((saved as any).autoReplyDelaySeconds)) ? Number((saved as any).autoReplyDelaySeconds) : 1) as ChatInputPreferences['autoReplyDelaySeconds'],
         emojiSuggestions: saved.emojiSuggestions === true,
         // Existing automatic link conversion stays enabled until explicitly disabled.
         linkCards: saved.linkCards !== false,
