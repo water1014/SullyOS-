@@ -27,7 +27,7 @@ const ChatInputSettings: React.FC<ChatInputSettingsProps> = ({ value, onChange, 
                 {
                     key: 'autoReply',
                     label: '发完后自动生成回复',
-                    help: `发过文字、图片或表情后，等输入框没有草稿和光标、加号等底部面板全部收起，再等 ${value.autoReplyDelaySeconds || 1} 秒让对方回复。继续输入、打开面板或发送新消息，就重新等待。倒计时可以取消。` + (scope === 'group' ? '群聊沿用本群的导演或轮询模式；退出群聊会取消等待。' : ''),
+                    help: `发过文字、图片或表情后，等输入框没有草稿、加号等底部面板全部收起，再等 ${value.autoReplyDelaySeconds || 1} 秒让对方回复。继续输入、打开面板或发送新消息，就重新等待。倒计时可以取消。` + (scope === 'group' ? '群聊沿用本群的导演或轮询模式；退出群聊会取消等待。' : ''),
                 },
                 {
                     key: 'emojiSuggestions',
