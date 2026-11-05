@@ -238,6 +238,18 @@ describe('Capacitor Android 原生键盘视口', () => {
         vi.restoreAllMocks();
     });
 
+    it('原生 Android 不启用浏览器专用的 interactive-widget 双重视口缩放', async () => {
+        const viewport = document.createElement('meta');
+        viewport.name = 'viewport';
+        viewport.content = 'width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content';
+        document.head.appendChild(viewport);
+
+        await install();
+
+        expect(viewport.content).toContain('viewport-fit=cover');
+        expect(viewport.content).not.toMatch(/interactive-widget\s*=/i);
+    });
+
     it('IME 动画只改变 visualViewport 时不二次缩放外壳、不主动滚动页面', async () => {
         await install();
         focusTextarea();
