@@ -359,9 +359,10 @@ function findNaiBase64(value: unknown, depth = 0): { encoded: string; mimeType?:
 }
 
 function repairSingleEntryNaiZipMetadata(source: Uint8Array): Uint8Array | null {
-  const readU16 = (offset: number) => source[offset] | (source[offset + 1] << 8);
-  const readU32 = (offset: number) => (source[offset] | (source[offset + 1] << 8)
-    | (source[offset + 2] << 16) | (source[offset + 3] << 24)) >>> 0;
+  const readU16 = (offset: number) => offset >= 0 && offset + 2 <= source.length
+    ? source[offset] | (source[offset + 1] << 8) : -1;
+  const readU32 = (offset: number) => offset >= 0 && offset + 4 <= source.length
+    ? (source[offset] | (source[offset + 1] << 8) | (source[offset + 2] << 16) | (source[offset + 3] << 24)) >>> 0 : -1;
   const writeU16 = (target: Uint8Array, offset: number, value: number) => {
     target[offset] = value & 0xff;
     target[offset + 1] = (value >>> 8) & 0xff;
@@ -381,53 +382,71 @@ function repairSingleEntryNaiZipMetadata(source: Uint8Array): Uint8Array | null 
   for (let offset = source.length - 22; offset >= Math.max(0, source.length - 22 - 0xffff); offset -= 1) {
     if (hasSignature(offset, 0x50, 0x4b, 0x05, 0x06)) { eocd = offset; break; }
   }
-  if (eocd < 0 || readU16(eocd + 8) !== 1 || readU16(eocd + 10) !== 1) return null;
-
-  const centralSize = readU32(eocd + 12);
-  if (centralSize < 46 || centralSize > 0x10000) return null;
-  const centralOffset = eocd - centralSize;
-  if (!hasSignature(centralOffset, 0x50, 0x4b, 0x01, 0x02)) return null;
-
-  const nameLength = readU16(centralOffset + 28);
-  const extraLength = readU16(centralOffset + 30);
-  const commentLength = readU16(centralOffset + 32);
-  if (46 + nameLength + extraLength + commentLength !== centralSize || nameLength === 0) return null;
-
-  const flags = readU16(centralOffset + 8);
-  const method = readU16(centralOffset + 10);
-  const uncompressedSize = readU32(centralOffset + 24);
-  if ((flags & 0x0009) !== 0 || (method !== 0 && method !== 8)
-    || uncompressedSize === 0 || uncompressedSize > 100 * 1024 * 1024) return null;
-
-  // A one-entry archive beginning with a local header has an unambiguous local offset of zero,
-  // even if the central-directory offset field itself was damaged during text transcoding.
+  if (eocd < 0 || readU16(eocd + 4) !== 0 || readU16(eocd + 6) !== 0
+    || readU16(eocd + 8) !== 1 || readU16(eocd + 10) !== 1) return null;
   if (!hasSignature(0, 0x50, 0x4b, 0x03, 0x04)) return null;
+
   const localFlags = readU16(6);
   const localMethod = readU16(8);
   const localNameLength = readU16(26);
   const localExtraLength = readU16(28);
-  if (localFlags !== flags || localMethod !== method || localNameLength !== nameLength) return null;
-
+  if (localFlags < 0 || localMethod < 0 || localNameLength <= 0 || localExtraLength < 0) return null;
   const dataStart = 30 + localNameLength + localExtraLength;
-  const dataEnd = centralOffset;
-  if (dataStart >= dataEnd) return null;
-  const inferredCompressedSize = dataEnd - dataStart;
-  if (inferredCompressedSize <= 0 || inferredCompressedSize > 0xffffffff) return null;
+  if (dataStart >= eocd) return null;
 
-  const localNameStart = 30;
-  const centralNameStart = centralOffset + 46;
-  for (let index = 0; index < nameLength; index += 1) {
-    if (source[localNameStart + index] !== source[centralNameStart + index]) return null;
+  // Some ZIP writers place a PK0505 central-directory digital-signature record
+  // between the single central-file record and EOCD. eocd - declaredCentralSize
+  // then points at PK0505, not PK0102. Scan the bounded tail and validate the
+  // complete record rather than assuming the central directory touches EOCD.
+  const scanStart = Math.max(dataStart, eocd - 0x10000 - 46);
+  const candidates: Array<{ offset: number; size: number; gap: number; flags: number; method: number; nameLength: number; uncompressedSize: number }> = [];
+  for (let offset = scanStart; offset <= eocd - 46; offset += 1) {
+    if (!hasSignature(offset, 0x50, 0x4b, 0x01, 0x02)) continue;
+    const nameLength = readU16(offset + 28);
+    const extraLength = readU16(offset + 30);
+    const commentLength = readU16(offset + 32);
+    const entrySize = 46 + nameLength + extraLength + commentLength;
+    const entryEnd = offset + entrySize;
+    if (nameLength <= 0 || extraLength < 0 || commentLength < 0 || entryEnd > eocd) continue;
+    const gap = eocd - entryEnd;
+    const validGap = gap === 0 || (
+      gap >= 6 && hasSignature(entryEnd, 0x50, 0x4b, 0x05, 0x05)
+      && readU16(entryEnd + 4) === gap - 6
+    );
+    if (!validGap) continue;
+
+    const flags = readU16(offset + 8);
+    const method = readU16(offset + 10);
+    const uncompressedSize = readU32(offset + 24);
+    const diskStart = readU16(offset + 34);
+    if (flags !== localFlags || method !== localMethod || diskStart !== 0
+      || (flags & 0x0009) !== 0 || (method !== 0 && method !== 8)
+      || uncompressedSize <= 0 || uncompressedSize > 100 * 1024 * 1024
+      || nameLength !== localNameLength) continue;
+
+    let sameName = true;
+    for (let index = 0; index < nameLength; index += 1) {
+      if (source[30 + index] !== source[offset + 46 + index]) { sameName = false; break; }
+    }
+    if (!sameName || dataStart >= offset) continue;
+    candidates.push({ offset, size: entrySize, gap, flags, method, nameLength, uncompressedSize });
   }
 
+  // Recovery is intentionally limited to one unambiguous, unencrypted image entry.
+  if (candidates.length !== 1) return null;
+  const central = candidates[0];
+  const inferredCompressedSize = central.offset - dataStart;
+  if (inferredCompressedSize <= 0 || inferredCompressedSize > 0xffffffff) return null;
+
   const repaired = source.slice();
-  const crc = readU32(centralOffset + 16);
+  const crc = readU32(central.offset + 16);
   writeU32(repaired, 14, crc);
   writeU32(repaired, 18, inferredCompressedSize);
-  writeU32(repaired, 22, uncompressedSize);
-  writeU32(repaired, centralOffset + 20, inferredCompressedSize);
-  writeU32(repaired, centralOffset + 42, 0);
-  writeU32(repaired, eocd + 16, centralOffset);
+  writeU32(repaired, 22, central.uncompressedSize);
+  writeU32(repaired, central.offset + 20, inferredCompressedSize);
+  writeU32(repaired, central.offset + 42, 0);
+  writeU32(repaired, eocd + 12, central.size);
+  writeU32(repaired, eocd + 16, central.offset);
   writeU16(repaired, eocd + 20, Math.max(0, source.length - eocd - 22));
   return repaired;
 }
@@ -472,7 +491,7 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
     const candidates = repaired ? [buffer, repaired] : [buffer];
     for (const candidate of candidates) {
       try {
-        const archive = await JSZip.loadAsync(candidate);
+        const archive = await JSZip.loadAsync(candidate, { checkCRC32: true });
         const imageFile = Object.values(archive.files).find(file =>
           !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
         );
