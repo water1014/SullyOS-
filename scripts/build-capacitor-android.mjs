@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -65,7 +65,7 @@ async function main() {
     }
     gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${versionCode}`);
     gradle = gradle.replace(/versionName\s+['"][^'"]+['"]/, `versionName "${versionName.replace(/["\\\\]/g, '')}"`);
-    if (!gradle.includes("apply from: 'signing.gradle'")) gradle += "\\n\\napply from: 'signing.gradle'\\n";
+    if (!gradle.includes("apply from: 'signing.gradle'")) gradle += "\n\napply from: 'signing.gradle'\n";
     writeFileSync(appGradle, gradle, 'utf8');
     writeFileSync(join(androidApp, 'signing.gradle'), `
 def signingStorePath = System.getenv('ANDROID_KEYSTORE_PATH')
@@ -98,7 +98,7 @@ android {
   const apkPath = join(androidApp, 'build', 'outputs', 'apk', variant, apkName);
   if (!existsSync(apkPath)) throw new Error(`Gradle reported success but the ${variant} APK was not found.`);
   const sha256 = createHash('sha256').update(readFileSync(apkPath)).digest('hex');
-  process.stdout.write(`\\n${buildRelease ? 'Signed release' : 'Debug test'} APK compiled: ${apkPath}\\nSHA-256: ${sha256}\\n`);
+  process.stdout.write(`\n${buildRelease ? 'Signed release' : 'Debug test'} APK compiled: ${apkPath}\nSHA-256: ${sha256}\n`);
   if (buildRelease) run(process.env.APKSIGNER_PATH || 'apksigner', ['verify', '--verbose', '--print-certs', apkPath]);
 
 }
