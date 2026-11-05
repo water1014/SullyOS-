@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Directory, Filesystem } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import JSZip from 'jszip';
 import {
   ArrowLeft, ArrowsClockwise, Check, Copy, DownloadSimple, GearSix, ImageSquare,
@@ -901,12 +904,54 @@ const ImageStudioApp: React.FC = () => {
     }
   };
 
-  const downloadImage = (item: DisplayImage) => {
-    const anchor = document.createElement('a');
-    anchor.href = item.url;
+  const downloadImage = async (item: DisplayImage) => {
     const extension = item.mimeType === 'image/webp' ? 'webp' : item.mimeType === 'image/jpeg' ? 'jpg' : 'png';
-    anchor.download = `nuomi-${item.engine}-${new Date(item.createdAt).toISOString().slice(0, 10)}.${extension}`;
-    anchor.click();
+    const filename = `nuomi-${item.engine}-${new Date(item.createdAt).toISOString().slice(0, 10)}.${extension}`;
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // Android WebView does not reliably honor <a download> for blob: URLs.
+        // Materialize the original image blob to app cache, then hand its file URI
+        // to the native share sheet so the user can save it to Downloads/Photos.
+        const response = await fetch(item.url);
+        if (!response.ok) throw new Error(`读取图片失败（HTTP ${response.status}）`);
+        const blob = await response.blob();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const result = String(reader.result || '');
+            const base64 = result.includes(',') ? result.slice(result.indexOf(',') + 1) : '';
+            if (!base64) reject(new Error('图片编码失败'));
+            else resolve(base64);
+          };
+          reader.onerror = () => reject(reader.error || new Error('读取图片失败'));
+          reader.readAsDataURL(blob);
+        });
+        const saved = await Filesystem.writeFile({
+          path: `sullyos-exports/${Date.now()}-${filename}`,
+          data: dataUrl,
+          directory: Directory.Cache,
+          recursive: true,
+        });
+        await Share.share({
+          title: '保存生图作品',
+          text: filename,
+          files: [saved.uri],
+          dialogTitle: '保存图片',
+        });
+        addToast('已打开系统分享面板，可选择保存到设备或文件', 'success');
+        return;
+      }
+      const anchor = document.createElement('a');
+      anchor.href = item.url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      addToast('已开始下载图片', 'success');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '图片下载失败';
+      addToast(`图片下载失败：${message.slice(0, 100)}`, 'error');
+    }
   };
 
   const copyPrompt = async (value: string) => {
