@@ -300,6 +300,7 @@ export interface APIConfig {
     naiModel?: string;
     naiCustomHeaders?: Record<string, string>;
     naiPositivePrompt?: string;
+    naiPositiveSuffix?: string;
     naiNegativePrompt?: string;
     naiWidth?: number;
     naiHeight?: number;
@@ -312,6 +313,7 @@ export interface APIConfig {
     gptModel?: string;
     gptCustomHeaders?: Record<string, string>;
     gptPositivePrompt?: string;
+    gptPositiveSuffix?: string;
     gptNegativePrompt?: string;
     gptNegativePromptMode?: 'append' | 'field' | 'omit';
     gptSize?: string;
