@@ -17,6 +17,9 @@
     },
     "StatusBar": {
       "overlaysWebView": true
+    },
+    "CapacitorHttp": {
+      "enabled": true
     }
   }
 }
