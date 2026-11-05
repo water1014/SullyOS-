@@ -523,7 +523,7 @@ pinDays 仅在需要置顶时才写，大多数记忆不需要。
         const reply = data.choices?.[0]?.message?.content || '';
         const finishReason = data.choices?.[0]?.finish_reason;
         const parsed = safeParseJsonArray(reply);
-        const isExplicitEmptyArray = /^\\s*(?:```(?:json)?\\s*)?\\[\\s*\\]\\s*(?:```)?\\s*$/i.test(reply);
+        const isExplicitEmptyArray = /^\s*(?:```(?:json)?\s*)?\[\s*\]\s*(?:```)?\s*$/i.test(reply);
         const wasTruncated = ['length', 'max_tokens'].includes(finishReason);
         const hasValidArray = parsed.length > 0 || isExplicitEmptyArray;
 
