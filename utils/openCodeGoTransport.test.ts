@@ -99,7 +99,7 @@ describe('OpenCode Go transport', () => {
 
   it('keeps browser and unrelated requests on fetch', async () => {
     const native = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response('native'));
-    const fallback = vi.fn(async () => Response.json({ ok: true }));
+    const fallback = vi.fn(async (_resource: RequestInfo | URL, _init?: RequestInit) => Response.json({ ok: true }));
     const transport = createOpenCodeGoTransport(false, native, fallback);
     const response = await transport('https://opencode.ai/zen/go/v1/models');
     expect(native).not.toHaveBeenCalled();
