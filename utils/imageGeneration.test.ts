@@ -232,6 +232,49 @@ describe('image generation clients', () => {
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(png.slice(0, 8));
   });
 
+  it('recovers a single-image ZIP with a central-directory digital-signature record', async () => {
+    const zip = new JSZip();
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0));
+    zip.file('image_0.png', png);
+    const original = new Uint8Array(await zip.generateAsync({ type: 'uint8array' }));
+    const findSignature = (bytes: Uint8Array, a: number, b: number, c: number, d: number) => {
+      for (let index = 0; index <= bytes.length - 4; index += 1) {
+        if (bytes[index] === a && bytes[index + 1] === b
+          && bytes[index + 2] === c && bytes[index + 3] === d) return index;
+      }
+      return -1;
+    };
+    const originalEocd = findSignature(original, 0x50, 0x4b, 0x05, 0x06);
+    expect(originalEocd).toBeGreaterThan(0);
+    const withSignature = new Uint8Array(original.length + 8);
+    withSignature.set(original.subarray(0, originalEocd));
+    // PK0505 + two-byte payload length + two payload bytes.
+    withSignature.set([0x50, 0x4b, 0x05, 0x05, 0x02, 0x00, 0xaa, 0xbb], originalEocd);
+    withSignature.set(original.subarray(originalEocd), originalEocd + 8);
+
+    const damaged = withSignature.slice();
+    const eocd = originalEocd + 8;
+    damaged.fill(0xff, eocd + 16, eocd + 20);
+    damaged[eocd + 20] = 0x1b;
+    damaged[eocd + 21] = 0x00;
+    damaged.fill(0xff, 18, 22);
+    const withTrailingBytes = new Uint8Array(damaged.length + 2);
+    withTrailingBytes.set(damaged);
+    withTrailingBytes.set([0x00, 0x00], damaged.length);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(withTrailingBytes, {
+      status: 200, headers: { 'Content-Type': 'application/zip' },
+    })));
+
+    const blob = await generateNaiImage(
+      { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      'blue hair',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
+    );
+    expect(blob.type).toBe('image/png');
+    expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(png.slice(0, 8));
+  });
+
   it('reports ZIP directory inconsistencies and transport headers for corrupted NAI responses', async () => {
     const zip = new JSZip();
     zip.file('image_0.png', Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0)));
