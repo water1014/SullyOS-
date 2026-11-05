@@ -9,6 +9,7 @@ export interface ChatStudioImageInput {
   model: string;
   positivePrompt: string;
   negativePrompt: string;
+  sceneDescription: string;
   createdAt: number;
   mimeType: string;
   naiSettings?: { size: string; steps: number; scale: number; sampler: string; seed?: number };
@@ -33,6 +34,9 @@ export async function upsertChatImageStudioItem(input: ChatStudioImageInput): Pr
       engine: input.engine,
       prompt: input.positivePrompt,
       negativePrompt: input.negativePrompt,
+      requestPrompt: input.positivePrompt,
+      requestNegativePrompt: input.negativePrompt,
+      sceneDescription: input.sceneDescription,
       model: input.model,
       createdAt: input.createdAt,
       mimeType: input.mimeType || 'image/png',
