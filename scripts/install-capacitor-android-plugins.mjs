@@ -68,22 +68,32 @@ async function patchCapacitorAndroidKeyboard() {
     throw new Error('Capacitor Keyboard Android source was not found. Refusing to build without the IME resize fix.');
   }
 
-  if (source.includes('SullyOS Android 16 IME inset fix')) return;
+  if (source.includes('SullyOS Android 16 IME inset fix v2')) return;
   const legacyMethod = /private int computeUsableHeight\(\) \{\s*Rect r = new Rect\(\);\s*mChildOfContent\.getWindowVisibleDisplayFrame\(r\);\s*return isOverlays\(\) \? r\.bottom : r\.height\(\);\s*\}/;
   if (!legacyMethod.test(source)) {
     throw new Error('Capacitor Keyboard computeUsableHeight() changed. Review the upstream plugin before building; no unverified patch was applied.');
   }
 
+  // Capacitor 6's fullscreen workaround detects overlays through a deprecated
+  // system-UI flag. On edge-to-edge devices this can misclassify the window and
+  // compute the wrong WebView height. Read IME/system-bar insets from the actual
+  // content child, and use the system-bar bottom inset while IME is hidden.
+  source = addImport(source, 'import androidx.core.graphics.Insets;');
+  source = addImport(source, 'import androidx.core.view.ViewCompat;');
+  source = addImport(source, 'import androidx.core.view.WindowInsetsCompat;');
+
   const modernMethod = `private int computeUsableHeight() {
-        // SullyOS Android 16 IME inset fix: use the actual keyboard inset rather than
-        // getWindowVisibleDisplayFrame(), whose bottom edge can be stale on fullscreen
-        // edge-to-edge devices and can resize the WebView to the wrong height.
-        WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(rootView);
-        int rootHeight = rootView.getHeight();
-        if (insets != null && rootHeight > 0) {
-            int imeBottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom;
-            if (imeBottom > 0 && imeBottom < rootHeight) {
-                return Math.max(1, rootHeight - imeBottom);
+        // SullyOS Android 16 IME inset fix v2: account for fullscreen edge-to-edge
+        // and use the content child's own bounds, not the decor/root view bounds.
+        WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(mChildOfContent);
+        int contentHeight = mChildOfContent.getHeight();
+        if (insets != null && contentHeight > 0) {
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
+            boolean imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime());
+            int bottomInset = imeVisible ? ime.bottom : systemBars.bottom;
+            if (bottomInset >= 0 && bottomInset < contentHeight) {
+                return Math.max(1, contentHeight - bottomInset);
             }
         }
         Rect r = new Rect();
