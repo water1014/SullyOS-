@@ -272,9 +272,9 @@ function findNaiBase64(value: unknown, depth = 0): { encoded: string; mimeType?:
   for (const key of ['image', 'image_base64', 'base64', 'b64_json', 'output', 'result']) {
     const candidate = object[key];
     if (typeof candidate === 'string' && candidate.trim()) {
-      const match = candidate.trim().match(/^(?:data:(image\\/[a-z0-9.+-]+);base64,)?([a-z0-9+/=_-\\s]+)$/i);
-      if (match && match[2].replace(/\\s/g, '').length > 0) {
-        return { encoded: match[2].replace(/\\s/g, '').replace(/-/g, '+').replace(/_/g, '/'), mimeType: match[1] || mimeType };
+      const match = candidate.trim().match(/^(?:data:(image\/[a-z0-9.+-]+);base64,)?([a-z0-9+/=_\-\s]+)$/i);
+      if (match && match[2].replace(/\s/g, '').length > 0) {
+        return { encoded: match[2].replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/'), mimeType: match[1] || mimeType };
       }
     }
     if (candidate && typeof candidate === 'object') {
