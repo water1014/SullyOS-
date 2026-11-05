@@ -137,7 +137,7 @@ const NAI_NEGATIVE_PACKS = [
 ];
 
 const ImageStudioApp: React.FC = () => {
-  const { closeApp, addToast, activeCharacterId, characters } = useOS();
+  const { closeApp, addToast, activeCharacterId, characters, apiConfig } = useOS();
   const [tab, setTab] = useState<'create' | 'gallery' | 'tasks' | 'settings'>('create');
   const [engine, setEngine] = useState<ImageEngine>('gpt');
   const [config, setConfig] = useState<StudioConfig>(readConfig);
@@ -164,6 +164,49 @@ const ImageStudioApp: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
   const [error, setError] = useState('');
+  const sharedImageConfig = apiConfig.chatImage;
+  useEffect(() => {
+    if (!sharedImageConfig?.enabled) return;
+    const sharedEngine = sharedImageConfig.engine || 'nai';
+    setEngine(sharedEngine);
+    setNegativePrompt(sharedEngine === 'nai'
+      ? (sharedImageConfig.naiNegativePrompt || 'low quality, worst quality, blurry, bad anatomy')
+      : (sharedImageConfig.gptNegativePrompt || ''));
+    if (sharedEngine === 'gpt') {
+      setConfig(current => ({
+        ...current,
+        gpt: {
+          baseUrl: sharedImageConfig.gptBaseUrl || current.gpt.baseUrl,
+          apiKey: sharedImageConfig.gptApiKey || current.gpt.apiKey,
+          model: sharedImageConfig.gptModel || current.gpt.model,
+          customHeaders: JSON.stringify(sharedImageConfig.gptCustomHeaders || {}),
+        },
+      }));
+      setGptSize(sharedImageConfig.gptSize || '1024x1024');
+      setGptQuality(sharedImageConfig.gptQuality || 'high');
+    } else {
+      const profile = {
+        provider: sharedImageConfig.naiProvider || 'official',
+        baseUrl: sharedImageConfig.naiProvider === 'thirdparty'
+          ? (sharedImageConfig.naiBaseUrl || '')
+          : 'https://image.novelai.net',
+        apiKey: sharedImageConfig.naiApiKey || '',
+        model: sharedImageConfig.naiModel || 'nai-diffusion-5-full',
+        customHeaders: JSON.stringify(sharedImageConfig.naiCustomHeaders || {}),
+      } as NaiImageConfig;
+      setConfig(current => ({
+        ...current,
+        nai: profile,
+        ...(profile.provider === 'official' ? { naiOfficial: profile } : { naiThirdParty: profile }),
+      }));
+      setNaiSize(`${sharedImageConfig.naiWidth || 832}x${sharedImageConfig.naiHeight || 1216}`);
+      setNaiSteps(sharedImageConfig.naiSteps || 28);
+      setNaiScale(sharedImageConfig.naiScale || 5);
+      setNaiSampler(sharedImageConfig.naiSampler || 'k_euler_ancestral');
+      setNaiSeed(sharedImageConfig.naiSeed || '');
+    }
+  }, [sharedImageConfig]);
+
   const [images, setImages] = useState<DisplayImage[]>([]);
   const [visualTasks, setVisualTasks] = useState<VisualTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -428,7 +471,14 @@ const ImageStudioApp: React.FC = () => {
       const visualMemories = activeCharacterId
         ? await visualCompanionRepository.listMemories(activeCharacterId)
         : [];
-      const effectivePrompt = mergeCharacterVisualContextPrompt(prompt, currentAppearanceProfile, visualMemories);
+      const scenePrompt = mergeCharacterVisualContextPrompt(prompt, currentAppearanceProfile, visualMemories);
+      const fixedPositive = engine === 'nai'
+        ? (sharedImageConfig?.enabled ? sharedImageConfig.naiPositivePrompt : '')
+        : (sharedImageConfig?.enabled ? sharedImageConfig.gptPositivePrompt : '');
+      const effectivePrompt = [fixedPositive, scenePrompt].map(part => (part || '').trim()).filter(Boolean).join(', ');
+      const effectiveNegativePrompt = sharedImageConfig?.enabled
+        ? (engine === 'nai' ? (sharedImageConfig.naiNegativePrompt || negativePrompt) : (sharedImageConfig.gptNegativePrompt || ''))
+        : negativePrompt;
       // GPT 生图优先使用用户本次上传的参考图；未上传时回退到角色档案的基础形象图。
       // NAI 保持纯文生图，不把参考图悄悄发送给不支持该流程的接口。
       let effectiveReferenceImage: Blob | File | null = engine === 'gpt' ? referenceImage : null;
@@ -443,26 +493,39 @@ const ImageStudioApp: React.FC = () => {
         }
         effectiveReferenceImage = baseBlob;
       }
-      if (engine === 'nai' && naiSeed.trim()) {
-        const parsedSeed = Number(naiSeed);
+      if (engine === 'nai' && (sharedImageConfig?.enabled ? (sharedImageConfig.naiSeed || '') : naiSeed).trim()) {
+        const parsedSeed = Number(sharedImageConfig?.enabled ? sharedImageConfig.naiSeed : naiSeed);
         if (!Number.isSafeInteger(parsedSeed) || parsedSeed < 0 || parsedSeed > 4294967295) {
           throw new Error('Seed 必须是 0 到 4294967295 之间的整数，或留空使用随机种子');
         }
       }
+      const activeNaiSeed = sharedImageConfig?.enabled ? (sharedImageConfig.naiSeed || '') : naiSeed;
       const effectiveNaiSeed = engine === 'nai'
-        ? (naiSeed.trim() ? Number(naiSeed) : Math.floor(Math.random() * 4294967296))
+        ? (activeNaiSeed.trim() ? Number(activeNaiSeed) : Math.floor(Math.random() * 4294967296))
         : undefined;
       if (effectiveNaiSeed !== undefined) setNaiSeed(String(effectiveNaiSeed));
+      const activeNaiSize = sharedImageConfig?.enabled
+        ? `${sharedImageConfig.naiWidth || 832}x${sharedImageConfig.naiHeight || 1216}`
+        : naiSize;
       const naiOptions = {
-        width: Number(naiSize.split('x')[0]), height: Number(naiSize.split('x')[1]),
-        steps: naiSteps, scale: naiScale, sampler: naiSampler,
+        width: Number(activeNaiSize.split('x')[0]), height: Number(activeNaiSize.split('x')[1]),
+        steps: sharedImageConfig?.enabled ? (sharedImageConfig.naiSteps || 28) : naiSteps,
+        scale: sharedImageConfig?.enabled ? (sharedImageConfig.naiScale || 5) : naiScale,
+        sampler: sharedImageConfig?.enabled ? (sharedImageConfig.naiSampler || 'k_euler_ancestral') : naiSampler,
         ...(effectiveNaiSeed !== undefined ? { seed: effectiveNaiSeed } : {}),
       };
+      const gptNegativeMode = sharedImageConfig?.gptNegativePromptMode || 'append';
+      const gptRequestPrompt = engine === 'gpt' && effectiveNegativePrompt && sharedImageConfig?.enabled && gptNegativeMode === 'append'
+        ? `${effectivePrompt}. Avoid: ${effectiveNegativePrompt}`
+        : effectivePrompt;
+      const gptNegativeField = sharedImageConfig?.enabled
+        ? (gptNegativeMode === 'field' ? effectiveNegativePrompt : undefined)
+        : effectiveNegativePrompt;
       const blob = engine === 'gpt'
         ? effectiveReferenceImage
-          ? await editGptImage(config.gpt, effectiveReferenceImage, effectivePrompt, { size: gptSize, quality: gptQuality, negativePrompt, signal: controller.signal })
-          : await generateGptImage(config.gpt, effectivePrompt, { size: gptSize, quality: gptQuality, negativePrompt, signal: controller.signal })
-        : await generateNaiImage(config.nai, effectivePrompt, negativePrompt, naiOptions, controller.signal);
+          ? await editGptImage(config.gpt, effectiveReferenceImage, gptRequestPrompt, { size: gptSize, quality: gptQuality, negativePrompt: gptNegativeField, signal: controller.signal })
+          : await generateGptImage(config.gpt, gptRequestPrompt, { size: gptSize, quality: gptQuality, negativePrompt: gptNegativeField, signal: controller.signal })
+        : await generateNaiImage(config.nai, effectivePrompt, effectiveNegativePrompt, naiOptions, controller.signal);
       await saveImage(blob, effectiveNaiSeed, currentAppearanceProfile?.status === 'active' ? currentAppearanceProfile.version : undefined);
       addToast('图片已生成并保存到我的画廊', 'success');
     } catch (cause) {
