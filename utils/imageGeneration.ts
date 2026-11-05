@@ -1,5 +1,4 @@
 import JSZip from 'jszip';
-import { unzipSync } from 'fflate';
 
 export type ImageEngine = 'gpt' | 'nai';
 
@@ -376,129 +375,12 @@ function findNaiBase64(value: unknown, depth = 0): { encoded: string; mimeType?:
   return null;
 }
 
-function calculateNaiCrc32(bytes: Uint8Array): number {
-  let crc = 0xffffffff;
-  for (const byte of bytes) {
-    crc ^= byte;
-    for (let bit = 0; bit < 8; bit += 1) {
-      crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
-
-function repairSingleEntryNaiZipMetadata(source: Uint8Array): Uint8Array | null {
-  const readU16 = (offset: number) => offset >= 0 && offset + 2 <= source.length
-    ? source[offset] | (source[offset + 1] << 8) : -1;
-  const readU32 = (offset: number) => offset >= 0 && offset + 4 <= source.length
-    ? (source[offset] | (source[offset + 1] << 8) | (source[offset + 2] << 16) | (source[offset + 3] << 24)) >>> 0 : -1;
-  const writeU16 = (target: Uint8Array, offset: number, value: number) => {
-    target[offset] = value & 0xff;
-    target[offset + 1] = (value >>> 8) & 0xff;
-  };
-  const writeU32 = (target: Uint8Array, offset: number, value: number) => {
-    target[offset] = value & 0xff;
-    target[offset + 1] = (value >>> 8) & 0xff;
-    target[offset + 2] = (value >>> 16) & 0xff;
-    target[offset + 3] = (value >>> 24) & 0xff;
-  };
-  const hasSignature = (offset: number, a: number, b: number, c: number, d: number) =>
-    offset >= 0 && offset + 4 <= source.length
-    && source[offset] === a && source[offset + 1] === b
-    && source[offset + 2] === c && source[offset + 3] === d;
-
-  let eocd = -1;
-  for (let offset = source.length - 22; offset >= Math.max(0, source.length - 22 - 0xffff); offset -= 1) {
-    if (hasSignature(offset, 0x50, 0x4b, 0x05, 0x06)) { eocd = offset; break; }
-  }
-  if (eocd < 0 || readU16(eocd + 4) !== 0 || readU16(eocd + 6) !== 0
-    || readU16(eocd + 8) !== 1 || readU16(eocd + 10) !== 1) return null;
-  if (!hasSignature(0, 0x50, 0x4b, 0x03, 0x04)) return null;
-
-  const localFlags = readU16(6);
-  const localMethod = readU16(8);
-  const localNameLength = readU16(26);
-  const localExtraLength = readU16(28);
-  if (localFlags < 0 || localMethod < 0 || localNameLength <= 0 || localExtraLength < 0) return null;
-  const dataStart = 30 + localNameLength + localExtraLength;
-  if (dataStart >= eocd) return null;
-
-  // Some ZIP writers place a PK0505 central-directory digital-signature record
-  // between the single central-file record and EOCD. eocd - declaredCentralSize
-  // then points at PK0505, not PK0102. Scan the bounded tail and validate the
-  // complete record rather than assuming the central directory touches EOCD.
-  const scanStart = Math.max(dataStart, eocd - 0x10000 - 46);
-  const candidates: Array<{ offset: number; size: number; gap: number; flags: number; method: number; nameLength: number; uncompressedSize: number }> = [];
-  for (let offset = scanStart; offset <= eocd - 46; offset += 1) {
-    if (!hasSignature(offset, 0x50, 0x4b, 0x01, 0x02)) continue;
-    const nameLength = readU16(offset + 28);
-    const extraLength = readU16(offset + 30);
-    const commentLength = readU16(offset + 32);
-    const entrySize = 46 + nameLength + extraLength + commentLength;
-    const entryEnd = offset + entrySize;
-    if (nameLength <= 0 || extraLength < 0 || commentLength < 0 || entryEnd > eocd) continue;
-    const gap = eocd - entryEnd;
-    const validGap = gap === 0 || (
-      gap >= 6 && hasSignature(entryEnd, 0x50, 0x4b, 0x05, 0x05)
-      && readU16(entryEnd + 4) === gap - 6
-    );
-    if (!validGap) continue;
-
-    const flags = readU16(offset + 8);
-    const method = readU16(offset + 10);
-    const uncompressedSize = readU32(offset + 24);
-    const diskStart = readU16(offset + 34);
-    if (flags !== localFlags || method !== localMethod || diskStart !== 0
-      || (flags & 0x0009) !== 0 || (method !== 0 && method !== 8)
-      || uncompressedSize <= 0 || uncompressedSize > 100 * 1024 * 1024
-      || nameLength !== localNameLength) continue;
-
-    let sameName = true;
-    for (let index = 0; index < nameLength; index += 1) {
-      if (source[30 + index] !== source[offset + 46 + index]) { sameName = false; break; }
-    }
-    if (!sameName || dataStart >= offset) continue;
-    candidates.push({ offset, size: entrySize, gap, flags, method, nameLength, uncompressedSize });
-  }
-
-  // Recovery is intentionally limited to one unambiguous, unencrypted image entry.
-  if (candidates.length !== 1) return null;
-  const central = candidates[0];
-  const inferredCompressedSize = central.offset - dataStart;
-  if (inferredCompressedSize <= 0 || inferredCompressedSize > 0xffffffff) return null;
-
-  // Normalize the optional central-directory digital-signature record away.
-  // JSZip and fflate do not consistently accept this record between the
-  // central directory and EOCD, even when its length is valid.
-  let repaired: Uint8Array;
-  let repairedEocd = eocd;
-  if (central.gap > 0) {
-    const entryEnd = central.offset + central.size;
-    repairedEocd = eocd - central.gap;
-    repaired = new Uint8Array(source.length - central.gap);
-    repaired.set(source.subarray(0, entryEnd), 0);
-    repaired.set(source.subarray(eocd), repairedEocd);
-  } else {
-    repaired = source.slice();
-  }
-  const crc = readU32(central.offset + 16);
-  writeU32(repaired, 14, crc);
-  writeU32(repaired, 18, inferredCompressedSize);
-  writeU32(repaired, 22, central.uncompressedSize);
-  writeU32(repaired, central.offset + 20, inferredCompressedSize);
-  writeU32(repaired, central.offset + 42, 0);
-  writeU32(repaired, repairedEocd + 12, central.size);
-  writeU32(repaired, repairedEocd + 16, central.offset);
-  writeU16(repaired, repairedEocd + 20, Math.max(0, repaired.length - repairedEocd - 22));
-  return repaired;
-}
-
 async function readNaiImageResponse(response: Response): Promise<Blob> {
   const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
   const buffer = new Uint8Array(await response.arrayBuffer());
   if (!buffer.length) throw new Error('NAI 服务返回了空内容');
 
-  // Gateways sometimes label raw PNG/JPEG/WebP bytes as application/octet-stream.
+  // Binary-safe first: never decode an unknown response as text before checking image/ZIP magic.
   const directMime = sniffImageMime(buffer);
   if (directMime) return new Blob([buffer], { type: directMime });
 
@@ -528,46 +410,24 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
   }
 
   if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
-    let originalError = '';
-    const repaired = repairSingleEntryNaiZipMetadata(buffer);
-    const candidates = repaired ? [buffer, repaired] : [buffer];
-    for (const candidate of candidates) {
-      try {
-        const archive = await JSZip.loadAsync(candidate, { checkCRC32: true });
-        const imageFile = Object.values(archive.files).find(file =>
-          !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
-        );
-        if (!imageFile) throw new Error('ZIP 中没有 PNG/JPEG/WebP 图片条目');
-        const bytes = await imageFile.async('uint8array');
-        const mimeType = sniffImageMime(bytes);
-        if (!mimeType) throw new Error('ZIP 图片条目解压后不是有效的 PNG/JPEG/WebP 数据');
-        return new Blob([bytes], { type: mimeType });
-      } catch (error) {
-        if (!originalError) originalError = error instanceof Error ? error.message : String(error);
-      }
-
-      // 柏宝绘同样使用 fflate。作为第二套独立解码器，兼容 JSZip 不接受的
-      // ZIP 变体；同时校验本地头 CRC，避免把损坏的压缩数据误报为成功。
-      try {
-        const files = unzipSync(candidate);
-        const imageName = Object.keys(files).find(name => /\.(png|webp|jpe?g)$/i.test(name));
-        if (!imageName) throw new Error('ZIP 中没有 PNG/JPEG/WebP 图片条目');
-        const bytes = files[imageName];
-        const expectedCrc = (candidate[14] | (candidate[15] << 8)
-          | (candidate[16] << 16) | (candidate[17] << 24)) >>> 0;
-        if (calculateNaiCrc32(bytes) !== expectedCrc) throw new Error('ZIP 图片 CRC 校验失败，响应数据可能已损坏');
-        const mimeType = sniffImageMime(bytes);
-        if (!mimeType) throw new Error('ZIP 图片条目解压后不是有效的 PNG/JPEG/WebP 数据');
-        return new Blob([bytes], { type: mimeType });
-      } catch (error) {
-        if (!originalError) originalError = error instanceof Error ? error.message : String(error);
-      }
+    try {
+      const archive = await JSZip.loadAsync(buffer, { checkCRC32: true });
+      const imageFile = Object.values(archive.files).find(file =>
+        !file.dir && /\\.(png|webp|jpe?g)$/i.test(file.name),
+      );
+      if (!imageFile) throw new Error('ZIP 中没有 PNG/JPEG/WebP 图片条目');
+      const bytes = await imageFile.async('uint8array');
+      const mimeType = sniffImageMime(bytes);
+      if (!mimeType) throw new Error('ZIP 图片条目解压后不是有效的 PNG/JPEG/WebP 数据');
+      return new Blob([bytes], { type: mimeType });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`NAI 返回 ZIP，但 ZIP 结构或图片校验失败：${reason.slice(0, 160)}。未修改响应元数据。响应诊断：${describeNaiZip(buffer, response)}`);
     }
-    throw new Error(`NAI 返回 ZIP，但解包失败：${originalError.slice(0, 180)}。已尝试安全修复单文件 ZIP 元数据；响应诊断：${describeNaiZip(buffer, response)}`);
   }
 
   const prefixHex = Array.from(buffer.subarray(0, 16), byte => byte.toString(16).padStart(2, '0')).join(' ');
-  const safePrefix = new TextDecoder().decode(buffer.subarray(0, 160)).replace(/[^\x20-\x7e\u4e00-\u9fff]/g, '.');
+  const safePrefix = new TextDecoder().decode(buffer.subarray(0, 160)).replace(/[^\\x20-\\x7e\\u4e00-\\u9fff]/g, '.');
   throw new Error(`NAI 返回了无法识别的数据（Content-Type: ${contentType || '未知'}，长度: ${buffer.length} bytes，文件头: ${prefixHex}，文本预览: ${safePrefix || '无'}）。请核对第三方接口的响应协议。`);
 }
 
@@ -596,10 +456,10 @@ export async function generateNaiImage(
     headers: buildImageRequestHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey.trim()}`,
-      // NAI's synchronous /generate-image protocol is ZIP. Some compatible gateways
-      // may still return JSON/base64, which the response reader accepts by content sniffing.
-      // Do not force JSON negotiation on gateways whose documented contract is ZIP.
-      Accept: 'application/zip, application/octet-stream, */*',
+      // NovelAI's synchronous endpoint supports JSON/base64 when application/json is
+      // preferred in Accept. Third-party NAI gateways may still return ZIP, which is retained
+      // as a strict compatibility fallback. Never repair malformed ZIP metadata client-side.
+      Accept: provider === 'thirdparty' ? 'application/json, application/zip, application/octet-stream, */*' : 'application/zip, application/octet-stream, */*',
     }, config.customHeaders),
     body: JSON.stringify({
       input: prompt.trim(),
