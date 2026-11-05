@@ -67,7 +67,7 @@ import { loadChatInputPreferences, saveChatInputPreferences } from '../utils/cha
 import { collectAppearance, collectCharSettings, collectDataScale, collectFeatureFlagsAsync, collectSARFeatureFlags } from '../utils/analyticsSnapshot';
 import { normalizeApiConfig, normalizeApiPreset, isOpenCodeGoEndpoint, getOpenCodeSessionId } from '../utils/apiConfigNormalize';
 import { fetchLlm } from '../utils/anthropicApi';
-import { fetchOpenCodeGo } from '../utils/openCodeGoTransport';
+import { fetchOpenCodeGo, normalizeOpenCodeGoRequestUrl } from '../utils/openCodeGoTransport';
 import { getCheckPhoneApi, setCheckPhoneApi } from '../utils/checkPhoneApi';
 import { markBackupDone } from '../utils/backupReminder';
 import { collectSARLocalBackup, restoreSARLocalBackup } from '../utils/vrWorld/sarBackup';
@@ -1196,7 +1196,7 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       const patchedFetch = async (...args: [RequestInfo | URL, RequestInit?]) => {
           const [resource, config] = args;
           
-          const urlStr = typeof resource === 'string'
+          const rawUrlStr = typeof resource === 'string'
               ? resource
               : (typeof Request !== 'undefined' && resource instanceof Request)
                   ? resource.url
@@ -1205,7 +1205,9 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
                       : String(resource);
           // Location lookup URLs contain device coordinates. Keep them out of API
           // capture, network diagnostics and request comparison caches; direct only.
-          if (isUserLocationLookupUrl(urlStr)) return originalFetch(...args);
+          if (isUserLocationLookupUrl(rawUrlStr)) return originalFetch(...args);
+          // Feature-specific settings may store the Go service root without /v1.
+          const urlStr = isOpenCodeGoEndpoint(rawUrlStr) ? normalizeOpenCodeGoRequestUrl(rawUrlStr) : rawUrlStr;
           const fetchStartedAt = Date.now();
           // 失败诊断要按发起时刻去 Resource Timing 里认领本次那条记录，而 entry.startTime 跟
           // performance.now() 同一条时间轴、跟 Date.now() 不是——两者不能混用，详见
@@ -1234,7 +1236,10 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
                   const scope = requestMeta?.charId ? `conversation:${requestMeta.charId}` : 'app-default';
                   headers.set('x-opencode-session', getOpenCodeSessionId(`transport:${scope}`));
               }
-              sendArgs = [resource, { ...((sendArgs[1] as RequestInit | undefined) || {}), headers }];
+              const normalizedResource = urlStr === rawUrlStr ? resource
+                  : request ? new Request(urlStr, request)
+                  : resource instanceof URL ? new URL(urlStr) : urlStr;
+              sendArgs = [normalizedResource, { ...((sendArgs[1] as RequestInit | undefined) || {}), headers }];
           }
           // 透明流式升级状态（utils/streamUpgrade.ts）：请求侧改写 → 响应侧拼回 JSON
           let streamUpgraded = false;
@@ -1261,7 +1266,10 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
                               streamUpgraded = true;
                           }
                       }
-                      if (body !== rawBody) sendArgs = [resource, { ...(config as RequestInit), body }];
+                      if (body !== rawBody) {
+                          // Preserve the Go session header and caller metadata after body normalization.
+                          sendArgs = [sendArgs[0], { ...((sendArgs[1] as RequestInit | undefined) || {}), body }];
+                      }
                   } catch { /* 非 JSON body：原样放行 */ }
               }
 

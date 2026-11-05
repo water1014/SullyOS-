@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createOpenCodeGoTransport } from './openCodeGoTransport';
+import { createOpenCodeGoTransport, normalizeOpenCodeGoRequestUrl } from './openCodeGoTransport';
 
 describe('OpenCode Go transport', () => {
+  it('normalizes raw Go roots for feature-specific API callers', () => {
+    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/zen/go/chat/completions')).toBe('https://opencode.ai/zen/go/v1/chat/completions');
+    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/zen/go/messages')).toBe('https://opencode.ai/zen/go/v1/messages');
+    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/inference/go/chat/completions')).toBe('https://opencode.ai/inference/go/openai/v1/chat/completions');
+    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/zen/go/v1/chat/completions')).toBe('https://opencode.ai/zen/go/v1/chat/completions');
+  });
+
   it('adds a stable session header to Go requests that forgot to provide one', async () => {
     const native = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => Response.json({
       session: new Headers(init?.headers).get('x-opencode-session'),

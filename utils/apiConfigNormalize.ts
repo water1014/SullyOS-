@@ -41,21 +41,32 @@ export const isOpenCodeGoEndpoint = (baseUrl: string): boolean =>
 
 /**
  * Stable OpenCode Go session per feature/conversation scope.
- * OpenCode Go requires x-opencode-session on every request; persisting this
- * value avoids creating a fresh upstream session for each background task.
+ * Persist where possible and keep a module-local fallback if WebView storage fails.
  */
+const fallbackSessionIds = new Map<string, string>();
+const createOpenCodeSessionId = (): string => {
+  const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID().replace(/-/g, '')
+    : Date.now().toString(36) + Math.random().toString(36).slice(2);
+  return 'ses_' + random;
+};
 export const getOpenCodeSessionId = (scope: string): string => {
   const key = `sully:opencode-session:${scope}`;
+  const cached = fallbackSessionIds.get(scope);
   try {
     const existing = localStorage.getItem(key);
-    if (existing) return existing;
-    const generated = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `sully-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    if (existing) {
+      fallbackSessionIds.set(scope, existing);
+      return existing;
+    }
+    const generated = cached || createOpenCodeSessionId();
     localStorage.setItem(key, generated);
+    fallbackSessionIds.set(scope, generated);
     return generated;
   } catch {
-    return `sully-${scope}-${Date.now().toString(36)}`;
+    const generated = cached || createOpenCodeSessionId();
+    fallbackSessionIds.set(scope, generated);
+    return generated;
   }
 };
 
