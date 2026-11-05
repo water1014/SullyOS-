@@ -45,67 +45,11 @@ function registerPlugin(source, className) {
   return source.slice(0, classClose) + method + source.slice(classClose);
 }
 
-async function patchCapacitorAndroidKeyboard() {
-  const keyboardJavaPath = join(
-    root,
-    'node_modules',
-    '@capacitor',
-    'keyboard',
-    'android',
-    'src',
-    'main',
-    'java',
-    'com',
-    'capacitorjs',
-    'plugins',
-    'keyboard',
-    'Keyboard.java',
-  );
-  let source;
-  try {
-    source = await readFile(keyboardJavaPath, 'utf8');
-  } catch {
-    throw new Error('Capacitor Keyboard Android source was not found. Refusing to build without the IME resize fix.');
-  }
-
-  if (source.includes('SullyOS Android 16 IME animation settle fix')) return;
-  const legacyMethod = /private int computeUsableHeight\(\) \{\s*Rect r = new Rect\(\);\s*mChildOfContent\.getWindowVisibleDisplayFrame\(r\);\s*return isOverlays\(\) \? r\.bottom : r\.height\(\);\s*\}/;
-  if (!legacyMethod.test(source)) {
-    throw new Error('Capacitor Keyboard computeUsableHeight() changed. Review the upstream plugin before building; no unverified patch was applied.');
-  }
-
-  // Capacitor 6 calculates the fullscreen resize at IME animation start. On
-  // edge-to-edge Android devices the visible display frame may not have settled
-  // yet at that point. Recalculate once more after the IME animation ends, using
-  // Capacitor's original overlay-aware height calculation. Do not subtract IME
-  // insets from a child view that Android may already have resized.
-  const endMethod = /public void onEnd\(@NonNull WindowInsetsAnimationCompat animation\) \{\s*super\.onEnd\(animation\);\s*boolean showingKeyboard = ViewCompat\.getRootWindowInsets\(rootView\)\.isVisible\(WindowInsetsCompat\.Type\.ime\(\)\);/;
-  if (!endMethod.test(source)) {
-    throw new Error('Capacitor Keyboard onEnd() changed. Review the upstream plugin before building; no unverified patch was applied.');
-  }
-  source = source.replace(endMethod, `public void onEnd(@NonNull WindowInsetsAnimationCompat animation) {
-                    super.onEnd(animation);
-                    boolean showingKeyboard = ViewCompat.getRootWindowInsets(rootView).isVisible(WindowInsetsCompat.Type.ime());
-                    if (resizeOnFullScreen) {
-                        // SullyOS Android 16 IME animation settle fix: remeasure after
-                        // the final insets are dispatched, not only at animation start.
-                        possiblyResizeChildOfContent(showingKeyboard);
-                    }`);
-  source = source.replace(
-    /if \(source\.includes\('SullyOS Android 16 IME animation settle fix'\)\) return;/,
-    "if (source.includes('SullyOS Android 16 IME animation settle fix')) return;",
-  );
-  await writeFile(keyboardJavaPath, source, 'utf8');
-  process.stdout.write('Capacitor Android keyboard resize patched to use WindowInsetsCompat IME bounds.\n');
-}
-
 async function main() {
   const config = JSON.parse(await readFile(join(root, 'capacitor.config.json'), 'utf8'));
   if (config.appId !== packageName) {
     throw new Error(`Unexpected Capacitor appId: ${config.appId}; native plugins are pinned to ${packageName}`);
   }
-
-  await patchCapacitorAndroidKeyboard();
 
   const mainActivities = await findFiles(javaRoot, 'MainActivity.java');
   if (mainActivities.length !== 1) {
