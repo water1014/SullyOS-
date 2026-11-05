@@ -183,8 +183,10 @@ describe('image generation clients', () => {
     expect(url).toBe('https://nai-proxy.example/ai/generate-image');
     expect(new Headers(request.headers).get('Authorization')).toBe('Bearer thirdparty-token');
     expect(new Headers(request.headers).get('x-provider')).toBe('studio-test');
+    expect(new Headers(request.headers).get('Accept')).toBe('*/*');
     expect(JSON.parse(String(request.body))).toMatchObject({
       action: 'generate',
+      use_new_shared_trial: true,
       model: 'nai-diffusion-5-full',
       parameters: { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 0, negative_prompt: 'blurry' },
     });
