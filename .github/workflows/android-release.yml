@@ -1,6 +1,9 @@
 name: Build signed Android migration and release APKs
 
 on:
+  push:
+    branches:
+      - feature/image-studio
   workflow_dispatch:
 
 permissions:
