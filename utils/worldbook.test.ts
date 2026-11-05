@@ -33,6 +33,16 @@ describe('worldbook activation', () => {
         expect(isWorldbookEntryActive(keywordBook, [{ content: '今晚下雨' }])).toBe(false);
     });
 
+    it('accepts comma- and newline-delimited keyword strings from compatible JSON exports', () => {
+        const imported = parseStandardWorldbook(JSON.stringify({ entries: [{
+            content: '关键词字符串导入测试', key: '月港, 灯塔，潮汐\\n海雾',
+            keysecondary: '船长,守夜人', selective: true, comment: '',
+        }] }), '字符串关键词');
+        expect(imported[0].key).toEqual(['月港', '灯塔', '潮汐', '海雾']);
+        expect(imported[0].keysecondary).toEqual(['船长', '守夜人']);
+        expect(imported[0].title).toBe('月港');
+    });
+
     it('matches Chinese and Japanese lore keywords even when Tavern whole-word mode is enabled', () => {
         expect(isWorldbookEntryActive(book({ constant: false, key: ['月亮'], matchWholeWords: true }), [{ content: '今晚月亮升起来了' }])).toBe(true);
         expect(isWorldbookEntryActive(book({ constant: false, key: ['東京'], matchWholeWords: true }), [{ content: '今夜は東京の街を歩く' }])).toBe(true);

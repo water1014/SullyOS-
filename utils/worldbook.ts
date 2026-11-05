@@ -62,8 +62,10 @@ const clamp = (value: unknown, min: number, max: number, fallback: number): numb
 };
 
 const asStringArray = (value: unknown): string[] => {
-    if (!Array.isArray(value)) return [];
-    return value.map(item => String(item).trim()).filter(Boolean);
+    const values = Array.isArray(value)
+        ? value
+        : typeof value === 'string' ? value.split(/[,，\\n]/) : [];
+    return values.map(item => String(item).trim()).filter(Boolean);
 };
 
 export const splitWorldbookKeywords = (value: string): string[] => (
@@ -393,7 +395,7 @@ export const parseStandardWorldbook = (
         const rawOrder = value.order == null || value.order === '' ? NaN : Number(value.order);
         return [{
             id: `wb-${now}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-            title: String(value.comment || value.name || value.title || value.key?.[0] || value.keys?.[0] || `条目 ${uid + 1}`).trim() || `条目 ${uid + 1}`,
+            title: String(value.comment || value.name || value.title || primary[0] || `条目 ${uid + 1}`).trim() || `条目 ${uid + 1}`,
             content: value.content,
             category,
             createdAt: now,
