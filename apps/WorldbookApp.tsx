@@ -10,6 +10,7 @@ import {
     WORLDBOOK_POSITION_DESCRIPTIONS,
     WORLDBOOK_POSITION_LABELS,
     WORLDBOOK_ROLE_LABELS,
+    upsertMountedWorldbooks,
 } from '../utils/worldbook';
 import { confirmExportSafety } from '../utils/exportGuard';
 import { shareOrDownloadFile } from '../utils/shareExport';
@@ -17,7 +18,7 @@ import { readShareFile } from '../utils/pngShare';
 import { trackEvent } from '../utils/analytics';
 
 const WorldbookApp: React.FC = () => {
-    const { closeApp, worldbooks, addWorldbook, addWorldbooks, updateWorldbook, updateWorldbooks, deleteWorldbook, deleteWorldbooks, addToast } = useOS();
+    const { closeApp, worldbooks, addWorldbook, addWorldbooks, updateWorldbook, updateWorldbooks, deleteWorldbook, deleteWorldbooks, addToast, characters, activeCharacterId, updateCharacter } = useOS();
     
     // View State
     const [isEditing, setIsEditing] = useState(false);
@@ -204,7 +205,15 @@ const WorldbookApp: React.FC = () => {
             const category = source.name.replace(/\.json$/i, '').trim() || '导入世界书';
             const imported = parseStandardWorldbook(text, category);
             await addWorldbooks(imported);
-            addToast(`已导入 ${imported.length} 条。还需到角色编辑 → 世界书中挂载，聊天才会使用`, 'success');
+            const activeCharacter = characters.find(character => character.id === activeCharacterId);
+            if (activeCharacter) {
+                await updateCharacter(activeCharacter.id, current => ({
+                    mountedWorldbooks: upsertMountedWorldbooks(current.mountedWorldbooks || [], imported),
+                }));
+                addToast(`已导入并挂载 ${imported.length} 条到当前角色「${activeCharacter.name}」，聊天即可使用`, 'success');
+            } else {
+                addToast(`已导入 ${imported.length} 条到世界书库。当前没有激活角色，请在角色编辑 → 世界书中挂载`, 'success');
+            }
             setExpandedCategory(category);
         } catch (error: any) {
             addToast(error?.message || '世界书导入失败', 'error');
