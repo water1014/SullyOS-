@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mergeImportedWorldbooks, parseStandardWorldbook } from './worldbook';
+import { mergeImportedWorldbooks } from './worldbook';
 import type { MountedWorldbook, Worldbook } from '../types';
 import {
     injectWorldbookDepthEntries,
     isWorldbookEntryActive,
-    parseStandardWorldbook,
     resolveWorldbookEntries,
     serializeStandardWorldbook,
     splitWorldbookSections,
