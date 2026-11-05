@@ -200,7 +200,7 @@ describe('image generation clients', () => {
 
     expect(blob.type).toBe('image/png');
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
-    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Accept')).toBe('application/json');
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Accept')).toBe('application/zip, application/octet-stream, */*');
   });
 
   it('extracts the first image from NovelAI ZIP output', async () => {
@@ -222,7 +222,7 @@ describe('image generation clients', () => {
     expect(url).toBe('https://nai-proxy.example/ai/generate-image');
     expect(new Headers(request.headers).get('Authorization')).toBe('Bearer thirdparty-token');
     expect(new Headers(request.headers).get('x-provider')).toBe('studio-test');
-    expect(new Headers(request.headers).get('Accept')).toBe('application/json');
+    expect(new Headers(request.headers).get('Accept')).toBe('application/zip, application/octet-stream, */*');
     expect(JSON.parse(String(request.body))).toMatchObject({
       action: 'generate',
       use_new_shared_trial: true,
