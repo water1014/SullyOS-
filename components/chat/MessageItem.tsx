@@ -3123,6 +3123,8 @@ const MessageItem = React.memo(({
                         eager={isLatestMessage}
                         onLoad={() => onMediaLoad?.(m.id)}
                         generation={(m as any).metadata?.chatImageGeneration}
+                        variants={(m as any).metadata?.chatImageVariants || [m.content]}
+                        activeVariantIndex={(m as any).metadata?.activeChatImageVariant || 0}
                         messageId={m.id}
                         charId={m.charId}
                     />
