@@ -939,6 +939,7 @@ const PhoneShell: React.FC = () => {
 
   const bgImageValue = getBgStyle(theme.wallpaper);
   const lockBgImageValue = getBgStyle(theme.lockWallpaper || theme.wallpaper);
+  const wallpaperIsCssImage = /^(?:url\\(|(?:repeating-)?(?:linear|radial|conic)-gradient\\()/i.test(bgImageValue);
   const contentColor = theme.contentColor || '#ffffff';
   const acnhSkin = theme.skin === 'animalcrossing'; // 动森彩蛋：锁屏换暖色草地点缀
   const storedCompanionFrame = theme.skin === 'companion' ? loadCompanionFrameStyle() : null;
@@ -1093,17 +1094,24 @@ const PhoneShell: React.FC = () => {
        <div
          className={`absolute inset-0 bg-cover bg-center ${isNativeAndroid ? '' : 'transition-all duration-500 ease-[cubic-bezier(0.25,0.1,0.25,1)]'}`}
          style={{
-             backgroundImage: bgImageValue,
+             // 原生 Android 将壁纸透明度与白色遮罩合并进同一组背景绘制，避免
+             // opacity 分组图层 + 独立半透明覆盖层同时参与 Surface 合成。
+             backgroundImage: isNativeAndroid && activeApp !== AppID.Launcher
+               ? `linear-gradient(rgba(255,255,255,0.5), rgba(255,255,255,0.5)), linear-gradient(to bottom right, rgba(251,207,232,0.4) 0%, rgba(233,213,255,0.4) 50%, rgba(199,210,254,0.4) 100%), ${wallpaperIsCssImage ? bgImageValue : 'none'}`
+               : bgImageValue,
+             backgroundColor: isNativeAndroid && activeApp !== AppID.Launcher && !wallpaperIsCssImage
+               ? theme.wallpaper
+               : undefined,
              // Android 系统悬浮窗覆盖时，WebView 的大面积滤镜合成层容易触发额外 Surface 重绘。
-             // 仅原生 Android 降级为纯色遮罩；浏览器/iOS 保留原有景深效果。
+             // 仅原生 Android 降级为纯背景绘制；浏览器/iOS 保留原有景深效果。
              filter: activeApp !== AppID.Launcher && !isNativeAndroid ? 'blur(10px)' : 'none',
-             opacity: activeApp !== AppID.Launcher ? 0.6 : 1,
+             opacity: isNativeAndroid || activeApp === AppID.Launcher ? 1 : 0.6,
              backfaceVisibility: isNativeAndroid ? 'visible' : 'hidden',
              contain: useIOSStandaloneLayout || isNativeAndroid ? undefined : 'strict'
          }}
        />
        
-       <div className={`absolute inset-0 ${isNativeAndroid ? '' : 'transition-all duration-500'} ${activeApp === AppID.Launcher ? 'bg-transparent' : isNativeAndroid ? 'bg-white/50' : 'bg-white/50 backdrop-blur-3xl'}`} />
+       <div className={`absolute inset-0 ${isNativeAndroid ? '' : 'transition-all duration-500'} ${activeApp === AppID.Launcher || isNativeAndroid ? 'bg-transparent' : 'bg-white/50 backdrop-blur-3xl'}`} />
        
        {/* 外壳安全区两种策略：
           - 未迁移 App：外壳铺满 body（含 --app-height 多出的 +safe-bottom 溢出区），用 padding 让位安全区，
