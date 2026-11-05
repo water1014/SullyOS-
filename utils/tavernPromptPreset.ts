@@ -5,6 +5,7 @@ export interface TavernPresetPrompt {
     content?: string;
     system_prompt?: boolean;
     marker?: boolean;
+    enabled?: boolean;
     injection_position?: number;
     injection_depth?: number;
     injection_order?: number;
@@ -99,12 +100,16 @@ export const renderTavernPromptPreset = (preset: TavernPromptPreset): string => 
         prompt.identifier || prompt.name || `__index_${index}`,
         prompt,
     ]));
-    const order = preset.prompt_order[0]?.order;
-    const ordered = order?.length
+    const order = preset.prompt_order.find(group => group.order?.length)?.order;
+    const orderedFromOrder = order?.length
         ? order.filter(item => item.enabled).map(item => byId.get(item.identifier)).filter((item): item is TavernPresetPrompt => !!item)
+        : [];
+    // Preserve modules absent from prompt_order (including modules added in the editor).
+    const ordered = order?.length
+        ? [...orderedFromOrder, ...preset.prompts.filter(prompt => !orderedFromOrder.includes(prompt))]
         : preset.prompts;
     const sections = ordered
-        .filter(prompt => !prompt.marker && typeof prompt.content === 'string' && prompt.content.trim())
+        .filter(prompt => prompt.enabled !== false && !prompt.marker && typeof prompt.content === 'string' && prompt.content.trim())
         .map(prompt => {
             const role = typeof prompt.role === 'string' && prompt.role.trim() ? prompt.role.trim() : 'system';
             const name = prompt.name || prompt.identifier || '提示词模块';
