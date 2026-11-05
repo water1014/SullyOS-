@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+
 let hasInstalledIOSStandaloneWorkaround = false;
 let stableStandaloneHeight = 0;
 // 这台设备要不要做键盘避让（iOS 全屏 PWA / 安卓浏览器）。装载时定下，
@@ -192,7 +194,10 @@ export const installIOSStandaloneWorkaround = () => {
     const useStandaloneFixes = isIOSStandaloneWebApp();
     // iOS 全屏 PWA 与安卓浏览器都需要这套键盘避让：可视区一变矮就挂 keyboard 类 + 锁外层滚动。
     // 安卓 Chrome/Edge 弹键盘时会把整页顶起，同样靠这套压回去。
-    const useKeyboardFixes = isIOSDevice() || isAndroidDevice();
+    // Capacitor Android already resizes its fullscreen WebView through the native Keyboard plugin
+    // (resizeOnFullScreen). Do not layer the browser-level focus/scroll workaround on top of it:
+    // the duplicate viewport/focus handling can fight the native IME while it is opening.
+    const useKeyboardFixes = isIOSDevice() || (isAndroidDevice() && !Capacitor.isNativePlatform());
     keyboardFixesEnabled = useKeyboardFixes;
     if (useStandaloneFixes) {
         document.documentElement.classList.add('ios-standalone');
