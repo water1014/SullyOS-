@@ -60,6 +60,7 @@ import { isAnthropicEndpoint } from '../utils/llmEndpoint';
 import { anthropicContinuation } from '../utils/anthropicApi';
 import { buildClaudeProxyCompatibilityBody, shouldRetryClaudeProxyCompatibility } from '../utils/claudeProxyCompat';
 import { routeMiniAppToolCall } from '../utils/miniAppToolRoute';
+import { CHAT_IMAGE_TOOL, CHAT_IMAGE_TOOL_NAME, executeChatImageTool } from '../utils/chatImageTool';
 import { applyEmotionEvalRaw, extractAssistantText } from '../utils/emotionApply';
 import { announceChatGen, CHAT_GEN_EVENTS } from '../utils/chatGenEvents';
 import {
@@ -1127,7 +1128,13 @@ export const useChatAI = ({
             // ⚠️ 工具模式(瑞幸点单/麦当劳)下绝不带 thinking/reasoning 参数: "thinking + tools" 同发
             //    Gemini 等会直接 400 INVALID_ARGUMENT —— 表现就是"开了思考链的角色一点单就报错,
             //    换个没开思考链的角色就好"。工具循环优先, 思考链这一轮让步。
-            const toolModeActive = payload.flags.luckinChatActive || payload.flags.mcdActive || payload.flags.luckinActive || payload.flags.mcpChatActive;
+            // 聊天生图只在本地生成路径启用；即时对话 Worker 暂不支持本地图片工具。
+            const chatImageToolInjected = apiConfig.chatImage?.enabled === true
+                && (apiConfig.chatImage?.engine === 'gpt'
+                    ? !!(apiConfig.chatImage?.gptApiKey && apiConfig.chatImage?.gptBaseUrl)
+                    : !!apiConfig.chatImage?.naiApiKey)
+                && !instantChatRoute;
+            const toolModeActive = payload.flags.luckinChatActive || payload.flags.mcdActive || payload.flags.luckinActive || payload.flags.mcpChatActive || chatImageToolInjected;
             // 主动消息 2.0 的工具本轮会不会注入：thinking 门要先知道这件事（工具在下面才真正
             // 拼进 tools，但参数取舍必须现在就定）。角色级开关关掉的不注入——否则被用户显式
             // 关掉的功能会被角色一次工具调用重新打开。
@@ -1172,6 +1179,10 @@ export const useChatAI = ({
                     baseReqBody.tools = luckinTools;
                     baseReqBody.tool_choice = 'auto';
                 }
+            }
+            if (chatImageToolInjected) {
+                baseReqBody.tools = [...(baseReqBody.tools || []), CHAT_IMAGE_TOOL];
+                if (!baseReqBody.tool_choice) baseReqBody.tool_choice = 'auto';
             }
             // 通用 MCP: 用户自配服务器的已发现工具, 追加而不覆盖(可与瑞幸/麦当劳共存)。
             // 工具清单读的是设置里持久化的发现结果, 不发网络请求。
@@ -1724,7 +1735,7 @@ export const useChatAI = ({
             //       createOrder 被拦截 —— 下单付款必须用户在结账卡上点。
             //     · 通用 MCP: 工具名命中 mcpToolResolve 映射就分发给对应服务器 (utils/mcpClient),
             //       结果只回填循环不落卡片。两类工具可同时在场, 按名字各走各的。
-            if ((payload.flags.luckinChatActive || mcpToolResolve || amsg2ToolsInjected) && data.choices?.[0]?.message?.tool_calls?.length) {
+            if ((payload.flags.luckinChatActive || mcpToolResolve || amsg2ToolsInjected || chatImageToolInjected) && data.choices?.[0]?.message?.tool_calls?.length) {
                 // 普通点单/排程维持 6 轮；接了通用 MCP 时允许游戏/论坛类任务自然推进到
                 // 12 轮。模型正常给正文会立刻 break，并不是固定多发 12 次请求。
                 const MAX_LOOPS = mcpToolResolve ? MCP_CHAT_MAX_TOOL_LOOPS : 6;
@@ -1796,6 +1807,24 @@ export const useChatAI = ({
                                 mcpProgressThisRound = true;
                             }
                             loopMessages.push(buildToolResultMessage(tc, mcpMsg) as any);
+                            continue;
+                        }
+                        // 聊天生图：固定提示词来自设置，模型只提供当前场景描述。
+                        if (fname === CHAT_IMAGE_TOOL_NAME && chatImageToolInjected) {
+                            setSearchStatus('正在为这段聊天绘制画面…');
+                            try {
+                                const generated = await replyStep(() => executeChatImageTool(apiConfig, char.id, char.name, args, replyRun.signal));
+                                setMessages(await replyStep(async () => DB.getRecentMessagesByCharId(char.id, 200)));
+                                loopMessages.push(buildToolResultMessage(
+                                    tc,
+                                    `图片已生成并作为图片消息发送到当前聊天（messageId: ${generated.messageId}）。场景：${generated.sceneDescription}。请自然地继续对话，不要再次调用生图工具。`,
+                                ) as any);
+                            } catch (error: any) {
+                                replyRun.check();
+                                loopMessages.push(buildToolResultMessage(tc, `图片生成失败：${error?.message || String(error)}。请不要反复重试，继续正常聊天或询问用户是否要再试一次。`) as any);
+                            } finally {
+                                setSearchStatus('');
+                            }
                             continue;
                         }
                         // 主动消息 2.0 工具
