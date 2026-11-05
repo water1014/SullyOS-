@@ -82,6 +82,24 @@ describe('SillyTavern prompt preset import', () => {
         localStorage.clear();
     });
 
+    it('allows manually re-enabling a module disabled in the imported order', () => {
+        const source = {
+            name: '手动开关',
+            prompts: [
+                { identifier: 'a', name: '默认启用', role: 'system', content: 'A' },
+                { identifier: 'b', name: '原本关闭', role: 'system', content: 'B', enabled: false },
+            ],
+            prompt_order: [{ order: [
+                { identifier: 'a', enabled: true },
+                { identifier: 'b', enabled: false },
+            ] }],
+        };
+        const preset = parseTavernPromptPreset(JSON.stringify(source));
+        preset.manualOrder = true;
+        preset.prompts[1].enabled = true;
+        expect(renderTavernPromptPreset(preset)).toContain('B');
+    });
+
     it('gives a clear message when a worldbook is passed to the preset importer', () => {
         expect(() => parseTavernPromptPreset(JSON.stringify({ entries: [] }))).toThrow(/prompts/);
     });
