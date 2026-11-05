@@ -464,7 +464,7 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
       try {
         const archive = await JSZip.loadAsync(candidate);
         const imageFile = Object.values(archive.files).find(file =>
-          !file.dir && /\\.(png|webp|jpe?g)$/i.test(file.name),
+          !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
         );
         if (!imageFile) throw new Error('ZIP 中没有 PNG/JPEG/WebP 图片条目');
         const bytes = await imageFile.async('uint8array');
