@@ -105,6 +105,19 @@ const isTextEntryElement = (target: EventTarget | null): target is HTMLElement =
 
 const setViewportVars = () => {
     if (typeof document === 'undefined') return;
+
+    // 原生 Android APK 的窗口尺寸由 Capacitor Keyboard 原生层负责。
+    // 不要再拿 visualViewport 的键盘动画高度改写整棵 App 外壳，也不要在 IME 动画中 scrollTo：
+    // 两套 resize/pan 同时生效会让固定定位输入框失去焦点，表现为键盘刚弹出就收回。
+    if (Capacitor.isNativePlatform() && isAndroidDevice()) {
+        const nativeHeight = Math.max(1, Math.round(window.innerHeight || document.documentElement.clientHeight || 1));
+        document.body.classList.remove('ios-keyboard-open');
+        document.documentElement.style.setProperty('--app-height', `${nativeHeight}px`);
+        document.documentElement.style.setProperty('--visual-viewport-height', `${nativeHeight}px`);
+        document.documentElement.style.setProperty('--keyboard-inset', '0px');
+        return;
+    }
+
     const shouldStabilizeHeight = isIOSStandaloneWebApp();
     const innerHeight = Math.round(window.innerHeight);
     const viewportHeight = Math.round(window.visualViewport?.height || innerHeight);
