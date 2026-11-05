@@ -118,6 +118,7 @@ export async function executeChatImageTool(
   const syncImageStudio = async () => {
     await upsertChatImageStudioItem({
       messageId, blobRef, engine, model, positivePrompt: positive, negativePrompt: negative,
+      sceneDescription: scene,
       createdAt: generation.createdAt, mimeType: blob.type || 'image/png',
       ...(generation.naiSettings ? { naiSettings: {
         size: `${generation.naiSettings.width}x${generation.naiSettings.height}`,
