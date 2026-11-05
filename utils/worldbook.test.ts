@@ -33,6 +33,17 @@ describe('worldbook activation', () => {
         expect(isWorldbookEntryActive(keywordBook, [{ content: '今晚下雨' }])).toBe(false);
     });
 
+    it('matches Chinese and Japanese lore keywords even when Tavern whole-word mode is enabled', () => {
+        expect(isWorldbookEntryActive(book({ constant: false, key: ['月亮'], matchWholeWords: true }), [{ content: '今晚月亮升起来了' }])).toBe(true);
+        expect(isWorldbookEntryActive(book({ constant: false, key: ['東京'], matchWholeWords: true }), [{ content: '今夜は東京の街を歩く' }])).toBe(true);
+    });
+
+    it('keeps whole-word boundaries for Latin keywords', () => {
+        const latin = book({ constant: false, key: ['moon'], matchWholeWords: true });
+        expect(isWorldbookEntryActive(latin, [{ content: 'the moon is bright' }])).toBe(true);
+        expect(isWorldbookEntryActive(latin, [{ content: 'moonlight is bright' }])).toBe(false);
+    });
+
     it('respects secondary keyword logic and disabled state', () => {
         const selectiveBook = book({
             constant: false,
