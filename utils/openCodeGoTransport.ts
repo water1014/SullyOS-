@@ -1,3 +1,5 @@
+import { getOpenCodeSessionId } from './apiConfigNormalize';
+
 type NativeStreamingFetch = typeof fetch;
 
 // Resolve fetch at call time so tests, webviews, and host fetch instrumentation can replace it.
@@ -31,13 +33,21 @@ export function createOpenCodeGoTransport(
     const url = typeof resource === 'string'
       ? resource
       : resource instanceof URL ? resource.href : resource.url;
-    if (!isNative || !(/opencode\.ai\/(?:inference\/go|zen\/go)(?:\/|$)/i.test(url))) {
+    if (!(/opencode\\.ai\\/(?:inference\\/go|zen\\/go)(?:\\/|$)/i.test(url))) {
       return fallback(resource, init);
     }
     const request = resource instanceof Request ? resource : undefined;
     const method = (init?.method || request?.method || 'GET').toUpperCase();
     const headers = new Headers(init?.headers || request?.headers);
+    // All OpenCode Go requests need a stable session, including feature-specific paths
+    // that do not construct the standard chat headers themselves.
+    const requestMeta = (init as (RequestInit & { __sullyMeta?: { charId?: string } }) | undefined)?.__sullyMeta;
+    if (!headers.has('x-opencode-session')) {
+      const scope = requestMeta?.charId ? `conversation:${requestMeta.charId}` : 'app-default';
+      headers.set('x-opencode-session', getOpenCodeSessionId(`transport:${scope}`));
+    }
     if (!headers.has('user-agent')) headers.set('user-agent', 'SullyOS/1.0');
+    if (!isNative) return fallback(resource, { ...(init || {}), headers });
     const body = init?.body ?? (request && method !== 'GET' && method !== 'HEAD'
       ? await request.clone().text()
       : undefined);
