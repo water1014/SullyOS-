@@ -39,6 +39,26 @@ export const isOpenCodeInferenceEndpoint = (baseUrl: string): boolean =>
 export const isOpenCodeGoEndpoint = (baseUrl: string): boolean =>
   /opencode\.ai\/(?:inference\/go|zen\/go)(?:\/|$)/i.test(baseUrl.trim());
 
+/**
+ * Stable OpenCode Go session per feature/conversation scope.
+ * OpenCode Go requires x-opencode-session on every request; persisting this
+ * value avoids creating a fresh upstream session for each background task.
+ */
+export const getOpenCodeSessionId = (scope: string): string => {
+  const key = `sully:opencode-session:${scope}`;
+  try {
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const generated = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `sully-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(key, generated);
+    return generated;
+  } catch {
+    return `sully-${scope}-${Date.now().toString(36)}`;
+  }
+};
+
 export const buildApiRequestHeaders = (
   apiKey: string,
   customHeaders?: unknown,
