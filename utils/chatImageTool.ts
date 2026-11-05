@@ -2,6 +2,7 @@ import type { APIConfig } from '../types';
 import { DB } from './db';
 import { putImageBlob } from './blobRef';
 import { generateNaiImage, generateGptImage } from './imageGeneration';
+import { upsertChatImageStudioItem } from './imageStudioIndex';
 
 export const CHAT_IMAGE_TOOL_NAME = 'generate_chat_image';
 
@@ -98,6 +99,18 @@ export async function executeChatImageTool(
     } : undefined,
   };
   let messageId: number;
+  const syncImageStudio = async () => {
+    await upsertChatImageStudioItem({
+      messageId, blobRef, engine, model, positivePrompt: positive, negativePrompt: negative,
+      createdAt: generation.createdAt, mimeType: blob.type || 'image/png',
+      ...(generation.naiSettings ? { naiSettings: {
+        size: `${generation.naiSettings.width}x${generation.naiSettings.height}`,
+        steps: generation.naiSettings.steps, scale: generation.naiSettings.scale,
+        sampler: generation.naiSettings.sampler,
+        ...(Number.isFinite(Number(generation.naiSettings.seed)) && generation.naiSettings.seed !== '' ? { seed: Number(generation.naiSettings.seed) } : {}),
+      } } : {}),
+    });
+  };
   let galleryUrl = blobRef;
   if (reroll?.targetMessageId) {
     messageId = reroll.targetMessageId;
@@ -130,6 +143,8 @@ export async function executeChatImageTool(
     } catch (error) {
       console.warn('[ChatImageTool] reroll gallery sync failed', error);
     }
+    try { await syncImageStudio(); }
+    catch (error) { console.warn('[ChatImageTool] reroll Image Studio sync failed', error); }
   } else {
     messageId = await DB.saveMessage({
       charId,
@@ -156,6 +171,8 @@ export async function executeChatImageTool(
     } catch (error) {
       console.warn('[ChatImageTool] generated image gallery sync failed', error);
     }
+    try { await syncImageStudio(); }
+    catch (error) { console.warn('[ChatImageTool] Image Studio sync failed', error); }
   }
   return { messageId, blobRef, engine, model, sceneDescription: scene };
 }
