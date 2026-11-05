@@ -190,6 +190,38 @@ describe('image generation clients', () => {
     });
   });
 
+  it('recovers a single-image NAI ZIP when its EOCD offset and local size fields are damaged', async () => {
+    const zip = new JSZip();
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0));
+    zip.file('image_0.png', png);
+    const archive = new Uint8Array(await zip.generateAsync({ type: 'uint8array' }));
+    const damaged = archive.slice();
+    const findSignature = (a: number, b: number, c: number, d: number) => {
+      for (let index = 0; index <= damaged.length - 4; index += 1) {
+        if (damaged[index] === a && damaged[index + 1] === b
+          && damaged[index + 2] === c && damaged[index + 3] === d) return index;
+      }
+      return -1;
+    };
+    const eocd = findSignature(0x50, 0x4b, 0x05, 0x06);
+    expect(eocd).toBeGreaterThan(0);
+    // Corrupt the EOCD central-directory offset and local-header compressed size.
+    damaged.fill(0xff, eocd + 16, eocd + 20);
+    damaged.fill(0xff, 18, 22);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(damaged, {
+      status: 200, headers: { 'Content-Type': 'application/zip' },
+    })));
+
+    const blob = await generateNaiImage(
+      { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      'blue hair',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
+    );
+    expect(blob.type).toBe('image/png');
+    expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(png.slice(0, 8));
+  });
+
   it('reports ZIP directory inconsistencies and transport headers for corrupted NAI responses', async () => {
     const zip = new JSZip();
     zip.file('image_0.png', Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0)));
