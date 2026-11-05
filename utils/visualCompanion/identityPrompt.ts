@@ -92,5 +92,8 @@ export function mergeCharacterVisualContextPrompt(
     const sceneOnly = scenePrompt.includes(priorContextMarker)
         ? (scenePrompt.split('【本次场景】').slice(1).join('【本次场景】').trim() || scenePrompt.trim())
         : scenePrompt.trim();
-    return [identity, changes, sceneOnly].filter(Boolean).join('\n\n');
+    const stableContext = [identity, changes].filter(Boolean).join('\n\n');
+    return stableContext
+        ? [stableContext, sceneOnly].filter(Boolean).join('\n\n【本次场景】\n')
+        : sceneOnly;
 }
