@@ -596,7 +596,9 @@ export async function generateNaiImage(
     headers: buildImageRequestHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey.trim()}`,
-      Accept: provider === 'thirdparty' ? '*/*' : 'application/zip',
+      // NovelAI's sync endpoint can return JSON with base64 images when requested.
+      // Keep the ZIP parser as a fallback for gateways that ignore content negotiation.
+      Accept: provider === 'thirdparty' ? 'application/json, application/zip, */*' : 'application/zip',
     }, config.customHeaders),
     body: JSON.stringify({
       input: prompt.trim(),
