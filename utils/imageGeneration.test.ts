@@ -339,7 +339,7 @@ describe('image generation clients', () => {
       'blue hair',
       '',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
-    )).rejects.toThrow('NAI 返回 ZIP，但解包失败');
+    )).rejects.toThrow('NAI 返回 ZIP，但 ZIP 结构或图片校验失败');
   });
 
   it('reports ZIP directory inconsistencies without attempting metadata repair', async () => {
