@@ -14,6 +14,11 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+const capacitorState = vi.hoisted(() => ({ native: false }));
+vi.mock('@capacitor/core', () => ({
+    Capacitor: { isNativePlatform: () => capacitorState.native },
+}));
+
 const SCREEN_H = 852; // 竖屏可视高度
 const SAFE_BOTTOM = 34; // home 条安全区
 const SAFE_TOP = 44;
@@ -197,5 +202,55 @@ describe('iOS 全屏 PWA 键盘态', () => {
         emitViewportResize(SCREEN_H);
         expect(inKeyboardMode()).toBe(false);
         expect(appHeight()).toBe(`${SCREEN_H}px`);
+    });
+});
+
+describe('Capacitor Android 原生键盘视口', () => {
+    beforeEach(() => {
+        capacitorState.native = true;
+        document.body.className = '';
+        document.body.innerHTML = '';
+        document.documentElement.removeAttribute('style');
+        vvListeners = { resize: [], scroll: [] };
+        visualViewport = {
+            height: SCREEN_H,
+            offsetTop: 0,
+            addEventListener: (type: string, fn: Listener) => { (vvListeners[type] ||= []).push(fn); },
+            removeEventListener: () => {},
+        };
+        Object.defineProperty(window, 'visualViewport', { value: visualViewport, configurable: true, writable: true });
+        Object.defineProperty(window, 'innerHeight', { value: SCREEN_H, configurable: true, writable: true });
+        Object.defineProperty(navigator, 'userAgent', {
+            value: 'Mozilla/5.0 (Linux; Android 14; V2364A) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36',
+            configurable: true,
+        });
+        window.matchMedia = ((query: string) => ({
+            matches: false, media: query, onchange: null,
+            addListener: () => {}, removeListener: () => {},
+            addEventListener: () => {}, removeEventListener: () => {},
+            dispatchEvent: () => false,
+        })) as typeof window.matchMedia;
+        window.scrollTo = vi.fn() as typeof window.scrollTo;
+    });
+
+    afterEach(() => {
+        capacitorState.native = false;
+        vi.restoreAllMocks();
+    });
+
+    it('IME 动画只改变 visualViewport 时不二次缩放外壳、不主动滚动页面', async () => {
+        await install();
+        focusTextarea();
+        emitViewportResize(SCREEN_H - KEYBOARD_H);
+
+        expect(appHeight()).toBe(`${SCREEN_H}px`);
+        expect(inKeyboardMode()).toBe(false);
+        expect(window.scrollTo).not.toHaveBeenCalled();
+
+        // 原生 adjustResize 真正缩小 WebView 后，跟随 window.innerHeight 更新外壳。
+        Object.defineProperty(window, 'innerHeight', { value: SCREEN_H - KEYBOARD_H, configurable: true, writable: true });
+        window.dispatchEvent(new Event('resize'));
+        expect(appHeight()).toBe(`${SCREEN_H - KEYBOARD_H}px`);
+        expect(window.scrollTo).not.toHaveBeenCalled();
     });
 });
