@@ -35,7 +35,7 @@ type StudioConfig = {
 };
 type SavedImage = {
   id: string; blobId: string; engine: ImageEngine; prompt: string; negativePrompt: string;
-  requestPrompt?: string; requestNegativePrompt?: string;
+  requestPrompt?: string; requestNegativePrompt?: string; sceneDescription?: string;
   model: string; createdAt: number; mimeType: string; appearanceProfileVersion?: number;
   naiSettings?: { size: string; steps: number; scale: number; sampler: string; seed?: number };
   note?: string; category?: string; favorite?: boolean; backupSourceId?: string; sourceMessageId?: number;
@@ -165,7 +165,6 @@ const ImageStudioApp: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const generationAbortRef = useRef<AbortController | null>(null);
   const [error, setError] = useState('');
-  const [lastNaiRequest, setLastNaiRequest] = useState<{ prompt: string; negativePrompt: string; model: string; options: NaiImageOptions; createdAt: number } | null>(null);
   const sharedImageConfig = apiConfig.chatImage;
   const hasSharedImageConfig = !!sharedImageConfig && (sharedImageConfig.engine === 'gpt'
     ? !!(sharedImageConfig.gptBaseUrl || sharedImageConfig.gptApiKey)
@@ -1129,6 +1128,13 @@ const ImageStudioApp: React.FC = () => {
                 <textarea className="field min-h-[70px] resize-y" value={selected.note || ''} onChange={event => updateImageMetadata(selected.id, { note: event.target.value })} placeholder="记录创作想法、修改方向或灵感来源……"/>
                 <div className="flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">正向提示词</label><button onClick={() => copyPrompt(selected.prompt)} className="text-[10px] text-sky-700">复制</button></div>
                 <p className="text-xs leading-5 text-slate-600 whitespace-pre-wrap break-words rounded-xl bg-white/55 p-3">{selected.prompt}</p>
+                {selected.sourceMessageId && selected.sceneDescription && <details className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 space-y-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-indigo-800">聊天生图诊断记录</summary>
+                  <div className="space-y-1"><label className="text-[10px] font-semibold text-slate-600">聊天模型交给生图工具的场景描述</label><p className="text-[11px] leading-5 text-slate-700 whitespace-pre-wrap break-words">{selected.sceneDescription}</p></div>
+                  <div className="flex items-center justify-between gap-2"><label className="text-[10px] font-semibold text-slate-600">最终交给图像接口的正向提示词</label><button type="button" onClick={() => copyPrompt(selected.requestPrompt || selected.prompt)} className="text-[10px] text-indigo-700">复制</button></div>
+                  <p className="text-[11px] leading-5 text-slate-700 whitespace-pre-wrap break-words">{selected.requestPrompt || selected.prompt}</p>
+                  {(selected.requestNegativePrompt || selected.negativePrompt) && <><div className="flex items-center justify-between gap-2"><label className="text-[10px] font-semibold text-slate-600">最终负向提示词</label><button type="button" onClick={() => copyPrompt(selected.requestNegativePrompt || selected.negativePrompt)} className="text-[10px] text-indigo-700">复制</button></div><p className="text-[11px] leading-5 text-slate-600 whitespace-pre-wrap break-words">{selected.requestNegativePrompt || selected.negativePrompt}</p></>}
+                </details>}
                 {selected.engine === 'nai' && selected.requestPrompt && <details className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 space-y-2">
                   <summary className="cursor-pointer text-xs font-semibold text-sky-800">查看实际发送给 NAI 的完整提示词</summary>
                   <div className="flex items-center justify-between gap-2"><label className="text-[10px] font-semibold text-slate-600">最终正向提示词（含角色外貌与固定前后缀）</label><button type="button" onClick={() => copyPrompt(selected.requestPrompt || '')} className="text-[10px] text-sky-700">复制</button></div>
