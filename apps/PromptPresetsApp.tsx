@@ -64,7 +64,7 @@ const PromptPresetsApp: React.FC = () => {
             const source = await readShareFile(file, 'worldbook');
             const parsed = parseTavernPromptPreset(await source.text(), source.name);
             const next = [parsed, ...presets.filter(item => item.name !== parsed.name)];
-            const nextActive = activeName || parsed.name;
+            const nextActive = presets.some(item => item.name === activeName) ? activeName : parsed.name;
             persist(next, nextActive);
             setExpandedName(parsed.name);
             setEditingName(null);
@@ -157,7 +157,7 @@ const PromptPresetsApp: React.FC = () => {
         try {
             await shareOrDownloadFile({
                 content: JSON.stringify(payload, null, 2),
-                fileName: `${preset.name.replace(/[<>:"/\\\\|?*\\u0000-\\u001F]/g, '_') || 'prompt-preset'}.json`,
+                fileName: `${preset.name.replace(/[<>:"\\/\\\\|?*\\u0000-\\u001F]/g, '_') || 'prompt-preset'}.json`,
                 mimeType: 'application/json;charset=utf-8',
                 shareTitle: `导出提示词预设「${preset.name}」`,
             });
@@ -221,7 +221,7 @@ const PromptPresetsApp: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
                                 <button onClick={() => exportPreset(preset)} className="flex-1 py-2 rounded-lg bg-slate-50 text-slate-600 text-[11px] font-medium flex items-center justify-center gap-1.5"><DownloadSimple size={14} />导出</button>
-                                <button onClick={() => setEditingName(editingName === preset.name ? null : preset.name)} className="flex-1 py-2 rounded-lg bg-slate-50 text-slate-600 text-[11px] font-medium flex items-center justify-center gap-1.5"><PencilSimple size={14} />{editingName === preset.name ? '完成编辑' : '编辑'}</button>
+                                <button onClick={() => { setExpandedName(preset.name); setEditingName(editingName === preset.name ? null : preset.name); }} className="flex-1 py-2 rounded-lg bg-slate-50 text-slate-600 text-[11px] font-medium flex items-center justify-center gap-1.5"><PencilSimple size={14} />{editingName === preset.name ? '完成编辑' : '编辑'}</button>
                                 <button onClick={() => deletePreset(preset.name)} className="px-3 py-2 rounded-lg bg-rose-50 text-rose-600 text-[11px] font-medium flex items-center justify-center"><Trash size={14} /></button>
                             </div>
                         </div>
