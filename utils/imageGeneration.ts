@@ -616,8 +616,24 @@ export async function generateNaiImage(
         noise_schedule: 'karras',
         cfg_rescale: 0,
         qualityToggle: true,
-        ucPreset: 0,
+        // Match the NAI-compatible request shape used by 柏宝绘 and other
+        // third-party gateways: the sync ZIP endpoint expects the msgpack
+        // stream hint in parameters even though the response is still a ZIP.
+        stream: 'msgpack',
+        ucPreset: 3,
         params_version: isV5 ? 4 : 3,
+        dynamic_thresholding: false,
+        controlnet_strength: 1,
+        legacy: false,
+        legacy_uc: false,
+        add_original_image: true,
+        legacy_v3_extend: false,
+        reference_strength_multiple: [],
+        normalize_reference_strength_multiple: true,
+        use_coords: false,
+        ...(isV5 || config.model.startsWith('nai-diffusion-4-5') || config.model.startsWith('nai-diffusion-4-')
+          ? { reference_image_multiple_cached: [], characterPrompts: [] }
+          : {}),
         v4_prompt: caption(prompt.trim()),
         v4_negative_prompt: caption(negativePrompt.trim()),
       },
