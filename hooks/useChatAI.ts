@@ -1235,6 +1235,13 @@ export const useChatAI = ({
             if (chatImageToolInjected) {
                 baseReqBody.tools = [...(baseReqBody.tools || []), CHAT_IMAGE_TOOL];
                 if (!baseReqBody.tool_choice) baseReqBody.tool_choice = 'auto';
+                baseReqBody.messages = [
+                    {
+                        role: 'system',
+                        content: '【聊天图片分享能力】你可以在当前对话中调用 generate_chat_image。只在画面确实能增强当前情境时使用，例如角色主动分享当下照片、重要场景切换、明确的视觉动作或用户提出看图；普通寒暄、纯文字解释、连续短句不要生成。每轮最多生成一张，不要为了使用工具而打断对话。scene_description 只写本次画面的动态内容，包括动作、表情、当下服装、环境、时间、光线和构图；不要重写角色固定外貌、固定画风或固定负向词，这些由用户设置自动拼接。生成后自然继续聊天，不要向用户展示工具参数。'
+                    },
+                    ...(baseReqBody.messages || []),
+                ];
             }
             // 通用 MCP: 用户自配服务器的已发现工具, 追加而不覆盖(可与瑞幸/麦当劳共存)。
             // 工具清单读的是设置里持久化的发现结果, 不发网络请求。
