@@ -164,7 +164,7 @@ describe('image generation clients', () => {
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
   });
 
-  it('uses the synchronous ZIP request shape without a MessagePack stream hint', async () => {
+  it('prefers the synchronous JSON image response without changing the NAI request body', async () => {
     const zip = new JSZip();
     const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0));
     zip.file('image_0.png', png);
@@ -200,7 +200,7 @@ describe('image generation clients', () => {
 
     expect(blob.type).toBe('image/png');
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
-    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Accept')).toBe('application/zip, application/octet-stream, */*');
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Accept')).toBe('application/json, application/zip, application/octet-stream, */*');
   });
 
   it('extracts the first image from NovelAI ZIP output', async () => {
@@ -222,7 +222,7 @@ describe('image generation clients', () => {
     expect(url).toBe('https://nai-proxy.example/ai/generate-image');
     expect(new Headers(request.headers).get('Authorization')).toBe('Bearer thirdparty-token');
     expect(new Headers(request.headers).get('x-provider')).toBe('studio-test');
-    expect(new Headers(request.headers).get('Accept')).toBe('application/zip, application/octet-stream, */*');
+    expect(new Headers(request.headers).get('Accept')).toBe('application/json, application/zip, application/octet-stream, */*');
     const requestBody = JSON.parse(String(request.body));
     expect(requestBody.parameters).not.toHaveProperty('stream');
     expect(requestBody).toMatchObject({
@@ -240,7 +240,7 @@ describe('image generation clients', () => {
     });
   });
 
-  it('recovers a single-image NAI ZIP when its EOCD offset and local size fields are damaged', async () => {
+  it('rejects a damaged single-image NAI ZIP instead of rewriting its metadata', async () => {
     const zip = new JSZip();
     const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0));
     zip.file('image_0.png', png);
@@ -272,17 +272,15 @@ describe('image generation clients', () => {
       status: 200, headers: { 'Content-Type': 'application/zip' },
     })));
 
-    const blob = await generateNaiImage(
+    await expect(generateNaiImage(
       { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
       'blue hair',
       '',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
-    );
-    expect(blob.type).toBe('image/png');
-    expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(png.slice(0, 8));
+    )).rejects.toThrow('未修改响应元数据');
   });
 
-  it('recovers a single-image ZIP with a central-directory digital-signature record', async () => {
+  it('rejects ZIP data with a damaged central directory even when a signature record exists', async () => {
     const zip = new JSZip();
     const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0));
     zip.file('image_0.png', png);
@@ -315,14 +313,12 @@ describe('image generation clients', () => {
       status: 200, headers: { 'Content-Type': 'application/zip' },
     })));
 
-    const blob = await generateNaiImage(
+    await expect(generateNaiImage(
       { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
       'blue hair',
       '',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
-    );
-    expect(blob.type).toBe('image/png');
-    expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(png.slice(0, 8));
+    )).rejects.toThrow('未修改响应元数据');
   });
 
   it('rejects a ZIP whose compressed image bytes fail CRC validation', async () => {
@@ -346,7 +342,7 @@ describe('image generation clients', () => {
     )).rejects.toThrow('NAI 返回 ZIP，但解包失败');
   });
 
-  it('reports ZIP directory inconsistencies and transport headers for corrupted NAI responses', async () => {
+  it('reports ZIP directory inconsistencies without attempting metadata repair', async () => {
     const zip = new JSZip();
     zip.file('image_0.png', Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0)));
     const archive = await zip.generateAsync({ type: 'uint8array' });
@@ -367,13 +363,12 @@ describe('image generation clients', () => {
         'Content-Disposition': 'attachment; filename=images.zip',
       },
     })));
-    const recovered = await generateNaiImage(
+    await expect(generateNaiImage(
       { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
       'blue hair',
       '',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
-    );
-    expect(recovered.type).toBe('image/png');
+    )).rejects.toThrow('未修改响应元数据');
   });
 
   it('accepts direct image responses from third-party NovelAI gateways', async () => {
