@@ -10,6 +10,7 @@ export function ImageViewer({ value, fallback, name, onClose, generation, messag
     const touchStartX = useRef<number | null>(null);
     const src = useBlobRefUrl(failed ? fallback : value);
     const close = useRef<HTMLButtonElement>(null);
+    useEffect(() => setFailed(false), [value]);
     useEffect(() => { const previous = document.activeElement as HTMLElement; close.current?.focus(); return () => previous?.focus(); }, []);
     return createPortal(<div className="chat-image-viewer" role="dialog" aria-modal="true" aria-label="图片预览"
         onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()} onPointerMove={e => e.stopPropagation()}
