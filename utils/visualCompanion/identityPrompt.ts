@@ -24,7 +24,7 @@ export function buildCharacterAppearancePrompt(profile: CharacterVisualProfile |
     if (!description) return '';
     return [
         '[Fixed character appearance]',
-        'Preserve this character’s recognizable facial identity, hair, eyes, proportions and defining visual traits. Treat this as the same person in every image. Do not let the scene prompt alter these fixed traits.',
+        'Preserve this character’s recognizable facial identity, eye shape and color, facial proportions, skin tone and defining marks across images. Keep the same person. Hair style, hair length, hair arrangement, clothing and accessories are scene-changeable: when the current scene explicitly requests a different hairstyle or appearance, follow that scene request for this image only. Do not let a temporary scene change overwrite the saved permanent appearance profile.',
         description,
     ].join('\n');
 }
