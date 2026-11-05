@@ -387,11 +387,12 @@ function repairSingleEntryNaiZipMetadata(source: Uint8Array): Uint8Array | null 
   const flags = readU16(centralOffset + 8);
   const method = readU16(centralOffset + 10);
   const uncompressedSize = readU32(centralOffset + 24);
-  const localOffset = readU32(centralOffset + 42);
   if ((flags & 0x0009) !== 0 || (method !== 0 && method !== 8)
     || uncompressedSize === 0 || uncompressedSize > 100 * 1024 * 1024) return null;
 
-  if (localOffset !== 0 || !hasSignature(0, 0x50, 0x4b, 0x03, 0x04)) return null;
+  // A one-entry archive beginning with a local header has an unambiguous local offset of zero,
+  // even if the central-directory offset field itself was damaged during text transcoding.
+  if (!hasSignature(0, 0x50, 0x4b, 0x03, 0x04)) return null;
   const localFlags = readU16(6);
   const localMethod = readU16(8);
   const localNameLength = readU16(26);
