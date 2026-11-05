@@ -44,7 +44,8 @@ import { PostOffice, MAX_LETTER_CHARS, exportIdentity, importIdentity, getAdminT
 import { Signal, getMyAuthorship, setSignalWhisper, hasSignalNoticeAck, ackSignalNotice, type SignalState } from '../utils/vrWorld/signal';
 import type { SignalPoem, SignalBooklet } from '../types';
 import { getVRApi, setVRApi, getVRApiLog, clearVRApiLog, type VRApiCall } from '../utils/vrWorld/vrApi';
-import { safeResponseJson } from '../utils/safeApi';
+import { safeFetchJson } from '../utils/safeApi';
+import { buildApiRequestHeaders, getOpenCodeSessionId } from '../utils/apiConfigNormalize';
 import {
     patchSARClubState,
     readSARClubState,
@@ -4024,13 +4025,17 @@ const VRApiSettings: React.FC<{ apiPresets: ApiPreset[]; chatApi: APIConfig; add
         if (!cfg?.baseUrl) { setTestResult('当前没有可用的 API'); return; }
         setTesting(true); setTestResult(null);
         try {
-            const res = await fetch(`${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+            const baseUrl = cfg.baseUrl.replace(/\/+$/, '');
+            const data = await safeFetchJson(`${baseUrl}/chat/completions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey || 'sk-none'}` },
+                headers: buildApiRequestHeaders(cfg.apiKey || 'sk-none', cfg.customHeaders, {
+                    baseUrl: cfg.baseUrl,
+                    sessionId: getOpenCodeSessionId('vr-api-connection-test'),
+                }),
                 body: JSON.stringify({ model: cfg.model, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 5, stream: false }),
-            });
-            if (res.ok) { const d = await safeResponseJson(res); const r = d.choices?.[0]?.message?.content || ''; setTestResult(`连接成功 — 模型回复:"${r.slice(0, 24)}"`); }
-            else { const t = await res.text().catch(() => ''); setTestResult(`HTTP ${res.status}: ${t.slice(0, 80)}`); }
+            }, 0, 60_000, { appName: '彼方', purpose: 'API 连接测试' });
+            const reply = data.choices?.[0]?.message?.content || '';
+            setTestResult(`连接成功 — 模型回复:"${reply.slice(0, 24)}"`);
         } catch (e: any) { setTestResult(`连接失败: ${e.message}`); } finally { setTesting(false); }
     };
 
