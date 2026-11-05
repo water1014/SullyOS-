@@ -31,6 +31,7 @@ export interface TavernPromptPreset {
     prompts: TavernPresetPrompt[];
     prompt_order: TavernPresetPromptOrder[];
     raw: Record<string, unknown>;
+    manualOrder?: boolean;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -105,7 +106,7 @@ export const renderTavernPromptPreset = (preset: TavernPromptPreset): string => 
         ? order.filter(item => item.enabled).map(item => byId.get(item.identifier)).filter((item): item is TavernPresetPrompt => !!item)
         : [];
     // Preserve modules absent from prompt_order (including modules added in the editor).
-    const ordered = order?.length
+    const ordered = !preset.manualOrder && order?.length
         ? [...orderedFromOrder, ...preset.prompts.filter(prompt => !orderedFromOrder.includes(prompt))]
         : preset.prompts;
     const sections = ordered
