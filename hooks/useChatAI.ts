@@ -60,7 +60,6 @@ import { isAnthropicEndpoint } from '../utils/llmEndpoint';
 import { anthropicContinuation } from '../utils/anthropicApi';
 import { buildClaudeProxyCompatibilityBody, shouldRetryClaudeProxyCompatibility } from '../utils/claudeProxyCompat';
 import { routeMiniAppToolCall } from '../utils/miniAppToolRoute';
-import { executeChatImageTool } from '../utils/chatImageTool';
 import { CHAT_IMAGE_TOOL, CHAT_IMAGE_TOOL_NAME, executeChatImageTool } from '../utils/chatImageTool';
 import { applyEmotionEvalRaw, extractAssistantText } from '../utils/emotionApply';
 import { announceChatGen, CHAT_GEN_EVENTS } from '../utils/chatGenEvents';
