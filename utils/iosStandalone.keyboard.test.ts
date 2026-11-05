@@ -210,6 +210,7 @@ describe('Capacitor Android 原生键盘视口', () => {
         capacitorState.native = true;
         document.body.className = '';
         document.body.innerHTML = '';
+        document.head.innerHTML = '';
         document.documentElement.removeAttribute('style');
         vvListeners = { resize: [], scroll: [] };
         visualViewport = {
