@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { isPaperWallpaper, useOS } from '../context/OSContext';
 import { INSTALLED_APPS, DOCK_APPS } from '../constants';
 import { isDevDebugAvailable, subscribeDevDebugAvailability } from '../utils/devDebug';
@@ -481,6 +482,7 @@ let _lastPageIndex = 0;
 
 const Launcher: React.FC<{ staticPreview?: boolean }> = ({ staticPreview = false }) => {
   const { openApp, characters, activeCharacterId, theme, updateTheme, lastMsgTimestamp, isDataLoaded, unreadMessages } = useOS();
+  const isNativeAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
   // Local state for widget data to prevent context trashing
   const [widgetChar, setWidgetChar] = useState<CharacterProfile | null>(staticPreview ? characters[0] || null : null);
@@ -1056,9 +1058,9 @@ const Launcher: React.FC<{ staticPreview?: boolean }> = ({ staticPreview = false
             overscrollBehaviorX: 'contain',
             overscrollBehaviorY: 'none',
             touchAction: layoutEditing ? 'pan-y' : 'pan-x pan-y',
-            willChange: 'scroll-position',
-            contain: 'layout paint',
-            transform: 'translateZ(0)',
+            willChange: isNativeAndroid ? 'auto' : 'scroll-position',
+            contain: isNativeAndroid ? 'none' : 'layout paint',
+            transform: isNativeAndroid ? 'none' : 'translateZ(0)',
             WebkitOverflowScrolling: 'touch',
         }}
       >
@@ -1067,7 +1069,7 @@ const Launcher: React.FC<{ staticPreview?: boolean }> = ({ staticPreview = false
               <div
                 key={idx}
                 className="launcher-page w-full flex-shrink-0 snap-center snap-always flex flex-col px-6 pt-12 pb-8 h-full"
-                style={{ contentVisibility: 'auto', contain: 'layout paint', transform: 'translateZ(0)' }}
+                style={isNativeAndroid ? undefined : { contentVisibility: 'auto', contain: 'layout paint', transform: 'translateZ(0)' }}
               >
                   {idx === 0 ? (
                       // Page 1 (original): Clock + Chat + 4x2 App Grid
