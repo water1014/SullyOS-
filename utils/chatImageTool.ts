@@ -98,17 +98,38 @@ export async function executeChatImageTool(
     } : undefined,
   };
   let messageId: number;
+  let galleryUrl = blobRef;
   if (reroll?.targetMessageId) {
     messageId = reroll.targetMessageId;
+    let activeVariant = 0;
     await DB.updateMessageMetadata(messageId, (previous: any) => {
       const variants = Array.isArray(previous?.chatImageVariants) ? previous.chatImageVariants : [];
+      activeVariant = variants.length;
       return {
         ...(previous || {}),
         chatImageGeneration: previous?.chatImageGeneration || generation,
         chatImageVariants: [...variants, blobRef],
-        activeChatImageVariant: variants.length,
+        activeChatImageVariant: activeVariant,
       };
     });
+    // Keep the existing album entry linked to this chat message and point it at
+    // the newest reroll. A reroll must not create an orphaned chat-only image.
+    try {
+      const existing = await DB.findGalleryImageBySourceMessageId(charId, messageId);
+      if (existing) {
+        await DB.saveGalleryImage({ ...existing, url: galleryUrl, timestamp: Date.now() });
+      } else {
+        await DB.saveGalleryImage({
+          id: `chat-image-${messageId}`,
+          charId,
+          url: galleryUrl,
+          timestamp: Date.now(),
+          sourceMessageId: messageId,
+        });
+      }
+    } catch (error) {
+      console.warn('[ChatImageTool] reroll gallery sync failed', error);
+    }
   } else {
     messageId = await DB.saveMessage({
       charId,
@@ -121,6 +142,20 @@ export async function executeChatImageTool(
         activeChatImageVariant: 0,
       },
     } as any);
+    // Chat-generated images are assistant messages, not user uploads. They
+    // bypass Chat.handleSendText's image-upload gallery path, so register them
+    // here explicitly using the same blobref token as the message.
+    try {
+      await DB.saveGalleryImage({
+        id: `chat-image-${messageId}`,
+        charId,
+        url: galleryUrl,
+        timestamp: Date.now(),
+        sourceMessageId: messageId,
+      });
+    } catch (error) {
+      console.warn('[ChatImageTool] generated image gallery sync failed', error);
+    }
   }
   return { messageId, blobRef, engine, model, sceneDescription: scene };
 }
