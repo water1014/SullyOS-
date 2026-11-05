@@ -318,7 +318,7 @@ function describeNaiZip(buffer: Uint8Array, response: Response): string {
     && eocdCommentLength !== eocdCommentAvailable;
   return [
     `实际读取=${buffer.length} bytes`,
-    `Content-Length=${contentLength || '未提供/不可见'}`,
+    `Content-Length=${contentLength || '未提供/不可见'}（线路声明值；Fetch 自动解码后与实际读取不同不一定异常）`,
     `Content-Encoding=${contentEncoding || '未提供/identity'}`,
     `Content-Disposition=${contentDisposition || '未提供'}`,
     `ZIP结束目录=${eocdOffset >= 0 ? `存在(offset ${eocdOffset})` : '缺失'}`,
@@ -572,12 +572,14 @@ export async function generateNaiImage(
     headers: buildImageRequestHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey.trim()}`,
-      Accept: 'application/zip',
+      Accept: '*/*',
     }, config.customHeaders),
     body: JSON.stringify({
       input: prompt.trim(),
       model: config.model || 'nai-diffusion-5-full',
       action: 'generate',
+      // Match the third-party NAI client request shape used by 智绘姬 / 柏宝绘.
+      use_new_shared_trial: true,
       parameters: {
         width: options.width,
         height: options.height,
