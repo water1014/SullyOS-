@@ -4,6 +4,7 @@ export const CHAT_AUTO_REPLY_DELAY_MS = 2000;
 
 interface Options {
     enabled: boolean;
+    delayMs?: number;
     conversationId: string | null;
     active: boolean;
     blocked: boolean;
@@ -79,14 +80,17 @@ export function useChatAutoReply(options: Options) {
             setSeconds(null);
             return;
         }
-        setSeconds(2);
-        const tick = window.setTimeout(() => { if (ready()) setSeconds(1); }, 1000);
+        const delayMs = Math.max(250, current.current.delayMs ?? CHAT_AUTO_REPLY_DELAY_MS);
+        setSeconds(Math.ceil(delayMs / 1000));
+        const tick = window.setInterval(() => {
+            if (ready()) setSeconds(previous => previous === null ? null : Math.max(0, previous - 1));
+        }, 1000);
         const timer = window.setTimeout(() => {
             if (!ready()) return;
             cancel();
             current.current.onGenerate();
-        }, CHAT_AUTO_REPLY_DELAY_MS);
-        return () => { window.clearTimeout(tick); window.clearTimeout(timer); };
+        }, delayMs);
+        return () => { window.clearInterval(tick); window.clearTimeout(timer); };
     }, [revision, visible, options.enabled, options.active, options.blocked, options.generating, options.conversationId, cancel]);
 
     return { seconds, beginSend, cancel };
