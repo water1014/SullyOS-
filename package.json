@@ -21,7 +21,8 @@
     "check:companion-sync": "node --check server/companion-sync/protocol.mjs && node --check server/companion-sync/server.mjs && node --check server/companion-sync/migrate.mjs",
     "test:companion-sync-integration": "node server/companion-sync/integration.test.mjs",
     "prepare:android": "node scripts/install-capacitor-android-plugins.mjs",
-    "build:capacitor:apk": "node scripts/build-capacitor-android.mjs --apk"
+    "build:capacitor:apk": "node scripts/build-capacitor-android.mjs --apk",
+    "build:capacitor:release": "node scripts/build-capacitor-android.mjs --release"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "^6.0.1",

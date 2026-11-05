@@ -24,7 +24,14 @@ function run(command, args, cwd = root, envOverrides = {}) {
 }
 
 async function main() {
-  const buildApk = process.argv.includes('--apk');
+  const buildRelease = process.argv.includes('--release');
+  const buildApk = process.argv.includes('--apk') || buildRelease;
+  if (buildRelease) {
+    const required = ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD'];
+    const missing = required.filter(name => !process.env[name]);
+    if (missing.length) throw new Error(`Missing release signing environment: ${missing.join(', ')}`);
+    if (!existsSync(process.env.ANDROID_KEYSTORE_PATH)) throw new Error('Release keystore file was not found.');
+  }
 
   run(pnpmCommand, ['run', 'build:chat-preview']);
   run(pnpmCommand, ['run', 'build:workers']);
@@ -47,13 +54,53 @@ async function main() {
     return;
   }
 
-  const wrapper = windows ? 'gradlew.bat' : './gradlew';
-  run(wrapper, ['assembleDebug', '--no-daemon'], androidRoot);
+  const appGradle = join(androidApp, 'build.gradle');
+  if (buildRelease) {
+    const versionCode = Number(process.env.ANDROID_VERSION_CODE || 30403);
+    const versionName = String(process.env.ANDROID_VERSION_NAME || '3.16.1').trim();
+    if (!Number.isSafeInteger(versionCode) || versionCode < 2 || !versionName) throw new Error('Release version is invalid.');
+    let gradle = readFileSync(appGradle, 'utf8');
+    if (!/defaultConfig\s*\{/.test(gradle) || !/versionCode\s+\d+/.test(gradle) || !/versionName\s+['"][^'"]+['"]/.test(gradle)) {
+      throw new Error('Generated app/build.gradle has no recognizable version fields.');
+    }
+    gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${versionCode}`);
+    gradle = gradle.replace(/versionName\s+['"][^'"]+['"]/, `versionName "${versionName.replace(/["\\\\]/g, '')}"`);
+    if (!gradle.includes("apply from: 'signing.gradle'")) gradle += "\\n\\napply from: 'signing.gradle'\\n";
+    writeFileSync(appGradle, gradle, 'utf8');
+    writeFileSync(join(androidApp, 'signing.gradle'), `
+def signingStorePath = System.getenv('ANDROID_KEYSTORE_PATH')
+def signingStorePassword = System.getenv('ANDROID_KEYSTORE_PASSWORD')
+def signingKeyAlias = System.getenv('ANDROID_KEY_ALIAS')
+def signingKeyPassword = System.getenv('ANDROID_KEY_PASSWORD')
+if (!signingStorePath || !signingStorePassword || !signingKeyAlias || !signingKeyPassword) {
+    throw new GradleException('Release signing environment is incomplete.')
+}
+android {
+    signingConfigs {
+        release {
+            storeFile file(signingStorePath)
+            storePassword signingStorePassword
+            keyAlias signingKeyAlias
+            keyPassword signingKeyPassword
+        }
+    }
+    buildTypes {
+        release { signingConfig signingConfigs.release }
+    }
+}
+`, 'utf8');
+  }
 
-  const apkPath = join(androidRoot, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-  if (!existsSync(apkPath)) throw new Error('Gradle reported success but the debug APK was not found.');
+  const wrapper = windows ? 'gradlew.bat' : './gradlew';
+  run(wrapper, [buildRelease ? 'assembleRelease' : 'assembleDebug', '--no-daemon'], androidRoot);
+  const variant = buildRelease ? 'release' : 'debug';
+  const apkName = buildRelease ? 'app-release.apk' : 'app-debug.apk';
+  const apkPath = join(androidApp, 'build', 'outputs', 'apk', variant, apkName);
+  if (!existsSync(apkPath)) throw new Error(`Gradle reported success but the ${variant} APK was not found.`);
   const sha256 = createHash('sha256').update(readFileSync(apkPath)).digest('hex');
-  process.stdout.write(`\nDebug APK compiled (not a release build): ${apkPath}\nSHA-256: ${sha256}\n`);
+  process.stdout.write(`\\n${buildRelease ? 'Signed release' : 'Debug test'} APK compiled: ${apkPath}\\nSHA-256: ${sha256}\\n`);
+  if (buildRelease) run(process.env.APKSIGNER_PATH || 'apksigner', ['verify', '--verbose', '--print-certs', apkPath]);
+
 }
 
 main().catch(error => {
