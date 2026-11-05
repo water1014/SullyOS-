@@ -306,7 +306,7 @@ const WorldbookApp: React.FC = () => {
             const target = index + direction;
             if (target < 0 || target >= prompts.length) return preset;
             [prompts[index], prompts[target]] = [prompts[target], prompts[index]];
-            return { ...preset, prompts };
+            return { ...preset, prompts, manualOrder: true };
         });
     };
 
@@ -1027,7 +1027,7 @@ const WorldbookApp: React.FC = () => {
                                 {preset.prompts.map((prompt, index) => {
                                     const moduleId = prompt.identifier || prompt.name || String(index);
                                     const isEnabled = prompt.enabled !== false;
-                                    return <div key={moduleId} className="rounded-xl bg-slate-50 border border-slate-100 p-3 space-y-2">
+                                    return <div key={prompt.identifier || `prompt-${index}`} className="rounded-xl bg-slate-50 border border-slate-100 p-3 space-y-2">
                                         <div className="flex items-center gap-2">
                                             <label className="flex items-center gap-2 flex-1 min-w-0 text-xs font-semibold text-slate-700">
                                                 <input type="checkbox" checked={isEnabled} disabled={editingPromptPreset !== preset.name || !!prompt.marker} onChange={event => togglePromptModule(preset.name, moduleId, event.target.checked)} />
@@ -1041,6 +1041,7 @@ const WorldbookApp: React.FC = () => {
                                         </div>
                                         {editingPromptPreset === preset.name ? <>
                                             <input value={prompt.name || ''} onChange={event => updatePromptModule(preset.name, index, { name: event.target.value })} placeholder="模块名称" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700" />
+                                            <input value={prompt.role || 'system'} onChange={event => updatePromptModule(preset.name, index, { role: event.target.value })} placeholder="角色类型，例如 system" className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700" />
                                             <textarea value={typeof prompt.content === 'string' ? prompt.content : ''} onChange={event => updatePromptModule(preset.name, index, { content: event.target.value })} rows={5} placeholder="在这里修改模块提示词内容" className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-700" />
                                         </> : <>
                                             <div className="text-[10px] text-slate-400">{prompt.role || (prompt.system_prompt ? '系统提示词' : '提示词模块')} · {prompt.marker ? '标记模块' : isEnabled ? '已启用' : '已停用'}</div>
