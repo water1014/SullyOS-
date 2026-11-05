@@ -1084,7 +1084,7 @@ const PhoneShell: React.FC = () => {
              // 仅原生 Android 降级为纯色遮罩；浏览器/iOS 保留原有景深效果。
              filter: activeApp !== AppID.Launcher && !isNativeAndroid ? 'blur(10px)' : 'none',
              opacity: activeApp !== AppID.Launcher ? 0.6 : 1,
-             backfaceVisibility: 'hidden',
+             backfaceVisibility: isNativeAndroid ? 'visible' : 'hidden',
              contain: useIOSStandaloneLayout || isNativeAndroid ? undefined : 'strict'
          }}
        />
