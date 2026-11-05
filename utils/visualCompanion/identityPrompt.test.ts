@@ -52,6 +52,14 @@ describe('character appearance prompt', () => {
         expect(prompt.match(/灰蓝色眼睛/g)).toHaveLength(1);
     });
 
+    it('allows explicit scene hairstyle changes without weakening facial identity', () => {
+        const prompt = mergeCharacterAppearancePrompt('本次场景：短发，黑色皮衣', profile);
+        expect(prompt).toContain('recognizable facial identity');
+        expect(prompt).toContain('when the current scene explicitly requests a different hairstyle');
+        expect(prompt).toContain('本次场景：短发，黑色皮衣');
+        expect(prompt).toContain('must not overwrite the saved permanent appearance profile');
+    });
+
     it('keeps the scene prompt after the fixed identity block', () => {
         const prompt = mergeCharacterAppearancePrompt('雨夜里的咖啡馆', profile);
         expect(prompt.indexOf('黑色长发')).toBeLessThan(prompt.indexOf('雨夜里的咖啡馆'));
