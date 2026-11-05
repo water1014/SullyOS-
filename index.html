@@ -173,7 +173,7 @@
          start page controls below the physical status-bar / punch-hole inset.
          max() avoids stacking a second full status-bar gap on top of the inset. */
       html.sully-android-native {
-        --chrome-top: max(var(--safe-top), 1.5rem);
+        --chrome-top: calc(var(--safe-top) + 1.5rem);
       }
       html.sully-statusbar-compact {
         --chrome-top: max(var(--safe-top), 1.5rem);

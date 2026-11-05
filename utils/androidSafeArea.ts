@@ -22,7 +22,6 @@ export async function refreshAndroidSafeArea(): Promise<void> {
     document.documentElement.style.setProperty('--android-safe-area-top', `${insets.topInsetDp}px`);
     document.documentElement.style.setProperty('--safe-top', `${insets.topInsetDp}px`);
     document.documentElement.classList.add('sully-android-native');
-    document.documentElement.classList.add('sully-statusbar-compact');
   } catch (error) {
     console.warn('[AndroidSafeArea] Could not refresh display cutout inset', error);
   }
