@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mergeImportedWorldbooks, parseStandardWorldbook } from './worldbook';
 import type { MountedWorldbook, Worldbook } from '../types';
 import {
     injectWorldbookDepthEntries,
