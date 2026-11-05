@@ -499,32 +499,32 @@ const ImageStudioApp: React.FC = () => {
         }
         effectiveReferenceImage = baseBlob;
       }
-      if (engine === 'nai' && (sharedImageConfig?.enabled ? (sharedImageConfig.naiSeed || '') : naiSeed).trim()) {
-        const parsedSeed = Number(sharedImageConfig?.enabled ? sharedImageConfig.naiSeed : naiSeed);
+      if (engine === 'nai' && (hasSharedImageConfig ? (sharedImageConfig.naiSeed || '') : naiSeed).trim()) {
+        const parsedSeed = Number(hasSharedImageConfig ? sharedImageConfig.naiSeed : naiSeed);
         if (!Number.isSafeInteger(parsedSeed) || parsedSeed < 0 || parsedSeed > 4294967295) {
           throw new Error('Seed 必须是 0 到 4294967295 之间的整数，或留空使用随机种子');
         }
       }
-      const activeNaiSeed = sharedImageConfig?.enabled ? (sharedImageConfig.naiSeed || '') : naiSeed;
+      const activeNaiSeed = hasSharedImageConfig ? (sharedImageConfig.naiSeed || '') : naiSeed;
       const effectiveNaiSeed = engine === 'nai'
         ? (activeNaiSeed.trim() ? Number(activeNaiSeed) : Math.floor(Math.random() * 4294967296))
         : undefined;
       if (effectiveNaiSeed !== undefined) setNaiSeed(String(effectiveNaiSeed));
-      const activeNaiSize = sharedImageConfig?.enabled
+      const activeNaiSize = hasSharedImageConfig
         ? `${sharedImageConfig.naiWidth || 832}x${sharedImageConfig.naiHeight || 1216}`
         : naiSize;
       const naiOptions = {
         width: Number(activeNaiSize.split('x')[0]), height: Number(activeNaiSize.split('x')[1]),
-        steps: sharedImageConfig?.enabled ? (sharedImageConfig.naiSteps || 28) : naiSteps,
-        scale: sharedImageConfig?.enabled ? (sharedImageConfig.naiScale || 5) : naiScale,
-        sampler: sharedImageConfig?.enabled ? (sharedImageConfig.naiSampler || 'k_euler_ancestral') : naiSampler,
+        steps: hasSharedImageConfig ? (sharedImageConfig.naiSteps || 28) : naiSteps,
+        scale: hasSharedImageConfig ? (sharedImageConfig.naiScale || 5) : naiScale,
+        sampler: hasSharedImageConfig ? (sharedImageConfig.naiSampler || 'k_euler_ancestral') : naiSampler,
         ...(effectiveNaiSeed !== undefined ? { seed: effectiveNaiSeed } : {}),
       };
       const gptNegativeMode = sharedImageConfig?.gptNegativePromptMode || 'append';
-      const gptRequestPrompt = engine === 'gpt' && effectiveNegativePrompt && sharedImageConfig?.enabled && gptNegativeMode === 'append'
+      const gptRequestPrompt = engine === 'gpt' && effectiveNegativePrompt && hasSharedImageConfig && gptNegativeMode === 'append'
         ? `${effectivePrompt}. Avoid: ${effectiveNegativePrompt}`
         : effectivePrompt;
-      const gptNegativeField = sharedImageConfig?.enabled
+      const gptNegativeField = hasSharedImageConfig
         ? (gptNegativeMode === 'field' ? effectiveNegativePrompt : undefined)
         : effectiveNegativePrompt;
       const blob = engine === 'gpt'
