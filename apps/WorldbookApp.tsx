@@ -52,6 +52,7 @@ const WorldbookApp: React.FC = () => {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showImportConfirm, setShowImportConfirm] = useState(false);
     const [showPromptPresets, setShowPromptPresets] = useState(false);
+    const [expandedPromptPreset, setExpandedPromptPreset] = useState<string | null>(null);
     const [promptPresets, setPromptPresets] = useState<TavernPromptPreset[]>(() => { try { return JSON.parse(localStorage.getItem('sully-tavern-prompt-presets:v1') || '[]'); } catch { return []; } });
     const presetImportRef = useRef<HTMLInputElement>(null);
     const importRef = useRef<HTMLInputElement>(null);
@@ -916,9 +917,21 @@ const WorldbookApp: React.FC = () => {
                 <div className="space-y-3">
                     <p className="text-xs leading-relaxed text-slate-500">酒馆提示词预设与世界书是两种不同的数据。预设已独立保存，不会混入世界书条目。</p>
                     {promptPresets.length === 0 ? <div className="py-8 text-center text-sm text-slate-400">还没有导入提示词预设</div> : promptPresets.map(preset => (
-                        <div key={preset.name} className="rounded-xl border border-slate-200 bg-white p-3 flex items-center gap-3">
-                            <div className="min-w-0 flex-1"><div className="font-semibold text-sm text-slate-700 truncate">{preset.name}</div><div className="text-xs text-slate-400 mt-1">{preset.prompts.length} 个提示词模块</div></div>
-                            <button type="button" onClick={() => deletePromptPreset(preset.name)} className="text-rose-500 text-xs font-semibold px-2 py-1">删除</button>
+                        <div key={preset.name} className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
+                            <div className="flex items-center gap-3">
+                                <button type="button" onClick={() => setExpandedPromptPreset(current => current === preset.name ? null : preset.name)} className="min-w-0 flex-1 text-left">
+                                    <div className="font-semibold text-sm text-slate-700 truncate">{preset.name}</div>
+                                    <div className="text-xs text-slate-400 mt-1">{preset.prompts.length} 个提示词模块 · {preset.prompt_order.length} 组启用顺序</div>
+                                </button>
+                                <button type="button" onClick={() => deletePromptPreset(preset.name)} className="text-rose-500 text-xs font-semibold px-2 py-1">删除</button>
+                            </div>
+                            {expandedPromptPreset === preset.name && <div className="border-t border-slate-100 pt-2 space-y-2">
+                                {preset.prompts.map((prompt, index) => <div key={prompt.identifier || prompt.name || index} className="rounded-lg bg-slate-50 p-2">
+                                    <div className="text-xs font-semibold text-slate-700">{prompt.name || prompt.identifier || `提示词模块 ${index + 1}`}</div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">{prompt.role || (prompt.system_prompt ? '系统提示词' : '提示词模块')} · {prompt.marker ? '标记模块' : '包含内容'}</div>
+                                    {typeof prompt.content === 'string' && <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap break-words line-clamp-5">{prompt.content}</p>}
+                                </div>)}
+                            </div>}
                         </div>
                     ))}
                     <button type="button" onClick={() => presetImportRef.current?.click()} className="w-full rounded-xl bg-sky-600 text-white py-3 text-sm font-semibold">导入酒馆提示词预设 JSON</button>
