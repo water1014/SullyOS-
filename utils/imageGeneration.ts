@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { crc32, unzipSync } from 'fflate';
+import { unzipSync } from 'fflate';
 
 export type ImageEngine = 'gpt' | 'nai';
 
@@ -376,6 +376,17 @@ function findNaiBase64(value: unknown, depth = 0): { encoded: string; mimeType?:
   return null;
 }
 
+function calculateNaiCrc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 function repairSingleEntryNaiZipMetadata(source: Uint8Array): Uint8Array | null {
   const readU16 = (offset: number) => offset >= 0 && offset + 2 <= source.length
     ? source[offset] | (source[offset + 1] << 8) : -1;
@@ -456,16 +467,29 @@ function repairSingleEntryNaiZipMetadata(source: Uint8Array): Uint8Array | null 
   const inferredCompressedSize = central.offset - dataStart;
   if (inferredCompressedSize <= 0 || inferredCompressedSize > 0xffffffff) return null;
 
-  const repaired = source.slice();
+  // Normalize the optional central-directory digital-signature record away.
+  // JSZip and fflate do not consistently accept this record between the
+  // central directory and EOCD, even when its length is valid.
+  let repaired: Uint8Array;
+  let repairedEocd = eocd;
+  if (central.gap > 0) {
+    const entryEnd = central.offset + central.size;
+    repairedEocd = eocd - central.gap;
+    repaired = new Uint8Array(source.length - central.gap);
+    repaired.set(source.subarray(0, entryEnd), 0);
+    repaired.set(source.subarray(eocd), repairedEocd);
+  } else {
+    repaired = source.slice();
+  }
   const crc = readU32(central.offset + 16);
   writeU32(repaired, 14, crc);
   writeU32(repaired, 18, inferredCompressedSize);
   writeU32(repaired, 22, central.uncompressedSize);
   writeU32(repaired, central.offset + 20, inferredCompressedSize);
   writeU32(repaired, central.offset + 42, 0);
-  writeU32(repaired, eocd + 12, central.size);
-  writeU32(repaired, eocd + 16, central.offset);
-  writeU16(repaired, eocd + 20, Math.max(0, source.length - eocd - 22));
+  writeU32(repaired, repairedEocd + 12, central.size);
+  writeU32(repaired, repairedEocd + 16, central.offset);
+  writeU16(repaired, repairedEocd + 20, Math.max(0, repaired.length - repairedEocd - 22));
   return repaired;
 }
 
@@ -531,7 +555,7 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
         const bytes = files[imageName];
         const expectedCrc = (candidate[14] | (candidate[15] << 8)
           | (candidate[16] << 16) | (candidate[17] << 24)) >>> 0;
-        if ((crc32(bytes) >>> 0) !== expectedCrc) throw new Error('ZIP 图片 CRC 校验失败，响应数据可能已损坏');
+        if (calculateNaiCrc32(bytes) !== expectedCrc) throw new Error('ZIP 图片 CRC 校验失败，响应数据可能已损坏');
         const mimeType = sniffImageMime(bytes);
         if (!mimeType) throw new Error('ZIP 图片条目解压后不是有效的 PNG/JPEG/WebP 数据');
         return new Blob([bytes], { type: mimeType });
@@ -572,14 +596,14 @@ export async function generateNaiImage(
     headers: buildImageRequestHeaders({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey.trim()}`,
-      Accept: '*/*',
+      Accept: provider === 'thirdparty' ? '*/*' : 'application/zip',
     }, config.customHeaders),
     body: JSON.stringify({
       input: prompt.trim(),
       model: config.model || 'nai-diffusion-5-full',
       action: 'generate',
       // Match the third-party NAI client request shape used by 智绘姬 / 柏宝绘.
-      use_new_shared_trial: true,
+      ...(provider === 'thirdparty' ? { use_new_shared_trial: true } : {}),
       parameters: {
         width: options.width,
         height: options.height,
