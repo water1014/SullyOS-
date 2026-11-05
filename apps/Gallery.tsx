@@ -59,6 +59,23 @@ const Gallery: React.FC = () => {
         }
     }, [activeCharId]);
 
+    useEffect(() => {
+        const refreshGallery = (event: Event) => {
+            const detail = (event as CustomEvent<{ charId?: string }>).detail;
+            if (!detail?.charId) return;
+            // Refresh album counts immediately, including when the Gallery app
+            // remains mounted in the background while chat generation completes.
+            DB.getGalleryImages(detail.charId).then(imgs => {
+                setAlbumCounts(prev => ({ ...prev, [detail.charId!]: imgs.length }));
+                if (activeCharId === detail.charId) {
+                    setImages(imgs.sort((a, b) => b.timestamp - a.timestamp));
+                }
+            }).catch(error => console.warn('[Gallery] refresh after chat image failed', error));
+        };
+        window.addEventListener('sully-gallery-images-changed', refreshGallery);
+        return () => window.removeEventListener('sully-gallery-images-changed', refreshGallery);
+    }, [activeCharId]);
+
     const handleCharClick = (id: string) => {
         setActiveCharId(id);
         setView('grid');
