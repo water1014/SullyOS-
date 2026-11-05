@@ -189,6 +189,24 @@ describe('image generation clients', () => {
     });
   });
 
+  it('falls back to zip.js when a valid NAI ZIP cannot be read by JSZip', async () => {
+    const zip = new JSZip();
+    zip.file('images/image_0.png', 'fallback-nai-png');
+    const archive = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+    const loadSpy = vi.spyOn(JSZip, 'loadAsync').mockRejectedValue(new Error('simulated JSZip parser failure'));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(archive, {
+      status: 200, headers: { 'Content-Type': 'application/zip' },
+    })));
+
+    const blob = await generateNaiImage(
+      { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      '1girl, blue hair', '', { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
+    );
+
+    expect(await blob.text()).toBe('fallback-nai-png');
+    loadSpy.mockRestore();
+  });
+
   it('accepts direct image responses from third-party NovelAI gateways', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(new Blob(['direct-image'], { type: 'image/webp' }), {
       status: 200,
