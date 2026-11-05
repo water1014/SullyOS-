@@ -289,6 +289,14 @@ function describeNaiZip(buffer: Uint8Array, response: Response): string {
   const centralDirectorySize = eocdOffset >= 0 ? readU32(eocdOffset + 12) : null;
   const centralDirectoryOffset = eocdOffset >= 0 ? readU32(eocdOffset + 16) : null;
   const entryCount = eocdOffset >= 0 ? readU16(eocdOffset + 10) : null;
+  const centralCandidate = eocdOffset >= 0 && centralDirectorySize !== null
+    ? eocdOffset - centralDirectorySize : -1;
+  const centralHeader = centralCandidate >= 0 && signature(centralCandidate)
+    && buffer[centralCandidate + 2] === 0x01 && buffer[centralCandidate + 3] === 0x02;
+  const centralCompressedSize = centralHeader ? readU32(centralCandidate + 20) : null;
+  const centralUncompressedSize = centralHeader ? readU32(centralCandidate + 24) : null;
+  const centralLocalOffset = centralHeader ? readU32(centralCandidate + 42) : null;
+  const centralCrc = centralHeader ? readU32(centralCandidate + 16) : null;
   const commentMismatch = eocdCommentLength !== null && eocdCommentAvailable !== null
     && eocdCommentLength !== eocdCommentAvailable;
   return [
@@ -299,6 +307,7 @@ function describeNaiZip(buffer: Uint8Array, response: Response): string {
     `ZIP结束目录=${eocdOffset >= 0 ? `存在(offset ${eocdOffset})` : '缺失'}`,
     `ZIP条目数=${entryCount ?? '未知'}`,
     `中央目录大小/偏移=${centralDirectorySize ?? '未知'}/${centralDirectoryOffset ?? '未知'}`,
+    `中央目录记录=${centralHeader ? `有效（压缩=${centralCompressedSize}，解压=${centralUncompressedSize}，本地偏移=${centralLocalOffset}，CRC=${centralCrc?.toString(16)}）` : '无法定位或签名无效'}`,
     `ZIP注释长度声明/实际=${eocdCommentLength ?? '未知'}/${eocdCommentAvailable ?? '未知'}${commentMismatch ? '（不一致，疑似截断或字节损坏）' : ''}`,
     `本地文件头=${localHeader ? 'PK0304' : '非PK0304'}`,
     `flags=${flags === null ? '未知' : `0x${flags.toString(16)}`}`,
