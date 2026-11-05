@@ -8,6 +8,7 @@ import {
   buildApiRequestHeaders,
   isOpenCodeInferenceEndpoint,
   isOpenCodeGoEndpoint,
+  getOpenCodeSessionId,
 } from './apiConfigNormalize';
 
 describe('API config normalization', () => {
@@ -57,6 +58,15 @@ describe('API config normalization', () => {
     expect(paygoHeaders.has('x-opencode-session')).toBe(false);
     const overridden = buildApiRequestHeaders('go-token', { 'X-OpenCode-Session': 'manual-session' }, { baseUrl: 'https://opencode.ai/inference/go/openai/v1', sessionId: 'automatic-session' });
     expect(overridden.get('x-opencode-session')).toBe('manual-session');
+  });
+
+  it('reuses a stable OpenCode Go session ID for each feature scope', () => {
+    const first = getOpenCodeSessionId('schedule:character-1');
+    const second = getOpenCodeSessionId('schedule:character-1');
+    const other = getOpenCodeSessionId('schedule:character-2');
+    expect(first).toBeTruthy();
+    expect(second).toBe(first);
+    expect(other).not.toBe(first);
   });
 
   it('keeps unrelated API settings intact', () => {
