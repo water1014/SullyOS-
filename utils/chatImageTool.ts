@@ -33,6 +33,7 @@ export async function executeChatImageTool(
   signal?: AbortSignal,
   reroll?: { positivePrompt?: string; negativePrompt?: string; randomizeSeed?: boolean; targetMessageId?: number },
 ) {
+  if (!charId || !charId.trim()) throw new Error('当前聊天缺少角色 ID，已停止保存图片以避免相册归属错误');
   const cfg = api.chatImage;
   if (!cfg?.enabled) throw new Error('聊天生图尚未启用，请先到设置中开启');
   const scene = String(args.scene_description || '').trim();
@@ -129,18 +130,18 @@ export async function executeChatImageTool(
     // the newest reroll. A reroll must not create an orphaned chat-only image.
     try {
       const existing = await DB.findGalleryImageBySourceMessageId(charId, messageId);
-      if (existing) {
-        await DB.saveGalleryImage({ ...existing, url: galleryUrl, timestamp: Date.now() });
-        window.dispatchEvent(new CustomEvent('sully-gallery-images-changed', { detail: { charId, messageId } }));
-      } else {
-        await DB.saveGalleryImage({
-          id: `chat-image-${messageId}`,
-          charId,
-          url: galleryUrl,
-          timestamp: Date.now(),
-          sourceMessageId: messageId,
-        });
-      }
+      await DB.saveGalleryImage(existing
+        ? { ...existing, charId, url: galleryUrl, timestamp: Date.now(), sourceMessageId: messageId }
+        : {
+            id: `chat-image-${messageId}`,
+            charId,
+            url: galleryUrl,
+            timestamp: Date.now(),
+            sourceMessageId: messageId,
+          });
+      // Notify after either update or first-time creation. In particular, a
+      // reroll may be the first successful album write for a legacy message.
+      window.dispatchEvent(new CustomEvent('sully-gallery-images-changed', { detail: { charId, messageId } }));
     } catch (error) {
       console.warn('[ChatImageTool] reroll gallery sync failed', error);
     }
