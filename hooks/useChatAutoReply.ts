@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 
-export const CHAT_AUTO_REPLY_DELAY_MS = 2000;
+export const CHAT_AUTO_REPLY_DELAY_MS = 1000;
 
 interface Options {
     enabled: boolean;
