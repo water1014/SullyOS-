@@ -1903,6 +1903,10 @@ export const useChatAI = ({
                                 ) as any);
                             } catch (error: any) {
                                 replyRun.check();
+                                // 已进入工具执行分支，说明模型确实发起了生图；这里失败属于下游执行错误，
+                                // 与模型拒绝/未调用工具分开提示。详细错误只回填本轮工具，不把请求内容写入日志。
+                                console.warn('[ChatImageTool] Image generation request failed:', error?.name || 'Error');
+                                addToast('聊天模型已发起生图，但图像生成请求失败。请到生图室检查 NAI 配置或接口状态。', 'error');
                                 loopMessages.push(buildToolResultMessage(tc, `图片生成失败：${error?.message || String(error)}。请不要反复重试，继续正常聊天或询问用户是否要再试一次。`) as any);
                             } finally {
                                 setSearchStatus('');
