@@ -314,7 +314,7 @@ describe('image generation clients', () => {
       '1girl',
       '',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral' },
-    )).rejects.toThrow('压缩包中没有找到图片文件');
+    )).rejects.toThrow('压缩包中没有 PNG/JPEG/WebP 图片条目');
   });
 
   it('surfaces provider errors instead of silently returning an empty image', async () => {
