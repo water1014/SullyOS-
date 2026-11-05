@@ -64,8 +64,9 @@ import { INSTALLED_APPS, HIDDEN_APP_NAMES } from '../constants';
 import { isAnalyticsRequestUrl, trackEvent, shouldReportSnapshot, trackDataScaleOnce, trackCurrentAppearanceOnce, trackCurrentCharSettingsOnce, trackCurrentFeaturesOnce, trackCurrentSARFeaturesOnce } from '../utils/analytics';
 import { loadChatInputPreferences, saveChatInputPreferences } from '../utils/chatInputPreferences';
 import { collectAppearance, collectCharSettings, collectDataScale, collectFeatureFlagsAsync, collectSARFeatureFlags } from '../utils/analyticsSnapshot';
-import { normalizeApiConfig, normalizeApiPreset } from '../utils/apiConfigNormalize';
+import { normalizeApiConfig, normalizeApiPreset, isOpenCodeGoEndpoint } from '../utils/apiConfigNormalize';
 import { fetchLlm } from '../utils/anthropicApi';
+import { fetchOpenCodeGo } from '../utils/openCodeGoTransport';
 import { getCheckPhoneApi, setCheckPhoneApi } from '../utils/checkPhoneApi';
 import { markBackupDone } from '../utils/backupReminder';
 import { collectSARLocalBackup, restoreSARLocalBackup } from '../utils/vrWorld/sarBackup';
@@ -1270,7 +1271,7 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           }
 
           try {
-              let response = await fetchLlm(sendArgs[0], sendArgs[1], originalFetch, true);
+              let response = await fetchLlm(sendArgs[0], sendArgs[1], isOpenCodeGoEndpoint(urlStr) ? fetchOpenCodeGo : originalFetch, true);
 
               // /chat/completions 是可能已经开始计费的请求。拿到任何 HTTP 响应后都不在
               // 兼容层静默重发：中转站可能在返回错误前已经把任务交给上游，重发会让用户
