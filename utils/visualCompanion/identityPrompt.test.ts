@@ -69,11 +69,16 @@ describe('character appearance prompt', () => {
     });
 
     it('replaces stale visual timeline blocks on reroll instead of accumulating history', () => {
+        const timelineMemory = (id: string, content: string): VisualMemoryRecord => ({
+            id, charId: 'c1', status: 'confirmed', source: 'user', category: 'appearance',
+            content, locked: true, privacyScope: 'standard', visualChangeKind: 'permanent',
+            createdAt: 1, updatedAt: 1, confirmedAt: 1,
+        });
         const previous = mergeCharacterVisualContextPrompt('雨夜里的咖啡馆', profile, [
-            memory({ id: 'old', visualChangeKind: 'permanent', content: '旧的红色围巾' }),
+            timelineMemory('old', '旧的红色围巾'),
         ], 100);
         const rerolled = mergeCharacterVisualContextPrompt(previous, profile, [
-            memory({ id: 'new', visualChangeKind: 'permanent', content: '新的蓝色围巾' }),
+            timelineMemory('new', '新的蓝色围巾'),
         ], 101);
         expect(rerolled).toContain('新的蓝色围巾');
         expect(rerolled).not.toContain('旧的红色围巾');
