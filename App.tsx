@@ -35,7 +35,6 @@ const App: React.FC = () => {
       >
         <div
           className={`${useAbsoluteShell ? 'absolute' : 'fixed'} inset-0 w-full h-full z-0 bg-transparent`}
-          style={{ transform: 'translateZ(0)' }}
         >
           <OSProvider>
             <MusicProvider>
