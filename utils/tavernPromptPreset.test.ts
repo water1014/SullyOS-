@@ -100,6 +100,25 @@ describe('SillyTavern prompt preset import', () => {
         expect(renderTavernPromptPreset(preset)).toContain('B');
     });
 
+    it('uses manually edited module enabled state over imported prompt_order', () => {
+        const preset = parseTavernPromptPreset(JSON.stringify({
+            name: '可编辑预设',
+            prompts: [
+                { identifier: 'a', name: '模块 A', role: 'system', content: 'A' },
+                { identifier: 'b', name: '模块 B', role: 'system', content: 'B' },
+            ],
+            prompt_order: [{ order: [
+                { identifier: 'a', enabled: true },
+                { identifier: 'b', enabled: false },
+            ] }],
+        }));
+        preset.prompts[1].enabled = true;
+        preset.manualOrder = true;
+        expect(renderTavernPromptPreset(preset)).toContain('B');
+        preset.prompts[0].enabled = false;
+        expect(renderTavernPromptPreset(preset)).not.toContain('### 模块 A');
+    });
+
     it('gives a clear message when a worldbook is passed to the preset importer', () => {
         expect(() => parseTavernPromptPreset(JSON.stringify({ entries: [] }))).toThrow(/prompts/);
     });
