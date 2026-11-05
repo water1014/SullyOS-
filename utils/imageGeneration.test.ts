@@ -164,7 +164,7 @@ describe('image generation clients', () => {
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
   });
 
-  it('keeps the msgpack compatibility hint scoped to third-party NAI gateways', async () => {
+  it('uses the synchronous ZIP request shape without a MessagePack stream hint', async () => {
     const zip = new JSZip();
     const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0));
     zip.file('image_0.png', png);
@@ -223,13 +223,15 @@ describe('image generation clients', () => {
     expect(new Headers(request.headers).get('Authorization')).toBe('Bearer thirdparty-token');
     expect(new Headers(request.headers).get('x-provider')).toBe('studio-test');
     expect(new Headers(request.headers).get('Accept')).toBe('application/zip, application/octet-stream, */*');
-    expect(JSON.parse(String(request.body))).toMatchObject({
+    const requestBody = JSON.parse(String(request.body));
+    expect(requestBody.parameters).not.toHaveProperty('stream');
+    expect(requestBody).toMatchObject({
       action: 'generate',
       use_new_shared_trial: true,
       model: 'nai-diffusion-5-full',
       parameters: {
         width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral',
-        seed: 0, negative_prompt: 'blurry', stream: 'msgpack', ucPreset: 3,
+        seed: 0, negative_prompt: 'blurry', ucPreset: 3,
         dynamic_thresholding: false, controlnet_strength: 1, legacy: false,
         legacy_uc: false, add_original_image: true, legacy_v3_extend: false,
         reference_strength_multiple: [], normalize_reference_strength_multiple: true,
