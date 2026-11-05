@@ -60,6 +60,7 @@ import { isAnthropicEndpoint } from '../utils/llmEndpoint';
 import { anthropicContinuation } from '../utils/anthropicApi';
 import { buildClaudeProxyCompatibilityBody, shouldRetryClaudeProxyCompatibility } from '../utils/claudeProxyCompat';
 import { routeMiniAppToolCall } from '../utils/miniAppToolRoute';
+import { executeChatImageTool } from '../utils/chatImageTool';
 import { CHAT_IMAGE_TOOL, CHAT_IMAGE_TOOL_NAME, executeChatImageTool } from '../utils/chatImageTool';
 import { applyEmotionEvalRaw, extractAssistantText } from '../utils/emotionApply';
 import { announceChatGen, CHAT_GEN_EVENTS } from '../utils/chatGenEvents';
@@ -560,6 +561,40 @@ export const useChatAI = ({
     // LLM 提取（+ 50 轮认知消化）。用 ref 在 finally 里读最新状态。
     const charRef = useRef(char);
     charRef.current = char;
+    const chatImageRerollBusyRef = useRef(false);
+
+    useEffect(() => {
+        const handler = async (event: Event) => {
+            const detail = (event as CustomEvent).detail;
+            if (!char?.id || detail?.charId !== char.id || !detail?.generation?.sceneDescription) return;
+            if (chatImageRerollBusyRef.current) return;
+            chatImageRerollBusyRef.current = true;
+            setSearchStatus('正在重新绘制这张图片…');
+            try {
+                await executeChatImageTool(
+                    apiConfig,
+                    char.id,
+                    char.name,
+                    { scene_description: detail.generation.sceneDescription, reason: '用户对上一张图片进行重 Roll' },
+                    undefined,
+                    {
+                        positivePrompt: detail.generation.positivePrompt,
+                        negativePrompt: detail.generation.negativePrompt,
+                        randomizeSeed: true,
+                    },
+                );
+                setMessages(await DB.getRecentMessagesByCharId(char.id, 200));
+                addToast('已重新生成，上一张图片仍保留在聊天记录中', 'success');
+            } catch (error: any) {
+                addToast(`图片重 Roll 失败：${error?.message || String(error)}`, 'error');
+            } finally {
+                chatImageRerollBusyRef.current = false;
+                setSearchStatus('');
+            }
+        };
+        window.addEventListener('sully:chat-image-reroll', handler);
+        return () => window.removeEventListener('sully:chat-image-reroll', handler);
+    }, [char?.id, char?.name, apiConfig, setMessages, addToast]);
 
     // beforeunload 保护：记忆宫殿后台处理中时，阻止用户意外关闭页面
     useEffect(() => {
