@@ -37,7 +37,7 @@ type SavedImage = {
   id: string; blobId: string; engine: ImageEngine; prompt: string; negativePrompt: string;
   model: string; createdAt: number; mimeType: string; appearanceProfileVersion?: number;
   naiSettings?: { size: string; steps: number; scale: number; sampler: string; seed?: number };
-  note?: string; category?: string; favorite?: boolean; backupSourceId?: string;
+  note?: string; category?: string; favorite?: boolean; backupSourceId?: string; sourceMessageId?: number;
 };
 type DisplayImage = SavedImage & { url: string };
 type NaiPromptTemplate = { id: string; name: string; prompt: string; negativePrompt: string; createdAt: number };
@@ -782,7 +782,7 @@ const ImageStudioApp: React.FC = () => {
 
       for (const snapshot of snapshots) {
         try {
-          await DB.deleteBlobAsset(snapshot.item.blobId);
+          if (!snapshot.item.sourceMessageId) await DB.deleteBlobAsset(snapshot.item.blobId);
           removed.push(snapshot.item);
         } catch {
           // Keep this item in the gallery when its binary could not be deleted.
@@ -885,7 +885,7 @@ const ImageStudioApp: React.FC = () => {
     if (!window.confirm('确定删除这张作品吗？')) return;
     const originalBlob = await DB.getBlobAsset(item.blobId).catch(() => null);
     try {
-      if (originalBlob) await DB.deleteBlobAsset(item.blobId);
+      if (originalBlob && !item.sourceMessageId) await DB.deleteBlobAsset(item.blobId);
       await updateItemsAtomically(current => current.filter(saved => saved.id !== item.id));
       setImages(current => current.filter(saved => saved.id !== item.id));
       if (selected?.id === item.id) setSelected(null);
