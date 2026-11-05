@@ -333,7 +333,7 @@ export const parseStandardWorldbook = (
 ): Worldbook[] => {
     let parsed: any;
     try {
-        parsed = JSON.parse(rawText);
+        parsed = JSON.parse(rawText.replace(/^\uFEFF/, ''));
     } catch {
         throw new Error('JSON 文件无法解析，请确认文件没有损坏');
     }

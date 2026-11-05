@@ -177,6 +177,15 @@ describe('standard worldbook import', () => {
         });
     });
 
+    it('accepts UTF-8 BOM-prefixed Tavern exports', () => {
+        const source = '\uFEFF' + JSON.stringify({
+            entries: [{ uid: 17, comment: 'BOM 条目', content: '来自酒馆的设定。', key: ['月港'] }],
+        });
+        const imported = parseStandardWorldbook(source, 'BOM 导入', 17);
+        expect(imported).toHaveLength(1);
+        expect(imported[0]).toMatchObject({ title: 'BOM 条目', sourceUid: 17, key: ['月港'] });
+    });
+
     it('accepts a plain entry array and does not turn a missing UID into zero', () => {
         const imported = parseStandardWorldbook(JSON.stringify([
             { comment: '无 UID 条目', content: '内容', key: ['测试'], keysecondary: ['辅助'] },
