@@ -29,6 +29,7 @@ import {
 import { DB } from '../db';
 import { buildChatRequestPayload } from '../chatRequestPayload';
 import { safeFetchJson } from '../safeApi';
+import { buildApiRequestHeaders, getOpenCodeSessionId } from '../apiConfigNormalize';
 import { processNewMessagesWithAutoArchive } from '../memoryPalace/autoArchive';
 import { loadMusicCfgStandalone } from '../../context/MusicContext';
 import { getCharLyricSnippet } from '../charLyricCache';
@@ -609,7 +610,7 @@ async function runVRSessionUnlocked(deps: VRSessionDeps): Promise<VRSessionResul
         try {
             data = await safeFetchJson(`${baseUrl}/chat/completions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vrApi.apiKey || 'sk-none'}` },
+                headers: buildApiRequestHeaders(vrApi.apiKey || 'sk-none', vrApi.customHeaders, { baseUrl: vrApi.baseUrl, sessionId: getOpenCodeSessionId(`vr:${char.id}`) }),
                 body: JSON.stringify({
                     model: vrApi.model,
                     messages: [{ role: 'system', content: systemPrompt }, ...payload.cleanedApiMessages, { role: 'user', content: roomTurn }],
