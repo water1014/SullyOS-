@@ -521,13 +521,35 @@ pinDays 仅在需要置顶时才写，大多数记忆不需要。
         );
 
         const reply = data.choices?.[0]?.message?.content || '';
-        if (['length', 'max_tokens'].includes(data.choices?.[0]?.finish_reason)) {
-            throw new Error('记忆提取输出被截断，请降低每批原文数量后重试');
-        }
+        const finishReason = data.choices?.[0]?.finish_reason;
         const parsed = safeParseJsonArray(reply);
+        const isExplicitEmptyArray = /^\\s*(?:```(?:json)?\\s*)?\\[\\s*\\]\\s*(?:```)?\\s*$/i.test(reply);
+        const wasTruncated = ['length', 'max_tokens'].includes(finishReason);
+        const hasValidArray = parsed.length > 0 || isExplicitEmptyArray;
 
-        if (parsed.length === 0 && !/^\s*(?:```(?:json)?\s*)?\[\s*\]\s*(?:```)?\s*$/i.test(reply)) {
-            throw new Error('记忆提取未返回有效 JSON，原文保留，请重试');
+        // Retry malformed or truncated model output with smaller batches. Original messages
+        // remain untouched; the pipeline advances its high-water mark only after success.
+        if (wasTruncated || !hasValidArray) {
+            const reason = wasTruncated ? 'output_truncated' : (!reply.trim() ? 'empty_response' : 'invalid_json');
+            console.warn('[MemoryExtraction] Invalid model output; retrying with smaller batches', {
+                model: llmConfig.model, finishReason: finishReason || 'unknown', reason,
+                messageCount: messages.length, responseChars: reply.length,
+            });
+            if (messages.length > 1) {
+                const midpoint = Math.ceil(messages.length / 2);
+                const left = await extractMemoriesFromBuffer(messages.slice(0, midpoint), charId, charName, llmConfig, charContext, userName, relatedMemories, pinnedMemories);
+                const right = await extractMemoriesFromBuffer(messages.slice(midpoint), charId, charName, llmConfig, charContext, userName, relatedMemories, pinnedMemories);
+                return {
+                    memories: [...left.memories, ...right.memories],
+                    crossTimeLinks: [...left.crossTimeLinks, ...right.crossTimeLinks],
+                    eventBoxHints: [...left.eventBoxHints, ...right.eventBoxHints],
+                    unpinIds: [...left.unpinIds, ...right.unpinIds],
+                    corrections: [...left.corrections, ...right.corrections],
+                };
+            }
+            throw new Error(wasTruncated
+                ? '单条消息的记忆提取结果仍被截断，原文保留，请检查记忆模型的输出长度限制'
+                : '单条消息的记忆提取未返回有效 JSON，原文保留，请检查记忆模型的响应格式或模型配置');
         }
 
         console.log(`🏰 [Extraction] 缓冲区提取完成：从 ${messages.length} 条消息中提取 ${parsed.length} 条记忆`);
