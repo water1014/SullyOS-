@@ -253,12 +253,13 @@ describe('image generation clients', () => {
         'Content-Disposition': 'attachment; filename=images.zip',
       },
     })));
-    await expect(generateNaiImage(
+    const recovered = await generateNaiImage(
       { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
       'blue hair',
       '',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
-    )).rejects.toThrow(/Content-Encoding=gzip.*ZIP注释长度声明\/实际=.*不一致/);
+    );
+    expect(recovered.type).toBe('image/png');
   });
 
   it('accepts direct image responses from third-party NovelAI gateways', async () => {
