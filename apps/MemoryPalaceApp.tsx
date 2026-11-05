@@ -6108,6 +6108,39 @@ create table if not exists memory_vectors (
                                 <div>创建: {new Date(selectedNode.createdAt).toLocaleString('zh-CN')}</div>
                                 <div>最后访问: {new Date(selectedNode.lastAccessedAt).toLocaleString('zh-CN')}</div>
                                 <div>访问次数: {selectedNode.accessCount}</div>
+                                {(selectedNode.revisionHistory || []).length > 0 && (
+                                    <details style={{ marginTop: 10, padding: 10, borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                        <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#475569' }}>
+                                            修改历史 · {selectedNode.revisionHistory!.length} 个旧版本
+                                        </summary>
+                                        <div style={{ marginTop: 10, display: 'grid', gap: 10 }}>
+                                            {[...(selectedNode.revisionHistory || [])].reverse().map((revision, index) => (
+                                                <div key={revision.editedAt + ':' + index} style={{ padding: 9, borderRadius: 8, background: 'white', border: '1px solid #e5e7eb' }}>
+                                                    <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 6 }}>
+                                                        {new Date(revision.editedAt).toLocaleString('zh-CN')}
+                                                    </div>
+                                                    <div style={{ fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: '#475569' }}>
+                                                        {revision.content}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setEditContent(revision.content);
+                                                            setEditImportance(selectedNode.importance);
+                                                            setEditMood(selectedNode.mood);
+                                                            setEditRoom(selectedNode.room);
+                                                            setEditTags(selectedNode.tags.join(', '));
+                                                            setEditing(true);
+                                                        }}
+                                                        style={{ marginTop: 8, padding: '6px 10px', borderRadius: 8, border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca', fontSize: 11, cursor: 'pointer' }}
+                                                    >
+                                                        恢复此版本
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </details>
+                                )}
                                 {currentBox && <div>事件盒: {currentBox.name || '未命名'}</div>}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                     <span>向量化:</span>
