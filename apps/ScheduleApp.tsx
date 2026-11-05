@@ -14,6 +14,7 @@ import { getCalendarDayDifference, getLocalDateKey } from '../utils/localDate';
 import { useLocalDateKey } from '../hooks/useLocalDateKey';
 import { trackEvent } from '../utils/analytics';
 import TokenImg from '../components/os/TokenImg';
+import { getOpenCodeSessionId, isOpenCodeGoEndpoint } from '../utils/apiConfigNormalize';
 
 const TWEMOJI_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72';
 const twemojiUrl = (codepoint: string) => `${TWEMOJI_BASE}/${codepoint}.png`;
@@ -176,7 +177,7 @@ const ScheduleApp: React.FC = () => {
 
             const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}`, ...(isOpenCodeGoEndpoint(apiConfig.baseUrl) ? { 'x-opencode-session': getOpenCodeSessionId(`schedule-app:${supervisor.id}`) } : {}) },
                 body: JSON.stringify({
                     model: apiConfig.model,
                     messages: (await ContextBuilder.buildCharacterRequest(characterContextInput, messages)),
@@ -262,7 +263,7 @@ const ScheduleApp: React.FC = () => {
         try {
             const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}`, ...(isOpenCodeGoEndpoint(apiConfig.baseUrl) ? { 'x-opencode-session': getOpenCodeSessionId(`schedule-app:${supervisor.id}`) } : {}) },
                 body: JSON.stringify({
                     model: apiConfig.model,
                     messages: (await ContextBuilder.buildCharacterRequest(characterContextInput, messages)),
