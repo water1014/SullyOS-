@@ -413,7 +413,7 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
     try {
       const archive = await JSZip.loadAsync(buffer, { checkCRC32: true });
       const imageFile = Object.values(archive.files).find(file =>
-        !file.dir && /\\.(png|webp|jpe?g)$/i.test(file.name),
+        !file.dir && /\.(png|webp|jpe?g)$/i.test(file.name),
       );
       if (!imageFile) throw new Error('ZIP 中没有 PNG/JPEG/WebP 图片条目');
       const bytes = await imageFile.async('uint8array');
@@ -427,7 +427,7 @@ async function readNaiImageResponse(response: Response): Promise<Blob> {
   }
 
   const prefixHex = Array.from(buffer.subarray(0, 16), byte => byte.toString(16).padStart(2, '0')).join(' ');
-  const safePrefix = new TextDecoder().decode(buffer.subarray(0, 160)).replace(/[^\\x20-\\x7e\\u4e00-\\u9fff]/g, '.');
+  const safePrefix = new TextDecoder().decode(buffer.subarray(0, 160)).replace(/[^\x20-\x7e\u4e00-\u9fff]/g, '.');
   throw new Error(`NAI 返回了无法识别的数据（Content-Type: ${contentType || '未知'}，长度: ${buffer.length} bytes，文件头: ${prefixHex}，文本预览: ${safePrefix || '无'}）。请核对第三方接口的响应协议。`);
 }
 
