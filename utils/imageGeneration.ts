@@ -184,7 +184,7 @@ export async function editGptImage(
   config: GptImageConfig,
   image: Blob,
   prompt: string,
-  options: { size: string; quality: string; signal?: AbortSignal },
+  options: { size: string; quality: string; negativePrompt?: string; signal?: AbortSignal },
 ): Promise<Blob> {
   if (!config.apiKey.trim()) throw new Error('请先填写 GPT 生图 API Key');
   if (!prompt.trim()) throw new Error('请写下希望如何修改参考图');
@@ -202,6 +202,7 @@ export async function editGptImage(
       model: config.model || 'gpt-image-2.5-flare',
       images: [{ image_url: imageUrl }],
       prompt: prompt.trim(),
+      ...(options.negativePrompt?.trim() ? { negative_prompt: options.negativePrompt.trim() } : {}),
       size: options.size,
       quality: options.quality,
       n: 1,
@@ -215,7 +216,7 @@ export async function editGptImage(
 export async function generateGptImage(
   config: GptImageConfig,
   prompt: string,
-  options: { size: string; quality: string; signal?: AbortSignal },
+  options: { size: string; quality: string; negativePrompt?: string; signal?: AbortSignal },
 ): Promise<Blob> {
   if (!config.apiKey.trim()) throw new Error('请先填写 GPT 生图 API Key');
   if (!prompt.trim()) throw new Error('先写下你想生成的画面吧');
@@ -228,6 +229,7 @@ export async function generateGptImage(
     body: JSON.stringify({
       model: config.model || 'gpt-image-2.5-flare',
       prompt: prompt.trim(),
+      ...(options.negativePrompt?.trim() ? { negative_prompt: options.negativePrompt.trim() } : {}),
       size: options.size,
       quality: options.quality,
       n: 1,
