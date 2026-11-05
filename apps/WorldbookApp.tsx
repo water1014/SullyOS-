@@ -16,6 +16,7 @@ import { confirmExportSafety } from '../utils/exportGuard';
 import { shareOrDownloadFile } from '../utils/shareExport';
 import { readShareFile } from '../utils/pngShare';
 import { trackEvent } from '../utils/analytics';
+import { DB } from '../utils/db';
 
 const WorldbookApp: React.FC = () => {
     const { closeApp, worldbooks, addWorldbook, addWorldbooks, updateWorldbook, updateWorldbooks, deleteWorldbook, deleteWorldbooks, addToast, characters, activeCharacterId, updateCharacter } = useOS();
@@ -207,9 +208,9 @@ const WorldbookApp: React.FC = () => {
             await addWorldbooks(imported);
             const activeCharacter = characters.find(character => character.id === activeCharacterId);
             if (activeCharacter) {
-                await updateCharacter(activeCharacter.id, current => ({
-                    mountedWorldbooks: upsertMountedWorldbooks(current.mountedWorldbooks || [], imported),
-                }));
+                const mountedWorldbooks = upsertMountedWorldbooks(activeCharacter.mountedWorldbooks || [], imported);
+                await DB.saveCharacter({ ...activeCharacter, mountedWorldbooks });
+                await updateCharacter(activeCharacter.id, { mountedWorldbooks });
                 addToast(`已导入并挂载 ${imported.length} 条到当前角色「${activeCharacter.name}」，聊天即可使用`, 'success');
             } else {
                 addToast(`已导入 ${imported.length} 条到世界书库。当前没有激活角色，请在角色编辑 → 世界书中挂载`, 'success');
