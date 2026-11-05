@@ -35,7 +35,7 @@ describe('worldbook activation', () => {
 
     it('accepts comma- and newline-delimited keyword strings from compatible JSON exports', () => {
         const imported = parseStandardWorldbook(JSON.stringify({ entries: [{
-            content: '关键词字符串导入测试', key: '月港, 灯塔，潮汐\\n海雾',
+            content: '关键词字符串导入测试', key: '月港, 灯塔，潮汐\n海雾',
             keysecondary: '船长,守夜人', selective: true, comment: '',
         }] }), '字符串关键词');
         expect(imported[0].key).toEqual(['月港', '灯塔', '潮汐', '海雾']);
