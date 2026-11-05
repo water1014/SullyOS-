@@ -368,8 +368,20 @@ export const parseStandardWorldbook = (
         const primary = asStringArray(value.key ?? value.keys);
         const secondary = asStringArray(value.keysecondary ?? value.secondary_keys ?? value.secondaryKeys);
         const insertionOrder = value.position ?? value.insertion_order ?? value.insertionOrder;
+        const positionName = typeof insertionOrder === 'string'
+            ? insertionOrder.trim().toLowerCase().replace(/[\\s-]+/g, '_')
+            : '';
+        const positionAliases: Record<string, number> = {
+            before: 0, before_char: 0, before_character: 0, world: 0,
+            after: 1, after_char: 1, after_character: 1, character: 1,
+            top_of_an: 2, authors_note_top: 2, an_top: 2,
+            bottom_of_an: 3, authors_note_bottom: 3, an_bottom: 3,
+            at_depth: 4, depth: 4,
+            before_example: 5, before_examples: 5, example_top: 5,
+            after_example: 6, after_examples: 6, example_bottom: 6,
+        };
         const rawPosition = typeof insertionOrder === 'string'
-            ? ({ before: 0, after: 1, 'before_character': 0, 'after_character': 1 } as Record<string, number>)[insertionOrder.toLowerCase()] ?? Number(insertionOrder)
+            ? positionAliases[positionName] ?? Number(insertionOrder)
             : insertionOrder;
 
         const position = clamp(rawPosition == null ? undefined : rawPosition, 0, 6, 1) as WorldbookPosition;

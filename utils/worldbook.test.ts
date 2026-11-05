@@ -280,6 +280,19 @@ describe('mounted worldbook synchronization', () => {
         expect(resolveWorldbookEntries(retried, [{ content: '我们去钟楼看看' }]).map(entry => entry.book.id)).toEqual(['generated-1', 'generated-2', 'existing']);
     });
 
+    it('accepts named Tavern insertion positions as well as numeric positions', () => {
+        const names = [
+            ['before_char', 0], ['after_char', 1], ['top_of_an', 2],
+            ['bottom_of_an', 3], ['at_depth', 4], ['before_example', 5], ['after_example', 6],
+        ] as const;
+        for (const [position, expected] of names) {
+            const imported = parseStandardWorldbook(JSON.stringify({
+                entries: [{ comment: position, content: '位置测试', position }],
+            }), '位置兼容', 100);
+            expect(imported[0].position).toBe(expected);
+        }
+    });
+
     it('imports Tavern character card V2/V3 character_book entries with keys aliases', () => {
         const imported = parseStandardWorldbook(JSON.stringify({
             spec: 'chara_card_v2',
