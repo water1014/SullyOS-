@@ -75,6 +75,29 @@ describe('independent vision API', () => {
     });
   });
 
+  it('keeps a stable vision session per character and isolates different characters', async () => {
+    const sessionHeaders: string[] = [];
+    configureOpenCodeGoNativeTransport(true, async options => {
+      sessionHeaders.push(String((options.headers as Record<string, string>)['x-opencode-session']));
+      return {
+        status: 200,
+        data: JSON.stringify({ choices: [{ message: { content: '识图完成。' } }] }),
+        headers: { 'content-type': 'application/json' },
+      };
+    });
+    const goConfig: VisionApiConfig = {
+      enabled: true, baseUrl: 'https://opencode.ai/zen/go', apiKey: 'go-token',
+      model: 'deepseek-v4-flash-vision-exp',
+    };
+
+    await describeImageWithVisionApi(image, goConfig, 'character-a');
+    await describeImageWithVisionApi(image, goConfig, 'character-a');
+    await describeImageWithVisionApi(image, goConfig, 'character-b');
+
+    expect(sessionHeaders[0]).toBe(sessionHeaders[1]);
+    expect(sessionHeaders[2]).not.toBe(sessionHeaders[0]);
+  });
+
   it('recognizes identical image data once, writes both message caches, then reuses them', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       choices: [{ message: { content: '一只黑猫坐在窗边，窗外正在下雨。' } }],

@@ -49,16 +49,19 @@ export const readVisionDescription = (message: Message): string => {
   return typeof value === 'string' ? value.trim() : '';
 };
 
-// A deterministic session per image keeps OpenCode Go prompt-cache routing stable
-// without incorrectly merging every user's unrelated vision requests into one session.
-const visionSessionId = (imageUrl: string): string => {
+// OpenCode Go sessions follow the character conversation, not image contents.
+// This keeps cache routing stable across turns while isolating different characters.
+const visionSessionId = (conversationId: string): string => {
   let hash = 2166136261;
-  for (let i = 0; i < imageUrl.length; i++) {
-    hash ^= imageUrl.charCodeAt(i);
+  for (let i = 0; i < conversationId.length; i++) {
+    hash ^= conversationId.charCodeAt(i);
     hash = Math.imul(hash, 16777619);
   }
   return `sullyos-vision-${(hash >>> 0).toString(36)}`;
 };
+
+const visionRequestKey = (imageUrl: string, conversationId?: string): string =>
+  `${conversationId || 'default'}::${imageUrl}`;
 
 const cleanDescription = (value: string): string => value
   .replace(/^\s*\[?图片\s*[：:]\s*/i, '')
@@ -71,6 +74,7 @@ const cleanDescription = (value: string): string => value
 export async function describeImageWithVisionApi(
   imageUrl: string,
   config: VisionApiConfig,
+  conversationId?: string,
 ): Promise<string> {
   if (!isVisionApiReady(config)) {
     throw new Error('识图 API 已开启，但 URL、Key 或 Model 尚未填写完整');
@@ -79,14 +83,15 @@ export async function describeImageWithVisionApi(
     throw new Error('图片数据不可用，无法调用识图 API');
   }
 
-  const existing = inFlightDescriptions.get(imageUrl);
+  const requestKey = visionRequestKey(imageUrl, conversationId);
+  const existing = inFlightDescriptions.get(requestKey);
   if (existing) return existing;
 
   const request = (async () => {
     const baseUrl = normalizeLlmBaseUrl(config.baseUrl, 'openai');
     const data = await safeFetchJson(`${baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: buildApiRequestHeaders(config.apiKey.trim(), config.customHeaders, { baseUrl, sessionId: visionSessionId(imageUrl) }),
+      headers: buildApiRequestHeaders(config.apiKey.trim(), config.customHeaders, { baseUrl, sessionId: visionSessionId(conversationId || imageUrl) }),
       body: JSON.stringify({
         model: config.model.trim(),
         messages: [{
@@ -107,11 +112,11 @@ export async function describeImageWithVisionApi(
     return description;
   })();
 
-  inFlightDescriptions.set(imageUrl, request);
+  inFlightDescriptions.set(requestKey, request);
   try {
     return await request;
   } finally {
-    inFlightDescriptions.delete(imageUrl);
+    inFlightDescriptions.delete(requestKey);
   }
 }
 
@@ -140,8 +145,8 @@ export async function materializeVisionDescriptions(
       const refs=share.imageRefs.filter((r:unknown)=>typeof r==='string'&&(isBlobRef(r)||r.startsWith('data:image/'))).slice(0,18);
       const descriptions:string[]=[];
       for(const [index,ref] of refs.entries()){
-        const description=descriptionByImage.get(ref)||await describeImageWithVisionApi(ref,config);
-        descriptionByImage.set(ref,description);descriptions.push(`配图 ${index+1}：${description}`);
+        const description=descriptionByImage.get(`${message.charId}::${ref}`)||await describeImageWithVisionApi(ref,config,message.charId);
+        descriptionByImage.set(`${message.charId}::${ref}`,description);descriptions.push(`配图 ${index+1}：${description}`);
       }
       if(!descriptions.length){prepared.push(message);continue;}
       const metadata={...message.metadata,visionDescription:descriptions.join('\n'),visionRecognizedAt:Date.now(),visionModel:config.model.trim()};
@@ -154,7 +159,7 @@ export async function materializeVisionDescriptions(
 
     const cached = readVisionDescription(message);
     if (cached) {
-      descriptionByImage.set(message.content, cached);
+      descriptionByImage.set(`${message.charId}::${message.content}`, cached);
       prepared.push(message);
       continue;
     }
@@ -166,9 +171,10 @@ export async function materializeVisionDescriptions(
       prepared.push(message);
       continue;
     }
-    const description = descriptionByImage.get(imageUrl)
-      || await describeImageWithVisionApi(imageUrl, config);
-    descriptionByImage.set(imageUrl, description);
+    const imageCacheKey = `${message.charId}::${imageUrl}`;
+    const description = descriptionByImage.get(imageCacheKey)
+      || await describeImageWithVisionApi(imageUrl, config, message.charId);
+    descriptionByImage.set(imageCacheKey, description);
 
     const metadata = {
       ...(message.metadata || {}),
