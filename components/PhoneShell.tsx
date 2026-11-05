@@ -833,7 +833,6 @@ const PhoneShell: React.FC = () => {
   // toggle Android system-UI/window insets while third-party overlay windows are visible.
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    let disposed = false;
     const configureNativeWindow = async () => {
       try {
         await CapStatusBar.setOverlaysWebView({ overlay: true });
@@ -844,7 +843,6 @@ const PhoneShell: React.FC = () => {
       }
     };
     void configureNativeWindow();
-    return () => { disposed = true; };
   }, []);
 
   // Ask for notification permission only after startup gating has cleared.
