@@ -27,7 +27,7 @@ export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'officia
   try { parsed = new URL(raw); }
   catch { throw new Error('NAI API Base URL 必须是完整的 http:// 或 https:// 地址'); }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error('NAI API Base URL 只支持 HTTP 或 HTTPS 地址');
-  const basePath = parsed.pathname.replace(/^\/+|\/+$/g, '').replace(/\/v1$/i, '');
+  const basePath = parsed.pathname.replace(/^\/+|\/+$/g, '').replace(/^(?:v1|.*\/v1)$/i, '');
   // Morpho treats /novelai as the complete API endpoint, not a base URL.
   // Its sugar-painting web paths /api/generate and /generate map to /novelai.
   if (/\/novelai$/i.test('/' + basePath)) {
