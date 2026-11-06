@@ -220,15 +220,14 @@ describe('image generation clients', () => {
     expect(blob.type).toBe('image/png');
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
     const [url, request] = vi.mocked(fetch).mock.calls[0];
-    expect(url).toBe('https://std.loliyc.com/novelai/ai/generate-image');
+    expect(url).toBe('https://std.loliyc.com/novelai');
     expect(new Headers(request.headers).get('Authorization')).toBe('Bearer sk-test');
     expect(new Headers(request.headers).get('x-provider')).toBe('studio-test');
-    expect(new Headers(request.headers).get('Accept')).toBe('*/*');
+    expect(new Headers(request.headers).get('Accept')).toBe('application/zip, application/json, image/*');
     const requestBody = JSON.parse(String(request.body));
-    expect(requestBody.parameters).toHaveProperty('stream', 'msgpack');
+    expect(requestBody.parameters.stream).toBeUndefined();
     expect(requestBody).toMatchObject({
       action: 'generate',
-      use_new_shared_trial: true,
       model: 'nai-diffusion-4-5-full',
       parameters: {
         width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral',
