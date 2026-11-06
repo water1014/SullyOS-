@@ -121,4 +121,27 @@ describe('memory extraction smart-context compatibility gate', () => {
             { name: '上海', type: 'place' },
         ]);
     });
+
+    it('uses a stable OpenCode Go session and enables only explicit overload retry', async () => {
+        const result = await extractMemoriesFromBuffer(
+            messages,
+            'char-extraction-go',
+            '测试角色',
+            {
+                baseUrl: 'https://opencode.ai/inference/go/openai/v1',
+                apiKey: 'test-go-key',
+                model: 'deepseek-v4.1-flash',
+            },
+            undefined,
+            '用户',
+        );
+
+        expect(result.memories).toHaveLength(1);
+        const [, init, , , , , retryGoOverload] = mockedSafeFetchJson.mock.calls[0];
+        const headers = new Headers((init as RequestInit).headers);
+        expect(headers.get('authorization')).toBe('Bearer test-go-key');
+        expect(headers.get('x-opencode-session')).toMatch(/^sullyos-/);
+        expect(retryGoOverload).toBe(true);
+    });
+
 });
