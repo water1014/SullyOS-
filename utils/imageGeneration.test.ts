@@ -180,8 +180,8 @@ describe('image generation clients', () => {
 
     const [, request] = vi.mocked(fetch).mock.calls[0];
     const body = JSON.parse(String(request.body));
-    expect(body.parameters.stream).toBe('msgpack');
-    expect(body.use_new_shared_trial).toBe(true);
+    expect(body.parameters.stream).toBeUndefined();
+    expect(body.use_new_shared_trial).toBeUndefined();
     expect(body.parameters).toHaveProperty('ucPreset', 0);
     expect(new Headers(request.headers).get('Accept')).toBe('application/zip, application/json, image/*');
   });
