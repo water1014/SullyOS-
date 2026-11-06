@@ -160,6 +160,69 @@ async function extractImageFromZipJs(buffer: Uint8Array): Promise<Blob> {
     await reader.close().catch(() => undefined);
   }
 }
+
+/** Last-resort recovery for gateways that preserve local ZIP entries but damage EOCD offsets. */
+function readZipU16(bytes: Uint8Array, offset: number): number {
+  return bytes[offset] | (bytes[offset + 1] << 8);
+}
+function readZipU32(bytes: Uint8Array, offset: number): number {
+  return (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0;
+}
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+async function inflateZipEntry(compressed: Uint8Array, method: number): Promise<Uint8Array> {
+  if (method === 0) return compressed.slice();
+  if (method !== 8) throw new Error('不支持的 ZIP 压缩方法：' + method);
+  if (typeof DecompressionStream === 'undefined') throw new Error('当前 WebView 不支持 ZIP 原始 DEFLATE 解压');
+  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw' as CompressionFormat));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function extractImageFromLocalZipHeaders(buffer: Uint8Array): Promise<Blob> {
+  const localSignature = [0x50, 0x4b, 0x03, 0x04];
+  let offset = 0;
+  let inspected = 0;
+  let lastError = '';
+  while (offset <= buffer.length - 30 && inspected < 64) {
+    if (localSignature.some((value, index) => buffer[offset + index] !== value)) {
+      offset += 1;
+      continue;
+    }
+    inspected += 1;
+    const flags = readZipU16(buffer, offset + 6);
+    const method = readZipU16(buffer, offset + 8);
+    const expectedCrc = readZipU32(buffer, offset + 14);
+    const compressedSize = readZipU32(buffer, offset + 18);
+    const uncompressedSize = readZipU32(buffer, offset + 22);
+    const nameLength = readZipU16(buffer, offset + 26);
+    const extraLength = readZipU16(buffer, offset + 28);
+    const dataStart = offset + 30 + nameLength + extraLength;
+    const dataEnd = dataStart + compressedSize;
+    const hasDataDescriptor = (flags & 0x0008) !== 0;
+    if (!hasDataDescriptor && compressedSize !== 0xffffffff && uncompressedSize !== 0xffffffff
+      && compressedSize > 0 && uncompressedSize > 0 && uncompressedSize <= 100 * 1024 * 1024
+      && dataStart <= buffer.length && dataEnd <= buffer.length) {
+      try {
+        const bytes = await inflateZipEntry(buffer.subarray(dataStart, dataEnd), method);
+        if (bytes.length !== uncompressedSize) throw new Error('ZIP 解压长度校验失败');
+        if (crc32(bytes) !== expectedCrc) throw new Error('ZIP CRC32 校验失败');
+        const mimeType = sniffImageMime(bytes);
+        if (mimeType) return new Blob([bytes], { type: mimeType });
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+      }
+      offset = dataEnd;
+    } else {
+      offset += 4;
+    }
+  }
+  throw new Error(lastError || '未找到可独立校验的 ZIP 本地图片条目');
+}
 function describeNaiZip(buffer: Uint8Array, response: Response): string {
   const hex = (bytes: Uint8Array) => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(' ');
   const signature = (offset: number) => offset >= 0 && offset + 4 <= buffer.length && buffer[offset] === 0x50 && buffer[offset + 1] === 0x4b;
@@ -261,8 +324,12 @@ export async function readNaiImageResponse(response: Response): Promise<Blob> {
     let zipJsError = '';
     try { return await extractImageFromZipJs(buffer); }
     catch (error) { zipJsError = error instanceof Error ? error.message : String(error); }
-    throw new Error('NAI 返回 ZIP，但 ZIP 结构或图片校验失败：' + jsZipError.slice(0, 160)
-      + '；zip.js：' + zipJsError.slice(0, 120) + '。未修改响应元数据。响应诊断：' + describeNaiZip(buffer, response));
+    let localEntryError = '';
+    try { return await extractImageFromLocalZipHeaders(buffer); }
+    catch (error) { localEntryError = error instanceof Error ? error.message : String(error); }
+    throw new Error('NAI 返回 ZIP，但 ZIP 结构或图片校验失败：' + jsZipError.slice(0, 120)
+      + '；zip.js：' + zipJsError.slice(0, 100) + '；本地文件头恢复：' + localEntryError.slice(0, 100)
+      + '。未修改响应元数据。响应诊断：' + describeNaiZip(buffer, response));
   }
   const preview = new TextDecoder().decode(buffer.subarray(0, Math.min(buffer.length, 160))).replace(/[^\x20-\x7e\u4e00-\u9fff]/g, '.');
   throw new Error('NAI 返回了无法识别的数据（Content-Type: ' + (contentType || '未知') + '，长度: ' + buffer.length + ' bytes）。响应开头：' + (preview || '二进制数据'));
