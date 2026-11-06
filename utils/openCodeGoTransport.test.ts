@@ -3,10 +3,13 @@ import { createOpenCodeGoTransport, normalizeOpenCodeGoRequestUrl } from './open
 
 describe('OpenCode Go transport', () => {
   it('normalizes raw Go roots for feature-specific API callers', () => {
-    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/zen/go/chat/completions')).toBe('https://opencode.ai/zen/go/v1/chat/completions');
-    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/zen/go/messages')).toBe('https://opencode.ai/zen/go/v1/messages');
+    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/zen/go/chat/completions')).toBe('https://opencode.ai/inference/go/openai/v1/chat/completions');
+    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/zen/go/messages')).toBe('https://opencode.ai/inference/go/anthropic/v1/messages');
     expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/inference/go/chat/completions')).toBe('https://opencode.ai/inference/go/openai/v1/chat/completions');
-    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/zen/go/v1/chat/completions')).toBe('https://opencode.ai/zen/go/v1/chat/completions');
+    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/zen/go/v1/chat/completions')).toBe('https://opencode.ai/inference/go/openai/v1/chat/completions');
+    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/inference/go/v1/chat/completions')).toBe('https://opencode.ai/inference/go/openai/v1/chat/completions');
+    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/inference/go/v1/messages')).toBe('https://opencode.ai/inference/go/anthropic/v1/messages');
+    expect(normalizeOpenCodeGoRequestUrl('https://opencode.ai/inference/go/v1/models')).toBe('https://opencode.ai/inference/go/v1/models');
   });
 
   it('adds a stable session header to Go requests that forgot to provide one', async () => {
@@ -65,7 +68,7 @@ describe('OpenCode Go transport', () => {
     });
     expect(native).toHaveBeenCalledOnce();
     const [calledUrl, calledInit] = native.mock.calls[0];
-    expect(calledUrl).toBe('https://opencode.ai/zen/go/v1/chat/completions');
+    expect(calledUrl).toBe('https://opencode.ai/inference/go/openai/v1/chat/completions');
     expect(calledInit?.method).toBe('POST');
     expect(new Headers(calledInit?.headers).get('authorization')).toBe('Bearer go-token');
     expect(new Headers(calledInit?.headers).get('x-opencode-session')).toBe('chat-1');
