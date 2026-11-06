@@ -343,33 +343,36 @@ describe('image generation clients', () => {
     )).rejects.toThrow('NAI 返回 ZIP，但 ZIP 结构或图片校验失败');
   });
 
-  it('reports ZIP directory inconsistencies without attempting metadata repair', async () => {
+  it('keeps legacy JSZip tolerance for noncanonical EOCD metadata without mutating response bytes', async () => {
     const zip = new JSZip();
     zip.file('image_0.png', Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0)));
     const archive = await zip.generateAsync({ type: 'uint8array' });
-    const corrupted = new Uint8Array(archive);
-    // Damage the EOCD comment length while retaining its signature.
-    const eocd = corrupted.findIndex((value, index) =>
-      value === 0x50 && corrupted[index + 1] === 0x4b
-      && corrupted[index + 2] === 0x05 && corrupted[index + 3] === 0x06,
+    const compatibleArchive = new Uint8Array(archive);
+    // Keep the EOCD signature but use the noncanonical comment length accepted by the old reader.
+    const eocd = compatibleArchive.findIndex((value, index) =>
+      value === 0x50 && compatibleArchive[index + 1] === 0x4b
+      && compatibleArchive[index + 2] === 0x05 && compatibleArchive[index + 3] === 0x06,
     );
     expect(eocd).toBeGreaterThanOrEqual(0);
-    corrupted[eocd + 20] = 0x4a;
-    corrupted[eocd + 21] = 0x00;
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(corrupted, {
+    compatibleArchive[eocd + 20] = 0x4a;
+    compatibleArchive[eocd + 21] = 0x00;
+    const originalBytes = compatibleArchive.slice();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(compatibleArchive, {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
-        'Content-Encoding': 'gzip',
         'Content-Disposition': 'attachment; filename=images.zip',
       },
     })));
-    await expect(generateNaiImage(
-      { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+    const blob = await generateNaiImage(
+      { apiKey: 'sk-test', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://std.loliyc.com/novelai' },
       'blue hair',
       '',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
-    )).rejects.toThrow('未修改响应元数据');
+    );
+    expect(blob.type).toBe('image/png');
+    expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+    expect(compatibleArchive).toEqual(originalBytes);
   });
 
   it('accepts direct image responses from third-party NovelAI gateways', async () => {
