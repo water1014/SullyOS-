@@ -53,10 +53,12 @@ public class AmsgUnifiedPushPlugin extends Plugin {
                 if (ACTION_PUSH.equals(type)) {
                     JSObject event = new JSObject();
                     event.put("payload", payload);
+                    event.put("receivedAt", intent.getLongExtra("receivedAt", 0L));
                     notifyListeners("pushReceived", event);
                 } else if (ACTION_TAP.equals(type)) {
                     JSObject event = new JSObject();
                     event.put("payload", payload);
+                    event.put("receivedAt", intent.getLongExtra("receivedAt", 0L));
                     notifyListeners("notificationTapped", event);
                 } else {
                     notifyListeners("registrationChanged", getStatusObject());
@@ -230,10 +232,15 @@ public class AmsgUnifiedPushPlugin extends Plugin {
     }
 
     static void sendEvent(Context context, String type, String payload) {
+        sendEvent(context, type, payload, 0L);
+    }
+
+    static void sendEvent(Context context, String type, String payload, long receivedAt) {
         Intent event = new Intent(ACTION_EVENT);
         event.setPackage(context.getPackageName());
         event.putExtra("type", type);
         if (payload != null) event.putExtra("payload", payload);
+        if (receivedAt > 0L) event.putExtra("receivedAt", receivedAt);
         context.sendBroadcast(event);
     }
 }
