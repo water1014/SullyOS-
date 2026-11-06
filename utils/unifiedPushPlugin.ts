@@ -27,7 +27,7 @@ interface UnifiedPushNativePlugin {
   getStatus(): Promise<Omit<UnifiedPushStatus, 'permission'>>;
   register(options: { vapidPublicKey: string }): Promise<{ pending: boolean }>;
   unregister(): Promise<void>;
-  drainPendingPushes(): Promise<{ messages: UnifiedPushStoredMessage[]; launchPayload?: string }>;
+  drainPendingPushes(): Promise<{ messages: UnifiedPushStoredMessage[]; launchPayload?: string; launchPayloadReceivedAt?: number }>;
   acknowledgePendingPushes(options: { throughReceivedAt: number }): Promise<void>;
   addListener(
     eventName: 'pushReceived' | 'notificationTapped' | 'registrationChanged',
