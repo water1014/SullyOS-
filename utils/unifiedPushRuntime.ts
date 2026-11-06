@@ -38,6 +38,7 @@ export const initUnifiedPushRuntime = async (): Promise<void> => {
 
     if (pending.launchPayload) {
       const payload = parseNativeAmsgPayload(pending.launchPayload);
+      acknowledgedThrough = Math.max(acknowledgedThrough, Number(pending.launchPayloadReceivedAt) || 0);
       const charId = payload?.metadata?.charId;
       if (typeof charId === 'string' && charId) {
         window.dispatchEvent(new CustomEvent('active-msg-open', { detail: { charId } }));
