@@ -1089,7 +1089,7 @@ async function fetchFromAnyUpstream(upstreamPath, env, timeoutMs = 8000) {
   const order = shuffleCopy(resolveNeteaseUpstreams(env));
   const errors = [];
   for (const base of order) {
-    const upstreamUrl = base.replace(/\\/+$/, '') + upstreamPath;
+    const upstreamUrl = base.replace(/\/+$/, '') + upstreamPath;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
