@@ -198,8 +198,7 @@ public class AmsgUnifiedPushPlugin extends Plugin {
 
     @PluginMethod
     public void acknowledgePendingPushes(PluginCall call) {
-        Long throughValue = call.getLong("throughReceivedAt");
-        long throughReceivedAt = throughValue == null ? 0L : throughValue;
+        long throughReceivedAt = call.getData().optLong("throughReceivedAt", 0L);
         android.content.SharedPreferences prefs = getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String raw = prefs.getString(KEY_MESSAGES, "[]");
         try {
