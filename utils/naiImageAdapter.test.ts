@@ -39,6 +39,20 @@ describe('NAI synchronous ZIP generation contract', () => {
     expect(legacySugarPath.url).toBe('https://std.loliyc.com/novelai');
   });
 
+  it('normalizes a trailing /v1 like OVO and keeps official NAI requests free of third-party gateway hints', () => {
+    const request = buildNaiGenerateRequest({
+      apiKey: 'test-token', model: 'nai-diffusion-4-5-full', provider: 'official',
+      baseUrl: 'https://api.example/v1',
+    }, '1girl, portrait', '', {
+      width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 123,
+    });
+    const body = JSON.parse(String(request.init.body));
+    expect(request.url).toBe('https://api.example/ai/generate-image');
+    expect(body.use_new_shared_trial).toBeUndefined();
+    expect(body.parameters.stream).toBeUndefined();
+    expect(body.parameters.add_original_image).toBe(true);
+  });
+
   it('uses the 智绘姬-compatible msgpack hint for generic third-party gateways without changing the ZIP response contract', () => {
     const request = buildNaiGenerateRequest({
       apiKey: 'test-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty',
