@@ -22,6 +22,7 @@ export const initUnifiedPushRuntime = async (): Promise<void> => {
       void ingest(event?.payload).catch((error) =>
         console.warn('[ActiveMsg:UnifiedPush] 收到推送后处理失败', error));
     });
+    listenerHandles = [receivedHandle];
     const tappedHandle = await addUnifiedPushListener('notificationTapped', (event) => {
       void ingest(event?.payload, true).catch((error) =>
         console.warn('[ActiveMsg:UnifiedPush] 通知点击处理失败', error));
