@@ -117,6 +117,23 @@ public class AmsgUnifiedPushPlugin extends Plugin {
         }
         getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString(KEY_VAPID, vapid.trim()).remove(KEY_LAST_ERROR).apply();
+        String saved = UnifiedPush.getSavedDistributor(getContext());
+        if (saved != null && UnifiedPush.getDistributors(getContext()).contains(saved)) {
+            try {
+                UnifiedPush.register(
+                    getContext(),
+                    ConstantsKt.INSTANCE_DEFAULT,
+                    "SullyOS 主动消息",
+                    vapid.trim()
+                );
+                JSObject result = new JSObject();
+                result.put("pending", true);
+                call.resolve(result);
+            } catch (Exception error) {
+                call.reject("向 UnifiedPush 分发器发起注册失败", error);
+            }
+            return;
+        }
         UnifiedPush.tryUseCurrentOrDefaultDistributor(getActivity(), success -> {
             if (Boolean.TRUE.equals(success)) {
                 try {
@@ -133,7 +150,7 @@ public class AmsgUnifiedPushPlugin extends Plugin {
                     call.reject("向 UnifiedPush 分发器发起注册失败", error);
                 }
             } else {
-                call.reject("没有选择可用的 UnifiedPush 分发器。请先安装并打开 ntfy 等分发器应用。");
+                call.reject("没有选择可用的 UnifiedPush 分发器。请先安装并打开支持 UnifiedPush 的分发器应用。");
             }
             return Unit.INSTANCE;
         });
