@@ -29,7 +29,8 @@ export function createOpenCodeGoNativeFetch(plugin: StreamPlugin = nativePlugin)
     const request = resource instanceof Request ? resource : undefined;
     const url = typeof resource === 'string' ? resource : resource instanceof URL ? resource.href : resource.url;
     const method = (init?.method || request?.method || 'GET').toUpperCase();
-    const headers = new Headers(init?.headers || request?.headers);
+    const headers = new Headers(request?.headers);
+    new Headers(init?.headers).forEach((value, name) => headers.set(name, value));
     const body = init?.body ?? (request && method !== 'GET' && method !== 'HEAD' ? await request.clone().text() : undefined);
     if (body != null && typeof body !== 'string') throw new TypeError('Native OpenCode Go only accepts text request bodies');
     const signal = init?.signal || request?.signal;
