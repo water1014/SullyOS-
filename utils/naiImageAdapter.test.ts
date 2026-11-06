@@ -48,7 +48,7 @@ describe('NAI synchronous ZIP generation contract', () => {
     });
     const body = JSON.parse(String(request.init.body));
     expect(request.url).toBe('https://proxy.example/ai/generate-image');
-    expect(body.use_new_shared_trial).toBeUndefined();
+    expect(body.use_new_shared_trial).toBe(true);
     expect(body.parameters.stream).toBe('msgpack');
   });
 
