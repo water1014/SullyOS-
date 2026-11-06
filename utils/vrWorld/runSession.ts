@@ -616,7 +616,7 @@ async function runVRSessionUnlocked(deps: VRSessionDeps): Promise<VRSessionResul
                     messages: [{ role: 'system', content: systemPrompt }, ...payload.cleanedApiMessages, { role: 'user', content: roomTurn }],
                     temperature: vrApi.temperature ?? 0.9, stream: vrApi.stream ?? false,
                 }),
-            }, 2, 0, { appName: '彼方', charId: char.id, charName: char.name, purpose: '自由活动' });
+            }, 2, 0, { appName: '彼方', charId: char.id, charName: char.name, purpose: '自由活动' }, undefined, true);
             logVRApiCall({ ts: callStart, charId: char.id, charName: char.name, charEnabled: !!char.vrState?.enabled, room: room.id, model: vrApi.model, baseUrl, ok: true, ms: Date.now() - callStart });
         } catch (e: any) {
             modelCallFailed = true;
