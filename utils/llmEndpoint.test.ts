@@ -21,7 +21,7 @@ describe('OpenCode Go URL normalization', () => {
 
   it('normalizes an Anthropic chat-completions suffix back to Messages', () => {
     expect(nativeRequestUrl('https://opencode.ai/zen/go/v1/messages/chat/completions'))
-      .toBe('https://opencode.ai/inference/go/anthropic/v1/messages');
+      .toBe('https://opencode.ai/zen/go/v1/messages');
   });
 
   it('normalizes pasted OpenCode Go full endpoint URLs without duplicating path segments', () => {
