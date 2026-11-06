@@ -104,10 +104,11 @@ describe('independent vision API', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       choices: [{ message: { content: '一只黑猫坐在窗边，窗外正在下雨。' } }],
     }), { status: 200, headers: { 'content-type': 'application/json' } }));
-    vi.stubGlobal('fetch', fetchMock);
+    configureOpenCodeGoNativeTransport(true, fetchMock);
     const updateSpy = vi.spyOn(DB, 'updateMessageMetadata').mockResolvedValue(undefined);
 
-    const prepared = await materializeVisionDescriptions([message(1), message(2)], config);
+    const goConfig: VisionApiConfig = { enabled: true, baseUrl: 'https://opencode.ai/zen/go', apiKey: 'go-token', model: 'deepseek-v4-flash-vision-exp' };
+    const prepared = await materializeVisionDescriptions([message(1), message(2)], goConfig);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(updateSpy).toHaveBeenCalledTimes(2);
@@ -116,7 +117,7 @@ describe('independent vision API', () => {
       '一只黑猫坐在窗边，窗外正在下雨。',
     ]);
 
-    await materializeVisionDescriptions(prepared, config);
+    await materializeVisionDescriptions(prepared, goConfig);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
