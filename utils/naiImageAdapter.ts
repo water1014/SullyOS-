@@ -116,8 +116,11 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
   const isMorphoNativeRoute = config.provider === 'thirdparty'
     && /\\.loliyc\\.com$/i.test(parsedEndpoint.hostname)
     && /\\/novelai$/i.test(parsedEndpoint.pathname);
-  if (config.provider === 'thirdparty' && !isMorphoNativeRoute) {
+  if (!isMorphoNativeRoute) {
+    // 智绘姬 sends these compatibility fields for the standard /ai/generate-image route,
+    // then still reads the response as a ZIP. They are not used by Morpho's /novelai adapter.
     (body.parameters as Record<string, unknown>).stream = 'msgpack';
+    (body as Record<string, unknown>).use_new_shared_trial = true;
   }
   headers.set('Accept', 'application/zip, application/json, image/*');
   return {
