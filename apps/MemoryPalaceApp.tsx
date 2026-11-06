@@ -3615,6 +3615,29 @@ export default function MemoryPalaceApp() {
                             </span>
                         </label>
 
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setRrUrl('https://opencode.ai/zen/go');
+                                setRrKey((lightKey || apiConfig?.apiKey || '').trim());
+                                setRrModel((lightModel || apiConfig?.model || '').trim());
+                                setRrEnabled(true);
+                            }}
+                            disabled={!((lightKey || apiConfig?.apiKey || '').trim()) || !((lightModel || apiConfig?.model || '').trim())}
+                            style={{
+                                padding: '8px 12px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                                border: '1px solid #7dd3fc', background: 'white', color: '#0369a1',
+                                cursor: (!((lightKey || apiConfig?.apiKey || '').trim()) || !((lightModel || apiConfig?.model || '').trim())) ? 'not-allowed' : 'pointer',
+                                textAlign: 'left',
+                            }}
+                            title="将 Go 订阅的地址、Key 和聊天模型填入，使用聊天模型执行记忆重排"
+                        >
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <Icon name="zap" size={13} />
+                                <span>使用 OpenCode Go 进行记忆重排</span>
+                            </span>
+                        </button>
+
                         {/* 一键同步 embedding 服务商 */}
                         <button
                             onClick={() => {
