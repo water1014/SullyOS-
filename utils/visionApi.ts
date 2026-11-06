@@ -3,6 +3,7 @@ import { DB } from './db';
 import { extractContent, safeFetchJson } from './safeApi';
 import { normalizeApiBaseUrl, normalizeApiCredential, normalizeApiModel, normalizeApiHeaders, buildApiRequestHeaders } from './apiConfigNormalize';
 import { normalizeLlmBaseUrl } from './llmEndpoint';
+import { isOpenCodeGoEndpoint } from './apiConfigNormalize';
 import { isBlobRef } from './blobRef';
 
 export const VISION_DESCRIPTION_METADATA_KEY = 'visionDescription';
@@ -105,7 +106,7 @@ export async function describeImageWithVisionApi(
         max_tokens: 1200,
         stream: false,
       }),
-    }, 1, 60_000, { appName: '消息', purpose: '识图' });
+    }, 1, 60_000, { appName: '消息', purpose: '识图' }, undefined, isOpenCodeGoEndpoint(baseUrl));
 
     const description = cleanDescription(extractContent(data));
     if (!description) throw new Error('识图 API 没有返回图片描述');
