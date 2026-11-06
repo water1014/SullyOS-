@@ -201,7 +201,7 @@ describe('image generation clients', () => {
 
     expect(blob.type).toBe('image/png');
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
-    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Accept')).toBe('application/zip');
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Accept')).toBe('*/*');
   });
 
   it('extracts the first image from NovelAI ZIP output', async () => {
@@ -223,11 +223,12 @@ describe('image generation clients', () => {
     expect(url).toBe('https://nai-proxy.example/ai/generate-image');
     expect(new Headers(request.headers).get('Authorization')).toBe('Bearer thirdparty-token');
     expect(new Headers(request.headers).get('x-provider')).toBe('studio-test');
-    expect(new Headers(request.headers).get('Accept')).toBe('application/zip');
+    expect(new Headers(request.headers).get('Accept')).toBe('*/*');
     const requestBody = JSON.parse(String(request.body));
     expect(requestBody.parameters).not.toHaveProperty('stream');
     expect(requestBody).toMatchObject({
       action: 'generate',
+      use_new_shared_trial: true,
       model: 'nai-diffusion-5-full',
       parameters: {
         width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral',
@@ -235,7 +236,7 @@ describe('image generation clients', () => {
         cfg_rescale: 0, qualityToggle: true, noise_schedule: 'karras', n_samples: 1,
       },
     });
-    expect(requestBody).not.toHaveProperty('use_new_shared_trial');
+    expect(requestBody).toHaveProperty('use_new_shared_trial', true);
     expect(requestBody.parameters).not.toHaveProperty('stream');
     expect(requestBody.parameters).not.toHaveProperty('dynamic_thresholding');
   });
