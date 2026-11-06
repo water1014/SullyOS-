@@ -81,6 +81,9 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
       qualityToggle: true,
       ucPreset: 0,
       params_version: isV5 ? 4 : 3,
+      // 柏宝绘与智绘姬的同步 NAI ZIP 路线都显式声明 msgpack 传输模式。
+      // 第三方兼容站依赖此字段选择 ZIP 响应，缺失时可能走错误的响应编码路径。
+      stream: 'msgpack',
       v4_prompt: caption(prompt.trim()),
       v4_negative_prompt: caption(negativePrompt.trim()),
     },
