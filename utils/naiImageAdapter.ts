@@ -27,7 +27,7 @@ export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'officia
   try { parsed = new URL(raw); }
   catch { throw new Error('NAI API Base URL 必须是完整的 http:// 或 https:// 地址'); }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error('NAI API Base URL 只支持 HTTP 或 HTTPS 地址');
-  const basePath = parsed.pathname.replace(/^\/+|\/+$/g, '');
+  const basePath = parsed.pathname.replace(/^\/+|\/+$/g, '').replace(/\/v1$/i, '');
   // Morpho treats /novelai as the complete API endpoint, not a base URL.
   // Its sugar-painting web paths /api/generate and /generate map to /novelai.
   if (/\/novelai$/i.test('/' + basePath)) {
@@ -95,7 +95,7 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
       dynamic_thresholding: false,
       controlnet_strength: 1,
       legacy: false,
-      add_original_image: false,
+      add_original_image: true,
       legacy_v3_extend: false,
       skip_cfg_above_sigma: null,
       use_coords: false,
@@ -116,7 +116,7 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
   const isMorphoNativeRoute = config.provider === 'thirdparty'
     && /\.loliyc\.com$/i.test(parsedEndpoint.hostname)
     && /\/novelai$/i.test(parsedEndpoint.pathname);
-  if (!isMorphoNativeRoute) {
+  if (provider === 'thirdparty' && !isMorphoNativeRoute) {
     // 智绘姬 sends these compatibility fields for the standard /ai/generate-image route,
     // then still reads the response as a ZIP. They are not used by Morpho's /novelai adapter.
     (body.parameters as Record<string, unknown>).stream = 'msgpack';
@@ -365,13 +365,13 @@ export async function readNaiImageResponse(response: Response): Promise<Blob> {
   const prefix = new TextDecoder().decode(buffer.subarray(0, Math.min(buffer.length, 32))).trimStart();
   if (contentType.includes('json') || contentType.startsWith('text/') || prefix.startsWith('{') || prefix.startsWith('[')) return parseNaiJsonResponse(buffer);
   if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
-    // Primary path matches BaiBai exactly: fflate.unzipSync on the original ZIP bytes.
-    let fflateError = '';
-    try { return extractImageWithFflate(buffer); }
-    catch (error) { fflateError = error instanceof Error ? error.message : String(error); }
+    // Match OVO's JSZip-first ZIP handling, then retain BaiBai's fflate fallback on the untouched bytes.
     let jsZipError = '';
     try { return await extractImageFromJsZip(buffer); }
     catch (error) { jsZipError = error instanceof Error ? error.message : String(error); }
+    let fflateError = '';
+    try { return extractImageWithFflate(buffer); }
+    catch (error) { fflateError = error instanceof Error ? error.message : String(error); }
     let zipJsError = '';
     try { return await extractImageFromZipJs(buffer); }
     catch (error) { zipJsError = error instanceof Error ? error.message : String(error); }
