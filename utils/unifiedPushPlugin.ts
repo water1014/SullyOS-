@@ -28,6 +28,7 @@ interface UnifiedPushNativePlugin {
   register(options: { vapidPublicKey: string }): Promise<{ pending: boolean }>;
   unregister(): Promise<void>;
   drainPendingPushes(): Promise<{ messages: UnifiedPushStoredMessage[]; launchPayload?: string }>;
+  acknowledgePendingPushes(options: { throughReceivedAt: number }): Promise<void>;
   addListener(
     eventName: 'pushReceived' | 'notificationTapped' | 'registrationChanged',
     listener: (event: any) => void,
@@ -137,6 +138,9 @@ export const readUnifiedPushSubscription = async () =>
   (await getUnifiedPushStatus()).subscription;
 
 export const drainUnifiedPushMessages = () => NativeUnifiedPush.drainPendingPushes();
+
+export const acknowledgeUnifiedPushMessages = (throughReceivedAt: number) =>
+  NativeUnifiedPush.acknowledgePendingPushes({ throughReceivedAt });
 
 export const addUnifiedPushListener = (
   eventName: 'pushReceived' | 'notificationTapped' | 'registrationChanged',
