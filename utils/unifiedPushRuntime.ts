@@ -1,6 +1,6 @@
 import type { PluginListenerHandle } from '@capacitor/core';
 import { ingestNativeAmsgPayload, parseNativeAmsgPayload } from './nativeAmsgInbox';
-import { addUnifiedPushListener, drainUnifiedPushMessages, isUnifiedPushPlatform } from './unifiedPushPlugin';
+import { acknowledgeUnifiedPushMessages, addUnifiedPushListener, drainUnifiedPushMessages, isUnifiedPushPlatform } from './unifiedPushPlugin';
 
 let initialized = false;
 let listenerHandles: PluginListenerHandle[] = [];
@@ -30,8 +30,10 @@ export const initUnifiedPushRuntime = async (): Promise<void> => {
 
     listenerHandles = [receivedHandle, tappedHandle];
     const pending = await drainUnifiedPushMessages();
+    let acknowledgedThrough = 0;
     for (const message of pending.messages || []) {
       await ingest(message.payload);
+      acknowledgedThrough = Math.max(acknowledgedThrough, Number(message.receivedAt) || 0);
     }
 
     if (pending.launchPayload) {
@@ -41,6 +43,7 @@ export const initUnifiedPushRuntime = async (): Promise<void> => {
         window.dispatchEvent(new CustomEvent('active-msg-open', { detail: { charId } }));
       }
     }
+    await acknowledgeUnifiedPushMessages(acknowledgedThrough);
     initialized = true;
   } catch (error) {
     await Promise.all(listenerHandles.map((handle) => handle.remove().catch(() => undefined)));
