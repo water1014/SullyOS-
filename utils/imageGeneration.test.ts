@@ -204,7 +204,8 @@ describe('image generation clients', () => {
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
     expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Accept')).toBe('application/zip, application/json, image/*');
     const sentBody = JSON.parse(String(fetchMock.mock.calls[0][1].body));
-    expect(sentBody.parameters.stream).toBeUndefined();
+    // 智绘姬-compatible gateways may require this hint but still return ZIP/JSON synchronously.
+    expect(sentBody.parameters.stream).toBe('msgpack');
     expect(sentBody).not.toHaveProperty('use_new_shared_trial');
   });
 
