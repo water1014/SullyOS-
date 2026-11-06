@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { acknowledge, addListener, drain, isAndroid, ingest } = vi.hoisted(() => ({
+const { acknowledge, addListener, drain, isAndroid, ingest, listeners } = vi.hoisted(() => ({
+  listeners: {} as Record<string, (event: any) => void>,
   acknowledge: vi.fn().mockResolvedValue(undefined),
   addListener: vi.fn(),
   drain: vi.fn(),
@@ -25,6 +26,11 @@ describe('UnifiedPush runtime recovery', () => {
     acknowledge.mockReset();
     acknowledge.mockResolvedValue(undefined);
     addListener.mockReset();
+    Object.keys(listeners).forEach((key) => delete listeners[key]);
+    addListener.mockImplementation(async (eventName, listener) => {
+      listeners[eventName] = listener;
+      return { remove: vi.fn().mockResolvedValue(undefined) };
+    });
     drain.mockReset();
     ingest.mockReset();
     ingest.mockResolvedValue({ charId: 'character-1' });
@@ -59,5 +65,23 @@ describe('UnifiedPush runtime recovery', () => {
     await runtime.initUnifiedPushRuntime();
     expect(acknowledge).not.toHaveBeenCalled();
   });
+
+  it('acknowledges live push events only after inbox ingestion', async () => {
+    const runtime = await import('./unifiedPushRuntime');
+    await runtime.initUnifiedPushRuntime();
+    await listeners.pushReceived({ payload: '{"metadata":{"charId":"c1"}}', receivedAt: 456 });
+    await vi.waitFor(() => expect(acknowledge).toHaveBeenCalledWith(456));
+  });
+
+  it('does not acknowledge a live push when inbox ingestion fails', async () => {
+    const runtime = await import('./unifiedPushRuntime');
+    await runtime.initUnifiedPushRuntime();
+    ingest.mockRejectedValueOnce(new Error('IndexedDB write failed'));
+    await listeners.pushReceived({ payload: '{"metadata":{"charId":"c1"}}', receivedAt: 789 });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(acknowledge).not.toHaveBeenCalled();
+  });
+
 
 });
