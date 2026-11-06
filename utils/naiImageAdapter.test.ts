@@ -28,7 +28,6 @@ describe('NAI synchronous ZIP generation contract', () => {
 
 
   it('retries the Android OkHttp unexpected-end-of-stream transport failure once', async () => {
-    vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const zip = new JSZip();
     const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
@@ -45,7 +44,6 @@ describe('NAI synchronous ZIP generation contract', () => {
     }, '1girl, portrait', '', {
       width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 123,
     });
-    await vi.advanceTimersByTimeAsync(1000);
     const image = await pending;
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(image.type).toBe('image/png');
