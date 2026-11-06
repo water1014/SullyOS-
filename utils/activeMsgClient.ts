@@ -149,7 +149,7 @@ export interface ActiveMsg2PushStatus {
   hasSubscription: boolean;
   vapidConfigured: boolean;
   detail?: string;
-  transport?: 'web-push' | 'unified-push';
+  transport?: 'web-push' | 'unified-push' | 'fcm';
   distributor?: string | null;
   needsDistributor?: boolean;
 }
@@ -1971,6 +1971,20 @@ export const ActiveMsgClient = {
   async getPushStatus(): Promise<ActiveMsg2PushStatus> {
     const config = await ensureGlobalReady();
     const workerConfigured = Boolean(config.workerUrl.trim());
+    // In the Capacitor FCM build, a persisted token is the native subscription.
+    // Do not run browser Service Worker capability checks inside Android WebView:
+    // they can report unsupported even though FCM is already registered.
+    const nativeFcmToken = readNativePushToken();
+    if (nativeFcmToken) {
+      return {
+        supported: true,
+        permission: 'granted',
+        hasSubscription: true,
+        vapidConfigured: workerConfigured,
+        transport: 'fcm',
+        detail: !workerConfigured ? '原生 FCM 已注册，请先填写 Worker 地址。' : 'Android 原生 FCM 已注册。',
+      };
+    }
     if (isUnifiedPushPlatform()) {
       try {
         const { getUnifiedPushStatus } = await import('./unifiedPushPlugin');
