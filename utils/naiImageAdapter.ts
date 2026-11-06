@@ -104,9 +104,11 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
       v4_negative_prompt: caption(negativePrompt.trim()),
     },
   };
+  const headers = makeNaiHeaders(config);
+  if (isLoliYcNovelAiRoute) headers.set('Accept', 'application/zip, application/json, image/*');
   return {
     url: endpoint,
-    init: { method: 'POST', headers: makeNaiHeaders(config), body: JSON.stringify(body) },
+    init: { method: 'POST', headers, body: JSON.stringify(body) },
   };
 }
 
