@@ -19,13 +19,21 @@ export const initUnifiedPushRuntime = async (): Promise<void> => {
   // foreground retry instead of permanently locking this runtime in a failed state.
   try {
     const receivedHandle = await addUnifiedPushListener('pushReceived', (event) => {
-      void ingest(event?.payload).catch((error) =>
-        console.warn('[ActiveMsg:UnifiedPush] 收到推送后处理失败', error));
+      void ingest(event?.payload)
+        .then(() => {
+          const receivedAt = Number(event?.receivedAt) || 0;
+          if (receivedAt > 0) return acknowledgeUnifiedPushMessages(receivedAt);
+        })
+        .catch((error) => console.warn('[ActiveMsg:UnifiedPush] 收到推送后处理失败', error));
     });
     listenerHandles = [receivedHandle];
     const tappedHandle = await addUnifiedPushListener('notificationTapped', (event) => {
-      void ingest(event?.payload, true).catch((error) =>
-        console.warn('[ActiveMsg:UnifiedPush] 通知点击处理失败', error));
+      void ingest(event?.payload, true)
+        .then(() => {
+          const receivedAt = Number(event?.receivedAt) || 0;
+          if (receivedAt > 0) return acknowledgeUnifiedPushMessages(receivedAt);
+        })
+        .catch((error) => console.warn('[ActiveMsg:UnifiedPush] 通知点击处理失败', error));
     });
 
     listenerHandles = [receivedHandle, tappedHandle];
