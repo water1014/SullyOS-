@@ -242,7 +242,13 @@ export const musicApi = {
     const url = `${resolveMusicWorkerUrl(cfg)}/netease${path.startsWith('/') ? path : '/' + path}`;
     const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body || {}) });
     const j = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(j?.error || j?.message || `HTTP ${res.status}`);
+    if (!res.ok) {
+      // Preserve Worker diagnostics: the previous UI hid `detail` (DNS/TLS/timeout/HTTP host).
+      const summary = j?.error || j?.message || `HTTP ${res.status}`;
+      const detail = typeof j?.detail === 'string' ? j.detail.trim() : '';
+      const tried = Number.isFinite(j?.tried) ? `（已尝试 ${j.tried} 个上游）` : '';
+      throw new Error([summary + tried, detail].filter(Boolean).join('：'));
+    }
     return j;
   },
   // 对外：默认走 TTL 缓存 + in-flight 去重；无匹配规则的 path 会透传
