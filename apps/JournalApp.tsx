@@ -634,7 +634,7 @@ ${charPart}
 `;
             const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+                headers: buildApiRequestHeaders(apiConfig.apiKey, apiConfig.customHeaders, { baseUrl: apiConfig.baseUrl, sessionId: getOpenCodeSessionId(`journal:${selectedChar.id}`) }),
                 body: JSON.stringify({
                     model: apiConfig.model,
                     messages: (await ContextBuilder.buildCharacterRequest(characterContextInput, [{ role: 'user', content: prompt }])),
