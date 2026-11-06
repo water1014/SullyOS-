@@ -10,7 +10,10 @@ public class AmsgNotificationTapReceiver extends BroadcastReceiver {
         String payload = intent.getStringExtra("payload");
         if (payload == null) return;
         context.getSharedPreferences(AmsgUnifiedPushPlugin.PREFS, Context.MODE_PRIVATE)
-            .edit().putString(AmsgUnifiedPushPlugin.KEY_LAUNCH_PAYLOAD, payload).commit();
+            .edit()
+            .putString(AmsgUnifiedPushPlugin.KEY_LAUNCH_PAYLOAD, payload)
+            .putLong(AmsgUnifiedPushPlugin.KEY_LAUNCH_PAYLOAD_AT, System.currentTimeMillis())
+            .commit();
         AmsgUnifiedPushPlugin.sendEvent(context, AmsgUnifiedPushPlugin.ACTION_TAP, payload);
         Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         if (launch != null) {
