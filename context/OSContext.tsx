@@ -68,6 +68,8 @@ import { collectAppearance, collectCharSettings, collectDataScale, collectFeatur
 import { normalizeApiConfig, normalizeApiPreset, isOpenCodeGoEndpoint, getOpenCodeSessionId } from '../utils/apiConfigNormalize';
 import { fetchLlm } from '../utils/anthropicApi';
 import { fetchOpenCodeGo, normalizeOpenCodeGoRequestUrl } from '../utils/openCodeGoTransport';
+import { configureOpenCodeGoNativeTransport } from '../utils/openCodeGoTransport';
+import { createOpenCodeGoNativeFetch } from '../utils/openCodeGoNativePlugin';
 import { getCheckPhoneApi, setCheckPhoneApi } from '../utils/checkPhoneApi';
 import { markBackupDone } from '../utils/backupReminder';
 import { collectSARLocalBackup, restoreSARLocalBackup } from '../utils/vrWorld/sarBackup';
@@ -1188,7 +1190,16 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       if (interceptorsInitialized.current) return;
       interceptorsInitialized.current = true;
 
-      // 1. Monkey Patch Fetch
+      // 1. Wire the Android OpenCode Go native stream bridge before patching fetch.
+      // The Java plugin is registered by scripts/prepare:android; without this binding
+      // fetchOpenCodeGo silently falls back to WebView fetch and is still subject to CORS.
+      const isAndroidOpenCodeGoRuntime = Capacitor.getPlatform() === 'android';
+      configureOpenCodeGoNativeTransport(
+          isAndroidOpenCodeGoRuntime,
+          isAndroidOpenCodeGoRuntime ? createOpenCodeGoNativeFetch() : undefined,
+      );
+
+      // 2. Monkey Patch Fetch
       const originalFetch = window.fetch;
       // “同一 API 在别的模式刚成功”是排查 CORS 包装错误最有价值的对照证据。
       // 只记 method + URL + 状态与时间，不保存请求正文。
