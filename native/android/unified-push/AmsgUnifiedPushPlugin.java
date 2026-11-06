@@ -39,6 +39,7 @@ public class AmsgUnifiedPushPlugin extends Plugin {
     static final String KEY_LAST_ERROR = "last_error";
     static final String KEY_MESSAGES = "pending_messages";
     static final String KEY_LAUNCH_PAYLOAD = "launch_payload";
+    static final String KEY_LAUNCH_PAYLOAD_AT = "launch_payload_at";
 
     private BroadcastReceiver receiver;
 
@@ -159,7 +160,7 @@ public class AmsgUnifiedPushPlugin extends Plugin {
     @PluginMethod
     public void unregister(PluginCall call) {
         try {
-            UnifiedPush.unregister(getContext(), ConstantsKt.getINSTANCE_DEFAULT());
+            UnifiedPush.unregister(getContext(), ConstantsKt.INSTANCE_DEFAULT);
             getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .remove(KEY_ENDPOINT).remove(KEY_P256DH).remove(KEY_AUTH)
                 .remove(KEY_DISTRIBUTOR).remove(KEY_TEMPORARY).remove(KEY_VAPID)
@@ -175,6 +176,7 @@ public class AmsgUnifiedPushPlugin extends Plugin {
         android.content.SharedPreferences prefs = getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String raw = prefs.getString(KEY_MESSAGES, "[]");
         String launchPayload = prefs.getString(KEY_LAUNCH_PAYLOAD, null);
+        long launchPayloadReceivedAt = prefs.getLong(KEY_LAUNCH_PAYLOAD_AT, 0L);
         JSArray messages = new JSArray();
         try {
             JSONArray stored = new JSONArray(raw);
@@ -190,6 +192,7 @@ public class AmsgUnifiedPushPlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("messages", messages);
         result.put("launchPayload", launchPayload);
+        result.put("launchPayloadReceivedAt", launchPayloadReceivedAt);
         call.resolve(result);
     }
 
@@ -207,7 +210,11 @@ public class AmsgUnifiedPushPlugin extends Plugin {
                 if (item != null && item.optLong("receivedAt", 0L) > throughReceivedAt) remaining.put(item);
             }
             android.content.SharedPreferences.Editor editor = prefs.edit().putString(KEY_MESSAGES, remaining.toString());
-            editor.remove(KEY_LAUNCH_PAYLOAD).commit();
+            long launchPayloadAt = prefs.getLong(KEY_LAUNCH_PAYLOAD_AT, 0L);
+            if (launchPayloadAt > 0L && launchPayloadAt <= throughReceivedAt) {
+                editor.remove(KEY_LAUNCH_PAYLOAD).remove(KEY_LAUNCH_PAYLOAD_AT);
+            }
+            editor.commit();
             call.resolve();
         } catch (Exception error) {
             call.reject("确认 UnifiedPush 收件箱失败", error);
