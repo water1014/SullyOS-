@@ -25,7 +25,7 @@ describe('OpenCode Go explicit overload retry', () => {
             }));
 
         const pending = safeFetchJson(
-            'https://opencode.ai/inference/go/openai/v1/chat/completions',
+            'https://api.test/v1/chat/completions',
             {
                 method: 'POST',
                 headers: { authorization: 'Bearer test-only', 'x-opencode-session': 'test-session' },
@@ -52,7 +52,7 @@ describe('OpenCode Go explicit overload retry', () => {
         ));
 
         await expect(safeFetchJson(
-            'https://opencode.ai/inference/go/openai/v1/chat/completions',
+            'https://api.test/v1/chat/completions',
             { method: 'POST', body: JSON.stringify({ model: 'deepseek-v4.1-flash', messages: [] }) },
             2,
             0,
@@ -68,7 +68,7 @@ describe('OpenCode Go explicit overload retry', () => {
         const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
 
         await expect(safeFetchJson(
-            'https://opencode.ai/inference/go/openai/v1/chat/completions',
+            'https://api.test/v1/chat/completions',
             { method: 'POST', body: JSON.stringify({ model: 'deepseek-v4.1-flash', messages: [] }) },
             2,
             0,
