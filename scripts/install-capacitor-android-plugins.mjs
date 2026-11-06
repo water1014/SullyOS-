@@ -70,6 +70,7 @@ async function main() {
     { className: 'ScreenAwarenessPlugin', directory: 'screen-awareness' },
     { className: 'AndroidSafeAreaPlugin', directory: 'android-safe-area' },
     { className: 'OpenCodeGoStreamPlugin', directory: 'opencode-go-stream' },
+    { className: 'AmsgUnifiedPushPlugin', directory: 'unified-push' },
   ];
   for (const plugin of plugins) {
     const source = join(pluginRoot, plugin.directory, `${plugin.className}.java`);
@@ -79,6 +80,9 @@ async function main() {
   }
   const serviceSource = join(pluginRoot, 'screen-awareness', 'ScreenAwarenessService.java');
   await copyFile(serviceSource, join(javaRoot, packageName.split('.').join('/'), 'ScreenAwarenessService.java'));
+  for (const file of ['AmsgUnifiedPushService.java', 'AmsgNotificationTapReceiver.java']) {
+    await copyFile(join(pluginRoot, 'unified-push', file), join(javaRoot, packageName.split('.').join('/'), file));
+  }
   activity = addImport(activity, 'import android.os.Bundle;');
   await writeFile(activityPath, activity, 'utf8');
 
@@ -151,6 +155,32 @@ async function main() {
       throw new Error('Existing FileProvider XML resource name is invalid');
     }
   }
+  const unifiedPushService = 'android:name=".AmsgUnifiedPushService"';
+  if (!manifest.includes(unifiedPushService)) {
+    const service = [
+      '        <service',
+      '            android:name=".AmsgUnifiedPushService"',
+      '            android:exported="false">',
+      '            <intent-filter>',
+      '                <action android:name="org.unifiedpush.android.connector.PUSH_EVENT" />',
+      '            </intent-filter>',
+      '        </service>',
+    ].join('\\n');
+    const applicationClose = manifest.lastIndexOf('</application>');
+    if (applicationClose < 0) throw new Error('AndroidManifest.xml has no application closing tag');
+    manifest = manifest.slice(0, applicationClose) + service + '\\n' + manifest.slice(applicationClose);
+  }
+  const tapReceiver = 'android:name=".AmsgNotificationTapReceiver"';
+  if (!manifest.includes(tapReceiver)) {
+    const receiver = [
+      '        <receiver',
+      '            android:name=".AmsgNotificationTapReceiver"',
+      '            android:exported="false" />',
+    ].join('\\n');
+    const applicationClose = manifest.lastIndexOf('</application>');
+    if (applicationClose < 0) throw new Error('AndroidManifest.xml has no application closing tag');
+    manifest = manifest.slice(0, applicationClose) + receiver + '\\n' + manifest.slice(applicationClose);
+  }
   await writeFile(manifestPath, manifest, 'utf8');
 
   const xmlDirectory = join(appRoot, 'src', 'main', 'res', 'xml');
@@ -174,8 +204,18 @@ async function main() {
   }
   await writeFile(xmlPath, pathsXml, 'utf8');
 
+  const appGradlePath = join(appRoot, 'build.gradle');
+  let appGradle = await readFile(appGradlePath, 'utf8');
+  const unifiedPushDependency = "implementation 'org.unifiedpush.android:connector:3.3.3'";
+  if (!appGradle.includes('org.unifiedpush.android:connector:')) {
+    const dependenciesMatch = appGradle.match(/dependencies\\s*\\{/);
+    if (!dependenciesMatch) throw new Error('Generated app/build.gradle has no dependencies block');
+    const insertAt = dependenciesMatch.index + dependenciesMatch[0].length;
+    appGradle = appGradle.slice(0, insertAt) + '\\n    ' + unifiedPushDependency + appGradle.slice(insertAt);
+  }
+  await writeFile(appGradlePath, appGradle, 'utf8');
 
-  process.stdout.write('Android project prepared: APK installer and Android Keystore plugins registered.\n');
+  process.stdout.write('Android project prepared: APK installer, Android Keystore, and UnifiedPush plugins registered.\n');
 }
 
 main().catch(error => {
