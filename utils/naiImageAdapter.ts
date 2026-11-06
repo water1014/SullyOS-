@@ -110,7 +110,15 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
     },
   };
   const headers = makeNaiHeaders(config);
-  // Match Morpho's standard NAI request: JSON payload, ZIP/JSON/image response, no msgpack stream flag.
+  // 智绘姬-compatible third-party gateways may require the legacy msgpack hint while still returning a ZIP.
+  // Morpho's native /novelai endpoint expects its standard synchronous JSON-to-ZIP contract instead.
+  const parsedEndpoint = new URL(endpoint);
+  const isMorphoNativeRoute = config.provider === 'thirdparty'
+    && /\\.loliyc\\.com$/i.test(parsedEndpoint.hostname)
+    && /\\/novelai$/i.test(parsedEndpoint.pathname);
+  if (config.provider === 'thirdparty' && !isMorphoNativeRoute) {
+    (body.parameters as Record<string, unknown>).stream = 'msgpack';
+  }
   headers.set('Accept', 'application/zip, application/json, image/*');
   return {
     url: endpoint,
