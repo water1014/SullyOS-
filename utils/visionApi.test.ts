@@ -78,6 +78,28 @@ describe('independent vision API', () => {
     });
   });
 
+  it('retries one explicit OpenCode Go vision prefill-capacity rejection', async () => {
+    vi.useFakeTimers();
+    const transport = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: '[prefill_cap_refused] the cell is at capacity; retry shortly (after 5 s)' },
+      }), { status: 429, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: '一只猫坐在窗台上。' } }],
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    configureOpenCodeGoNativeTransport(true, transport);
+
+    const pending = describeImageWithVisionApi(image, {
+      enabled: true, baseUrl: 'https://opencode.ai/zen/go', apiKey: 'go-token',
+      model: 'deepseek-v4.1-flash',
+    }, 'vision-capacity-test');
+
+    await vi.runAllTimersAsync();
+    await expect(pending).resolves.toContain('猫');
+    expect(transport).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
   it('keeps a stable vision session per character and isolates different characters', async () => {
     const sessionHeaders: string[] = [];
     configureOpenCodeGoNativeTransport(true, async (_url, init) => {
