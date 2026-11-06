@@ -16,6 +16,7 @@ import { SongSheet, SongLine, APIConfig, CharacterProfile } from '../types';
 import { SONG_GENRES, SONG_MOODS } from './songPrompts';
 import { DB } from './db';
 import { getProxyWorkerUrl } from './proxyWorker';
+import { buildApiRequestHeaders, getOpenCodeSessionId } from './apiConfigNormalize';
 
 // ── Endpoint config ──
 // Same Cloudflare Worker that hosts /netease, /xhs, /webdav etc. — address comes
@@ -303,12 +304,13 @@ ${trimmed || '(用户没填，请完全凭角色档案的怪癖和气质来决�
 ${trimmed ? '⚠️ 再次提醒: 用户 hint 里写明的具体音乐元素 (vocal 性别 / 风格 / 乐器 / BPM) 必须原样保留。' : ''}
 最终回复仅是那一行标签串本身 (不要前后缀 / 不要解释)。**即使 hint 模糊或为空, 也必须给出一段 8-15 个标签的完整字符串, 绝不能空回。**`;
 
-  const res = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+  const baseUrl = apiConfig.baseUrl.replace(/\/+$/, '');
+  const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiConfig.apiKey}`,
-    },
+    headers: buildApiRequestHeaders(apiConfig.apiKey, apiConfig.customHeaders, {
+      baseUrl,
+      sessionId: getOpenCodeSessionId(`music-prompt:${collaborator?.id || 'global'}`),
+    }),
     body: JSON.stringify({
       model: apiConfig.model,
       messages: [
