@@ -3598,7 +3598,7 @@ export default function MemoryPalaceApp() {
                         fontSize: 11, color: '#1e3a8a', lineHeight: 1.7,
                     }}>
                         <div style={{ fontWeight: 700, marginBottom: 4 }}>rerank 是干啥的？</div>
-                        开了之后能让跟你这句话最相关的记忆更准地被翻出来；可选增强，不开也不影响。OpenCode Go 没有公开的 /rerank 端点，这里仍需使用独立的 Rerank 服务。
+                        开了之后能让跟你这句话最相关的记忆更准地被翻出来；可选增强，不开也不影响。使用 OpenCode Go 时会自动改用聊天模型进行重排；其他服务商仍走原生 /rerank 端点。
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
