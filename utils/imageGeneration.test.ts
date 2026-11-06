@@ -281,6 +281,36 @@ describe('image generation clients', () => {
     )).rejects.toThrow('未修改响应元数据');
   });
 
+  it('recovers an intact NAI image from local ZIP headers when the EOCD directory offset is damaged', async () => {
+    const zip = new JSZip();
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0));
+    zip.file('image_0.png', png);
+    const archive = new Uint8Array(await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }));
+    let eocd = -1;
+    for (let index = archive.length - 22; index >= Math.max(0, archive.length - 22 - 0xffff); index -= 1) {
+      if (archive[index] === 0x50 && archive[index + 1] === 0x4b
+        && archive[index + 2] === 0x05 && archive[index + 3] === 0x06) {
+        eocd = index;
+        break;
+      }
+    }
+    expect(eocd).toBeGreaterThan(0);
+    const damaged = archive.slice();
+    damaged.fill(0xff, eocd + 16, eocd + 20);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(damaged, {
+      status: 200, headers: { 'Content-Type': 'application/zip' },
+    })));
+
+    const blob = await generateNaiImage(
+      { apiKey: 'proxy-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example' },
+      'blue hair',
+      '',
+      { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 1 },
+    );
+    expect(blob.type).toBe('image/png');
+    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(png);
+  });
+
   it('rejects ZIP data with a damaged central directory even when a signature record exists', async () => {
     const zip = new JSZip();
     const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkyoAAAAASUVORK5CYII='), char => char.charCodeAt(0));
