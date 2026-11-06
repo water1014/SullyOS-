@@ -21,8 +21,8 @@ describe('API config normalization', () => {
   });
 
   it('normalizes the user-facing OpenCode Zen Go URL to the OpenAI-compatible v1 root', () => {
-    expect(normalizeLlmBaseUrl('https://opencode.ai/zen/go', 'openai')).toBe('https://opencode.ai/zen/go/v1');
-    expect(normalizeLlmBaseUrl('https://opencode.ai/zen/go/', 'openai')).toBe('https://opencode.ai/zen/go/v1');
+    expect(normalizeLlmBaseUrl('https://opencode.ai/zen/go', 'openai')).toBe('https://opencode.ai/inference/go/openai/v1');
+    expect(normalizeLlmBaseUrl('https://opencode.ai/zen/go/', 'openai')).toBe('https://opencode.ai/inference/go/openai/v1');
     expect(isOpenCodeGoEndpoint('https://opencode.ai/zen/go/v1')).toBe(true);
   });
 
@@ -37,13 +37,13 @@ describe('API config normalization', () => {
       baseUrl: 'https://opencode.ai/zen/go',
       apiKey: 'go-token',
       model: 'kimi-k3',
-    }).baseUrl).toBe('https://opencode.ai/zen/go/v1');
+    }).baseUrl).toBe('https://opencode.ai/inference/go/openai/v1');
     expect(normalizeApiConfig({
       baseUrl: 'https://opencode.ai/zen/go',
       apiKey: 'go-token',
       model: 'qwen3.8-max',
       apiType: 'anthropic',
-    }).baseUrl).toBe('https://opencode.ai/zen/go/v1/messages');
+    }).baseUrl).toBe('https://opencode.ai/inference/go/anthropic/v1/messages');
   });
 
   it('keeps valid custom headers and drops invalid or browser-forbidden headers', () => {
