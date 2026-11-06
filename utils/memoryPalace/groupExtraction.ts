@@ -12,6 +12,7 @@ import type { Message } from '../../types';
 import type { MemoryRoom } from './types';
 import type { LightLLMConfig } from './pipeline';
 import { safeFetchJson } from '../safeApi';
+import { buildApiRequestHeaders, getOpenCodeSessionId, isOpenCodeGoEndpoint } from '../apiConfigNormalize';
 import { safeParseJsonArray } from './jsonUtils';
 
 /** 群记忆草稿——尚未指派 charId（一份记忆稍后会复制给每个成员持久化） */
@@ -137,10 +138,10 @@ ${buildGroupRulesBlock(groupName, memberNames, userLabel)}
             `${llmConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`,
             {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${llmConfig.apiKey}`,
-                },
+                headers: buildApiRequestHeaders(llmConfig.apiKey, undefined, {
+                    baseUrl: llmConfig.baseUrl,
+                    sessionId: getOpenCodeSessionId(`group-memory:${groupName}`),
+                }),
                 body: JSON.stringify({
                     model: llmConfig.model,
                     messages: [
@@ -152,7 +153,7 @@ ${buildGroupRulesBlock(groupName, memberNames, userLabel)}
                     stream: false,
                 }),
             },
-            2, 180_000, { appName: '记忆宫殿', purpose: '群记忆提取' }
+            2, 180_000, { appName: '记忆宫殿', purpose: '群记忆提取' }, undefined, isOpenCodeGoEndpoint(llmConfig.baseUrl)
         );
 
         const reply = data.choices?.[0]?.message?.content || '';
