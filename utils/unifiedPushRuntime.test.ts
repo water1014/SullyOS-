@@ -59,4 +59,11 @@ describe('UnifiedPush runtime recovery', () => {
     expect(acknowledge).not.toHaveBeenCalled();
   });
 
+  it('does not acknowledge messages when inbox ingestion fails', async () => {
+    ingest.mockRejectedValueOnce(new Error('IndexedDB write failed'));
+    const runtime = await import('./unifiedPushRuntime');
+    await runtime.initUnifiedPushRuntime();
+    expect(acknowledge).not.toHaveBeenCalled();
+  });
+
 });
