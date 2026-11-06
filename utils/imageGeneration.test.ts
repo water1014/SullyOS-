@@ -235,7 +235,7 @@ describe('image generation clients', () => {
         cfg_rescale: 0, qualityToggle: true, noise_schedule: 'karras', n_samples: 1,
       },
     });
-    expect(requestBody.parameters).not.toHaveProperty('dynamic_thresholding');
+    expect(requestBody.parameters.dynamic_thresholding).toBe(false);
   });
 
   it('rejects a damaged single-image NAI ZIP instead of rewriting its metadata', async () => {
