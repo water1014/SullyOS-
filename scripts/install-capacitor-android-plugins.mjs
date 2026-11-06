@@ -165,10 +165,10 @@ async function main() {
       '                <action android:name="org.unifiedpush.android.connector.PUSH_EVENT" />',
       '            </intent-filter>',
       '        </service>',
-    ].join('\\n');
+    ].join('\n');
     const applicationClose = manifest.lastIndexOf('</application>');
     if (applicationClose < 0) throw new Error('AndroidManifest.xml has no application closing tag');
-    manifest = manifest.slice(0, applicationClose) + service + '\\n' + manifest.slice(applicationClose);
+    manifest = manifest.slice(0, applicationClose) + service + '\n' + manifest.slice(applicationClose);
   }
   const tapReceiver = 'android:name=".AmsgNotificationTapReceiver"';
   if (!manifest.includes(tapReceiver)) {
@@ -176,10 +176,10 @@ async function main() {
       '        <receiver',
       '            android:name=".AmsgNotificationTapReceiver"',
       '            android:exported="false" />',
-    ].join('\\n');
+    ].join('\n');
     const applicationClose = manifest.lastIndexOf('</application>');
     if (applicationClose < 0) throw new Error('AndroidManifest.xml has no application closing tag');
-    manifest = manifest.slice(0, applicationClose) + receiver + '\\n' + manifest.slice(applicationClose);
+    manifest = manifest.slice(0, applicationClose) + receiver + '\n' + manifest.slice(applicationClose);
   }
   await writeFile(manifestPath, manifest, 'utf8');
 
@@ -208,10 +208,10 @@ async function main() {
   let appGradle = await readFile(appGradlePath, 'utf8');
   const unifiedPushDependency = "implementation 'org.unifiedpush.android:connector:3.3.3'";
   if (!appGradle.includes('org.unifiedpush.android:connector:')) {
-    const dependenciesMatch = appGradle.match(/dependencies\\s*\\{/);
+    const dependenciesMatch = appGradle.match(/dependencies\s*\{/);
     if (!dependenciesMatch) throw new Error('Generated app/build.gradle has no dependencies block');
     const insertAt = dependenciesMatch.index + dependenciesMatch[0].length;
-    appGradle = appGradle.slice(0, insertAt) + '\\n    ' + unifiedPushDependency + appGradle.slice(insertAt);
+    appGradle = appGradle.slice(0, insertAt) + '\n    ' + unifiedPushDependency + appGradle.slice(insertAt);
   }
   await writeFile(appGradlePath, appGradle, 'utf8');
 
