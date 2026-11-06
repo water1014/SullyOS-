@@ -9,6 +9,7 @@ import type { Message } from '../../types';
 import type { MemoryEntity, MemoryNode, MemoryRoom } from './types';
 import type { LightLLMConfig } from './pipeline';
 import { safeFetchJson } from '../safeApi';
+import { buildApiRequestHeaders, getOpenCodeSessionId } from '../apiConfigNormalize';
 import { safeParseJsonArray } from './jsonUtils';
 import { buildSARMemoryBoundaryInstruction, formatMessageForPrompt } from '../messageFormat';
 import { readRecallRuntimeSnapshot } from './trace';
@@ -500,10 +501,14 @@ pinDays 仅在需要置顶时才写，大多数记忆不需要。
             `${llmConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`,
             {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${llmConfig.apiKey}`,
-                },
+                headers: buildApiRequestHeaders(
+                    llmConfig.apiKey,
+                    undefined,
+                    {
+                        baseUrl: llmConfig.baseUrl,
+                        sessionId: getOpenCodeSessionId(`memory-extraction:${charId}`),
+                    },
+                ),
                 body: JSON.stringify({
                     model: llmConfig.model,
                     messages: [
