@@ -93,6 +93,15 @@ describe('Anthropic native transport',()=>{
   expect(cancel).toHaveBeenCalledWith('user stopped');
   expect(network.mock.calls[0][1]).toMatchObject({credentials:'omit',redirect:'error'});
  });
+ it('merges init headers with Request headers for Anthropic Go-compatible calls',async()=>{
+  const network=vi.fn(async()=>Response.json(message()));
+  const request=new Request(native+'/chat/completions',{method:'POST',headers:{Authorization:'Bearer request-key','x-preserved':'yes','content-type':'application/json'},body:JSON.stringify({model:'claude-test',messages:[{role:'user',content:'你好'}]})});
+  await fetchLlm(request,{headers:{'x-added':'yes'}},network,true);
+  const [,options]=network.mock.calls[0] as any;
+  expect(options.headers.get('x-api-key')).toBe('request-key');
+  expect(options.headers.get('x-preserved')).toBe('yes');
+  expect(options.headers.get('x-added')).toBe('yes');
+ });
  it('roundtrips non-stream tool calls and respects native thinking model IDs and unsupported sampling',()=>{
   const original=message([{type:'text',text:'查一下'},{type:'tool_use',id:'x',name:'lookup',input:{q:'城市'}}]);original.stop_reason='tool_use';
   const out=fromAnthropicMessage(original);expect(out.choices[0].message.tool_calls[0].function.arguments).toBe('{"q":"城市"}');
