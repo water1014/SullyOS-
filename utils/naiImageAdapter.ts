@@ -377,6 +377,25 @@ function isRetryableNaiNetworkError(error: unknown): boolean {
     || /unexpected end of stream|connection reset|connection aborted|failed to connect|socket closed|network request failed|networkerror|timed? ?out/i.test(message);
 }
 
+function naiAbortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason || new DOMException('已取消', 'AbortError'));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      reject(signal?.reason || new DOMException('已取消', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 function naiRetryDelay(attempt: number, retryAfter: number | null): number {
   const exponential = Math.min(NAI_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1), NAI_MAX_RETRY_WAIT_MS);
   const jittered = Math.round(exponential * (0.5 + 0.5 * Math.random()));
@@ -402,10 +421,7 @@ export async function generateNaiImage(config: NaiImageConfig, prompt: string, n
         if (attempt === NAI_MAX_ATTEMPTS) throw error;
         const waitMs = naiRetryDelay(attempt, error.retryAfterMs ?? null);
         console.warn('[NAI] upstream transient HTTP failure; retrying', { attempt, max: NAI_MAX_ATTEMPTS - 1, status: response.status, waitMs });
-        await new Promise<void>((resolve, reject) => {
-          const timer = setTimeout(resolve, waitMs);
-          signal?.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason || new DOMException('已取消', 'AbortError')); }, { once: true });
-        });
+        await naiAbortableDelay(waitMs, signal);
         continue;
       }
       return await readNaiImageResponse(response);
@@ -415,10 +431,7 @@ export async function generateNaiImage(config: NaiImageConfig, prompt: string, n
       if (!isRetryableNaiNetworkError(error) || attempt === NAI_MAX_ATTEMPTS) throw error;
       const waitMs = naiRetryDelay(attempt, null);
       console.warn('[NAI] network transport failed before a complete response; retrying', { attempt, max: NAI_MAX_ATTEMPTS - 1, waitMs, error: String(error) });
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(resolve, waitMs);
-        signal?.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason || new DOMException('已取消', 'AbortError')); }, { once: true });
-      });
+      await naiAbortableDelay(waitMs, signal);
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError || 'NAI 生图失败'));
