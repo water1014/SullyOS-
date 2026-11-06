@@ -12,11 +12,16 @@ export function normalizeOpenCodeGoRequestUrl(value: string): string {
   const path = parsed.pathname.replace(/\/+$/, '');
   const lower = path.toLowerCase();
   if (lower.startsWith('/zen/go/')) {
-    const tail = path.slice('/zen/go/'.length);
-    if (!/^v1\//i.test(tail) && /^(?:chat\/completions|messages(?:\/(?:chat\/completions|models))?|models|responses|completions)(?:\/|$)/i.test(tail)) parsed.pathname = '/zen/go/v1/' + tail;
+    const tail = path.slice('/zen/go/'.length).replace(/^v1\//i, '');
+    if (/^messages(?:\/|$)/i.test(tail)) parsed.pathname = '/inference/go/anthropic/v1/' + tail;
+    else if (/^(?:chat\/completions|responses|completions|models)(?:\/|$)/i.test(tail)) parsed.pathname = '/inference/go/openai/v1/' + tail;
   } else if (lower.startsWith('/inference/go/')) {
     const tail = path.slice('/inference/go/'.length);
-    if (!/^(?:openai|anthropic|google)\//i.test(tail) && !/^v1\//i.test(tail)) {
+    if (/^v1\//i.test(tail)) {
+      const endpoint = tail.replace(/^v1\//i, '');
+      if (/^messages(?:\/|$)/i.test(endpoint)) parsed.pathname = '/inference/go/anthropic/v1/' + endpoint;
+      else if (/^(?:chat\/completions|responses|completions|models)(?:\/|$)/i.test(endpoint)) parsed.pathname = '/inference/go/openai/v1/' + endpoint;
+    } else if (!/^(?:openai|anthropic|google)\//i.test(tail)) {
       if (/^(?:chat\/completions|responses|completions|models)(?:\/|$)/i.test(tail)) parsed.pathname = '/inference/go/openai/v1/' + tail;
       else if (/^messages(?:\/|$)/i.test(tail)) parsed.pathname = '/inference/go/anthropic/v1/' + tail;
     }
