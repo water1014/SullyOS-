@@ -16,12 +16,13 @@ export function normalizeLlmBaseUrl(value: string, type?: LlmApiType): string {
         const url = new URL(base);
         let path = url.pathname.replace(/\/+$/, '');
         if (isZenGoPath(path)) {
-            // Accept a pasted service root or a full endpoint without duplicating
-            // /v1 when the app appends /chat/completions or /messages later.
-            path = path.replace(/\/(?:chat\/completions|messages(?:\/chat\/completions|\/models)?|models|completions)$/i, '');
+            // /zen/go is the legacy route. Migrate it to the current documented
+            // Go API family so old saved settings keep working after upgrade.
+            path = path.replace(/\/(?:chat\/completions|messages(?:\/chat\/completions|\/models)?|models|responses|completions)$/i, '');
             path = path.replace(/\/v1$/i, '');
-            path += '/v1';
-            if (type === 'anthropic') path += '/messages';
+            path = type === 'anthropic'
+                ? '/inference/go/anthropic/v1/messages'
+                : '/inference/go/openai/v1';
         } else if (isInferenceGoPath(path)) {
             path = path.replace(/\/(?:openai|anthropic)(?:\/v1)?(?:\/messages(?:\/chat\/completions|\/models)?|\/chat\/completions|\/models)?$/i, '');
             path = path.replace(/\/v1$/i, '');
