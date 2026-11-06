@@ -50,6 +50,22 @@ describe('NAI synchronous ZIP generation contract', () => {
     expect(new Uint8Array(await image.arrayBuffer())).toEqual(png);
   });
 
+  it('stops after one retry when the NAI stream is repeatedly cut', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValue(new Error('unexpected end of stream on com.android.okhttp.Address@test'))
+      .mockRejectedValue(new Error('unexpected end of stream on com.android.okhttp.Address@test'));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(generateNaiImage({
+      apiKey: 'test-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty',
+      baseUrl: 'https://std.loliyc.com/novelai',
+    }, '1girl, portrait', '', {
+      width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 123,
+    })).rejects.toThrow(/unexpected end of stream/i);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('reads the returned ZIP as raw bytes and extracts its image entry', async () => {
     const zip = new JSZip();
     const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
