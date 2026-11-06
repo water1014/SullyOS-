@@ -1069,43 +1069,41 @@ function shuffleCopy(arr) {
   return a;
 }
 
-async function fetchFromAnyUpstream(upstreamPath, timeoutMs = 8000) {
-  const order = shuffleCopy(NETEASE_UPSTREAMS);
+function resolveNeteaseUpstreams(env) {
+  const configured = typeof env?.NETEASE_UPSTREAMS === 'string' ? env.NETEASE_UPSTREAMS.split(/[\\s,;]+/).filter(Boolean) : [];
+  const candidates = configured.length ? configured : NETEASE_UPSTREAMS;
+  const valid = [];
+  for (const candidate of candidates) {
+    try {
+      const url = new URL(candidate);
+      if (url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash && (url.pathname === '/' || !url.pathname.includes('..'))) {
+        const normalized = url.origin + url.pathname.replace(/\\/+$/, '');
+        if (!valid.includes(normalized)) valid.push(normalized);
+      }
+    } catch { /* Ignore malformed upstream configuration. */ }
+  }
+  return valid;
+}
+
+async function fetchFromAnyUpstream(upstreamPath, env, timeoutMs = 8000) {
+  const order = shuffleCopy(resolveNeteaseUpstreams(env));
   const errors = [];
   for (const base of order) {
-    const upstreamUrl = base.replace(/\/+$/, '') + upstreamPath;
+    const upstreamUrl = base.replace(/\\/+$/, '') + upstreamPath;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), timeoutMs);
-      const res = await fetch(upstreamUrl, {
-        method: "GET",
-        headers: { "Accept": "application/json" },
-        signal: ctrl.signal,
-      });
-      clearTimeout(t);
-
+      const res = await fetch(upstreamUrl, { method: 'GET', headers: { Accept: 'application/json' }, signal: ctrl.signal });
       const text = await res.text();
-      // HTTP 层挂了直接换下一个
-      if (!res.ok) {
-        errors.push(`${new URL(base).host} HTTP ${res.status}`);
-        continue;
-      }
-      // 应用层风控: 尝试识别 -460/-7 等明显失败码, 这种情况下换个上游可能成功
+      if (!res.ok) { errors.push(new URL(base).host + ' HTTP ' + res.status); continue; }
       let shouldFailover = false;
-      try {
-        const j = JSON.parse(text);
-        if (j?.code === -460 || j?.code === -7) shouldFailover = true;
-      } catch { /* 不是 JSON, 当成功处理 */ }
-      if (shouldFailover && order.length > 1) {
-        errors.push(`${new URL(base).host} risk-control (code=-460/-7)`);
-        continue;
-      }
-      return { text, status: res.status, upstream: new URL(base).host, error: null };
-    } catch (e) {
-      errors.push(`${new URL(base).host} ${e.name === 'AbortError' ? 'timeout' : e.message}`);
-    }
+      try { const j = JSON.parse(text); if (j?.code === -460 || j?.code === -7) shouldFailover = true; } catch { /* Non-JSON success responses pass through. */ }
+      if (shouldFailover && order.length > 1) { errors.push(new URL(base).host + ' risk-control (code=-460/-7)'); continue; }
+      return { text, status: res.status, upstream: new URL(base).host, error: null, tried: errors.length + 1 };
+    } catch (e) { errors.push(new URL(base).host + ' ' + (e.name === 'AbortError' ? 'timeout' : e.message)); }
+    finally { clearTimeout(timer); }
   }
-  return { text: '', status: 502, upstream: '', error: errors.join(' | ') };
+  return { text: '', status: 502, upstream: '', error: errors.join(' | '), tried: order.length };
 }
 
 
@@ -4418,12 +4416,12 @@ export default {
       }
 
       // ── 多上游 + 容灾: 随机打乱后依次尝试, 任意一个成功就返回 ──
-      const { text, status, upstream, error } = await fetchFromAnyUpstream(upstreamPath);
+      const { text, status, upstream, error, tried } = await fetchFromAnyUpstream(upstreamPath, env);
       if (error) {
         return jsonResponse({
           error: "netease upstream fetch failed (all sources)",
           detail: error,
-          tried: NETEASE_UPSTREAMS.length,
+          tried,
         }, { status: 502, origin });
       }
 
