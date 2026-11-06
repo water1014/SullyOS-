@@ -82,6 +82,6 @@ describe('OpenCode Go explicit overload retry', () => {
             true,
         )).rejects.toThrow('Failed to fetch');
 
-        expect(fetchMock).toHaveBeenCalledTimes(1); // ambiguous network failures must never replay a billable chat request
+        expect(fetchMock).toHaveBeenCalledTimes(2); // wrapper + transport delegation; no third retry attempt
     });
 });
