@@ -44,22 +44,16 @@ describe('UnifiedPush runtime recovery', () => {
   });
 
   it('drains cold-start messages after listeners are attached', async () => {
-    drain.mockResolvedValueOnce({ messages: [{ payload: '{"metadata":{"charId":"c1"}}' }] });
+    drain.mockResolvedValueOnce({ messages: [{ payload: '{"metadata":{"charId":"c1"}}', receivedAt: 123 }] });
     const runtime = await import('./unifiedPushRuntime');
     await runtime.initUnifiedPushRuntime();
     expect(addListener).toHaveBeenCalledTimes(2);
     expect(drain).toHaveBeenCalledTimes(1);
     expect(ingest).toHaveBeenCalledWith('{"metadata":{"charId":"c1"}}');
-    expect(acknowledge).toHaveBeenCalledWith(0);
+    expect(acknowledge).toHaveBeenCalledWith(123);
   });
   it('does not acknowledge messages when inbox ingestion fails', async () => {
-    ingest.mockRejectedValueOnce(new Error('IndexedDB write failed'));
-    const runtime = await import('./unifiedPushRuntime');
-    await runtime.initUnifiedPushRuntime();
-    expect(acknowledge).not.toHaveBeenCalled();
-  });
-
-  it('does not acknowledge messages when inbox ingestion fails', async () => {
+    drain.mockResolvedValueOnce({ messages: [{ payload: '{"metadata":{"charId":"c1"}}', receivedAt: 123 }] });
     ingest.mockRejectedValueOnce(new Error('IndexedDB write failed'));
     const runtime = await import('./unifiedPushRuntime');
     await runtime.initUnifiedPushRuntime();
