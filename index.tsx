@@ -6,7 +6,7 @@ import { openDB } from './utils/db';
 import { checkDatabaseReadable } from './utils/databaseHealth';
 import { startDatabaseOpenDiagnostics, releaseDatabaseDiagnosticPersistence, recordDatabaseOpen } from './utils/databaseOpenDiagnostics';
 import { installTranslateCrashGuard } from './utils/translateCrashGuard';
-import { ActiveMsgRuntime } from './utils/activeMsgRuntime';
+import { ActiveMsgRuntime, handlePageBecameVisible } from './utils/activeMsgRuntime';
 import { KeepAlive } from './utils/keepAlive';
 import { ProactiveChat } from './utils/proactiveChat';
 import { VRScheduler } from './utils/vrWorld/scheduler';
@@ -45,7 +45,9 @@ if (Capacitor.isNativePlatform()) {
     if (!isActive) return;
     void KeepAlive.init();
     ProactiveChat.resume();
-    void ActiveMsgRuntime.init();
+    // init() is intentionally one-shot. Foreground recovery must use the
+    // dedicated path that flushes the inbox and catches up missed cloud pushes.
+    handlePageBecameVisible();
   });
 }
 Promise.all([databaseReady, keepAliveReady]).then(() => {
