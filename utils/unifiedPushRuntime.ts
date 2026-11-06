@@ -1,7 +1,9 @@
+import type { PluginListenerHandle } from '@capacitor/core';
 import { ingestNativeAmsgPayload, parseNativeAmsgPayload } from './nativeAmsgInbox';
 import { addUnifiedPushListener, drainUnifiedPushMessages, isUnifiedPushPlatform } from './unifiedPushPlugin';
 
 let initialized = false;
+let listenerHandles: PluginListenerHandle[] = [];
 
 const ingest = async (payload: unknown, openAfter = false): Promise<void> => {
   const result = await ingestNativeAmsgPayload(payload);
@@ -16,15 +18,16 @@ export const initUnifiedPushRuntime = async (): Promise<void> => {
   // If the native bridge is absent or temporarily unavailable, allow a later
   // foreground retry instead of permanently locking this runtime in a failed state.
   try {
-    await addUnifiedPushListener('pushReceived', (event) => {
+    const receivedHandle = await addUnifiedPushListener('pushReceived', (event) => {
       void ingest(event?.payload).catch((error) =>
         console.warn('[ActiveMsg:UnifiedPush] 收到推送后处理失败', error));
     });
-    await addUnifiedPushListener('notificationTapped', (event) => {
+    const tappedHandle = await addUnifiedPushListener('notificationTapped', (event) => {
       void ingest(event?.payload, true).catch((error) =>
         console.warn('[ActiveMsg:UnifiedPush] 通知点击处理失败', error));
     });
 
+    listenerHandles = [receivedHandle, tappedHandle];
     const pending = await drainUnifiedPushMessages();
     for (const message of pending.messages || []) {
       await ingest(message.payload);
@@ -39,6 +42,8 @@ export const initUnifiedPushRuntime = async (): Promise<void> => {
     }
     initialized = true;
   } catch (error) {
+    await Promise.all(listenerHandles.map((handle) => handle.remove().catch(() => undefined)));
+    listenerHandles = [];
     console.warn('[ActiveMsg:UnifiedPush] Android 原生推送桥不可用，等待下次恢复时重试', error);
   }
 };
