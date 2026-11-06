@@ -41,6 +41,27 @@ describe('OpenCode Go transport', () => {
     expect((await other.json()).session).not.toBe(firstSession);
   });
 
+  it('merges init headers with headers already present on a Request', async () => {
+    const native = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => Response.json({
+      authorization: new Headers(init?.headers).get('authorization'),
+      custom: new Headers(init?.headers).get('x-custom'),
+      session: new Headers(init?.headers).get('x-opencode-session'),
+    }));
+    const transport = createOpenCodeGoTransport(true, native, vi.fn(async () => new Response('fallback')));
+    const request = new Request('https://opencode.ai/zen/go/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer request-key', 'x-custom': 'kept' },
+      body: '{}',
+    });
+    const response = await transport(request, { headers: { 'x-extra': 'added' } });
+    expect(await response.json()).toMatchObject({
+      authorization: 'Bearer request-key',
+      custom: 'kept',
+    });
+    expect(new Headers(native.mock.calls[0][1]?.headers).get('x-extra')).toBe('added');
+    expect(new Headers(native.mock.calls[0][1]?.headers).get('x-opencode-session')).toBeTruthy();
+  });
+
   it('preserves an explicitly supplied OpenCode Go session header', async () => {
     const native = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => Response.json({
       session: new Headers(init?.headers).get('x-opencode-session'),
