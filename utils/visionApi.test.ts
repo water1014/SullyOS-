@@ -68,7 +68,7 @@ describe('independent vision API', () => {
 
     expect(description).toContain('猫');
     expect(nativeOptions).toMatchObject({
-      url: 'https://opencode.ai/zen/go/v1/chat/completions',
+      url: 'https://opencode.ai/inference/go/openai/v1/chat/completions',
       method: 'POST',
       headers: expect.objectContaining({
         authorization: 'Bearer go-token',
