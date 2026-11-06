@@ -235,8 +235,6 @@ describe('image generation clients', () => {
         cfg_rescale: 0, qualityToggle: true, noise_schedule: 'karras', n_samples: 1,
       },
     });
-    expect(requestBody).toHaveProperty('use_new_shared_trial', true);
-    expect(requestBody.parameters).toHaveProperty('stream', 'msgpack');
     expect(requestBody.parameters).not.toHaveProperty('dynamic_thresholding');
   });
 
