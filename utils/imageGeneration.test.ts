@@ -180,8 +180,8 @@ describe('image generation clients', () => {
 
     const [, request] = vi.mocked(fetch).mock.calls[0];
     const body = JSON.parse(String(request.body));
-    expect(body.parameters.stream).toBeUndefined();
-    expect(body).not.toHaveProperty('use_new_shared_trial');
+    expect(body.parameters.stream).toBe('msgpack');
+    expect(body.use_new_shared_trial).toBe(true);
     expect(body.parameters).toHaveProperty('ucPreset', 0);
     expect(new Headers(request.headers).get('Accept')).toBe('application/zip, application/json, image/*');
   });
@@ -206,7 +206,7 @@ describe('image generation clients', () => {
     const sentBody = JSON.parse(String(fetchMock.mock.calls[0][1].body));
     // 智绘姬-compatible gateways may require this hint but still return ZIP/JSON synchronously.
     expect(sentBody.parameters.stream).toBe('msgpack');
-    expect(sentBody).not.toHaveProperty('use_new_shared_trial');
+    expect(sentBody.use_new_shared_trial).toBe(true);
   });
 
   it('extracts the first image from NovelAI ZIP output', async () => {
