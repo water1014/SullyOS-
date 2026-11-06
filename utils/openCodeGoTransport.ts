@@ -1,6 +1,6 @@
 import { getOpenCodeSessionId, isOpenCodeGoEndpoint } from './apiConfigNormalize';
 type NativeStreamingFetch = typeof fetch;
-const fallbackFetch: typeof fetch = (resource, init) => globalThis.fetch(resource, init);
+// Capture the runtime fetch before installAnthropicFetch wraps globalThis.fetch.\n// A dynamic lookup here would recurse: the wrapper delegates back to this transport.\nconst fallbackFetch: typeof fetch = globalThis.fetch.bind(globalThis);
 let activeTransport: typeof fetch = createOpenCodeGoTransport(false, fallbackFetch, fallbackFetch);
 
 /** Normalize raw Go service roots used by older feature-specific settings. */

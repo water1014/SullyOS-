@@ -83,6 +83,8 @@ describe('credId 起名', () => {
 describe('凭据行取值', () => {
   it('地址归一成 /chat/completions（任务行里存的是终点地址）', () => {
     expect(normalizeChatApiUrl('https://api.example.dev/v1/')).toBe('https://api.example.dev/v1/chat/completions');
+    expect(normalizeChatApiUrl('https://opencode.ai/zen/go')).toBe('https://opencode.ai/zen/go/v1/chat/completions');
+    expect(normalizeChatApiUrl('https://opencode.ai/zen/go', 'anthropic')).toBe('https://opencode.ai/zen/go/v1/messages');
     expect(toCredentialValue(API)).toEqual({
       apiUrl: 'https://api.example.dev/v1/chat/completions',
       apiKey: 'sk-global',

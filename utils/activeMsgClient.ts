@@ -1,7 +1,6 @@
 import { buildChatOutputStylePrompt, readChatTranslationConfig } from './chatOutputStylePrompt';
 import { resolveDialogueApi } from './characterApi';
 import { isAnthropicEndpoint } from './llmEndpoint';
-import { isOpenCodeGoEndpoint } from './apiConfigNormalize';
 import { ackStoppedReplyReceipts, stoppedReplyStateEntries } from './amsgStoppedReplyClient';
 import { loadCharacterContextMessages } from './chatContextRange';
 import { ReiClient, classifyClientStateWrite } from '@rei-standard/amsg-client';
@@ -581,8 +580,8 @@ const initializeClient = (config: ActiveMsg2GlobalConfig) => {
 const resolveApiConfig = (char: CharacterProfile, _config: ActiveMsg2CharacterConfig, apiConfig: APIConfig) => {
   const source = resolveDialogueApi(apiConfig, char);
 
-  if (Object.keys(source.customHeaders || {}).length > 0 || isOpenCodeGoEndpoint(source.baseUrl)) {
-    throw new Error('当前 API 配置使用自定义请求头或 OpenCode Go 会话标识，主动消息 2.0 云端执行暂不支持；请改用无自定义请求头的普通 API 后再使用云端排程。');
+  if (Object.keys(source.customHeaders || {}).length > 0) {
+    throw new Error('当前 API 配置使用自定义请求头，主动消息 2.0 云端执行暂不支持；请先清空自定义请求头。OpenCode Go 所需的 x-opencode-session 会由云端请求通道自动添加。');
   }
   if (!source.baseUrl || !source.apiKey || !source.model) {
     throw new Error('主动消息 2.0 缺少可用的 API URL / Key / Model。');
@@ -3122,7 +3121,7 @@ export const ActiveMsgClient = {
       // 引用与内联上游只收一种，同传直接 400。
       ...(inlineCreds
         ? {
-          apiUrl: normalizeChatApiUrl(api.baseUrl),
+          apiUrl: normalizeChatApiUrl(api.baseUrl, api.apiType),
           apiKey: api.apiKey,
           primaryModel: api.model,
         }
