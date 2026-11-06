@@ -117,12 +117,12 @@ public class AmsgUnifiedPushPlugin extends Plugin {
         }
         getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString(KEY_VAPID, vapid.trim()).remove(KEY_LAST_ERROR).apply();
-        UnifiedPush.tryUseCurrentOrDefaultDistributor(getContext(), success -> {
+        UnifiedPush.tryUseCurrentOrDefaultDistributor(getActivity(), success -> {
             if (Boolean.TRUE.equals(success)) {
                 try {
                     UnifiedPush.register(
                         getContext(),
-                        ConstantsKt.getINSTANCE_DEFAULT(),
+                        ConstantsKt.INSTANCE_DEFAULT,
                         "SullyOS 主动消息",
                         vapid.trim()
                     );
