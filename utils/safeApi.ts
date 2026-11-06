@@ -437,12 +437,15 @@ export async function safeFetchJson(
     meta?: ApiCallMeta,
     /** 可选：流式增量回调（请求体带 stream:true 时传入才有意义；响应不是 SSE 时静默不触发）。 */
     streamHooks?: StreamHooks,
+    /** Explicit opt-in for a single retry when OpenCode Go returns a definitive 429 overloaded rejection. */
+    retryChatOverloadOnce: boolean = false,
 ): Promise<any> {
     const retryableStatuses = new Set([429, 500, 502, 503, 504]);
     let lastError: Error | null = null;
     const urlStr = String(url);
-    const automaticRetryLimit = isChatCompletionUrl(urlStr)
-        ? 0
+    const chatCompletionRequest = isChatCompletionUrl(urlStr);
+    const automaticRetryLimit = chatCompletionRequest
+        ? (retryChatOverloadOnce ? 1 : 0)
         : Math.max(0, Math.floor(Number(maxRetries) || 0));
     let lastStatus: number | undefined;
 
@@ -489,12 +492,28 @@ export async function safeFetchJson(
             const headersMs = Date.now() - attemptStartedAt;
 
             if (!response.ok) {
-                // For retryable status codes, retry before giving up
+                // Chat completions normally never retry because a dropped response can still be billable.
+                // One narrow exception: OpenCode Go's explicit 429 + "overloaded" response is a rejection,
+                // so VRWorld may opt into exactly one delayed retry without replaying ambiguous network failures.
                 if (retryableStatuses.has(response.status) && attempt < automaticRetryLimit) {
-                    const delay = Math.pow(2, attempt) * 1000; // 1s, 2s
-                    log.warn('HTTP retry', { status: response.status, attempt: attempt + 1, maxRetries: automaticRetryLimit, delay });
-                    await new Promise(r => setTimeout(r, delay));
-                    continue;
+                    let retryThisResponse = !chatCompletionRequest;
+                    let delay = Math.pow(2, attempt) * 1000;
+                    if (chatCompletionRequest && retryChatOverloadOnce && response.status === 429) {
+                        const bodyText = await response.clone().text().catch(() => '');
+                        retryThisResponse = /overloaded/i.test(bodyText);
+                        const retryAfter = response.headers.get('retry-after');
+                        if (retryAfter) {
+                            const seconds = Number(retryAfter);
+                            const date = Date.parse(retryAfter);
+                            if (Number.isFinite(seconds) && /^\d+(?:\.\d+)?$/.test(retryAfter.trim())) delay = Math.min(Math.max(seconds * 1000, 1000), 60000);
+                            else if (!Number.isNaN(date)) delay = Math.min(Math.max(date - Date.now(), 1000), 60000);
+                        }
+                    }
+                    if (retryThisResponse) {
+                        log.warn('HTTP retry', { status: response.status, attempt: attempt + 1, maxRetries: automaticRetryLimit, delay, chatOverloadOnly: chatCompletionRequest });
+                        await new Promise(r => setTimeout(r, delay));
+                        continue;
+                    }
                 }
                 // Non-retryable or last attempt: parse body for error details
                 const data = await safeResponseJson(response);
