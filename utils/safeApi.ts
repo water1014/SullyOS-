@@ -568,7 +568,7 @@ export async function safeFetchJson(
             const isAbort = e?.name === 'AbortError' || /aborted|timeout/i.test(e?.message || '');
 
             // Network errors (fetch itself failed) are retryable
-            if ((e?.name === 'TypeError' || isAbort) && attempt < automaticRetryLimit) {
+            if (!chatCompletionRequest && (e?.name === 'TypeError' || isAbort) && attempt < automaticRetryLimit) {
                 const delay = Math.pow(2, attempt) * 1000;
                 log.warn(isAbort ? 'Timeout/Abort retry' : 'Network error retry', { attempt: attempt + 1, maxRetries: automaticRetryLimit, delay, message: e?.message });
                 await new Promise(r => setTimeout(r, delay));
@@ -576,7 +576,7 @@ export async function safeFetchJson(
             }
 
             // For HTML/parse errors on non-ok responses during retry, continue
-            if (attempt < automaticRetryLimit && e?.message?.includes('API返回了HTML')) {
+            if (!chatCompletionRequest && attempt < automaticRetryLimit && e?.message?.includes('API返回了HTML')) {
                 const delay = Math.pow(2, attempt) * 1000;
                 log.warn('HTML response retry', { attempt: attempt + 1, maxRetries, delay });
                 await new Promise(r => setTimeout(r, delay));
