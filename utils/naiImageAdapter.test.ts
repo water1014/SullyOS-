@@ -18,8 +18,15 @@ describe('NAI synchronous ZIP generation contract', () => {
     expect(body.model).toBe('nai-diffusion-4-5-full');
     expect(body.use_new_shared_trial).toBeUndefined();
     expect(body.parameters.stream).toBeUndefined();
-    expect(body.parameters.v4_prompt.caption.base_caption).toBe('1girl, portrait');
-    expect(body.parameters.v4_negative_prompt.caption.base_caption).toBe('low quality');
+    expect(body.parameters.params_version).toBe(3);
+    expect(body.parameters.dynamic_thresholding).toBe(false);
+    expect(body.parameters.controlnet_strength).toBe(1);
+    expect(body.parameters.legacy).toBe(false);
+    expect(body.parameters.use_coords).toBe(false);
+    expect(body.parameters.characterPrompts).toEqual([]);
+    expect(body.parameters.reference_image_multiple).toEqual([]);
+    expect(body.parameters.v4_prompt).toMatchObject({ caption: { base_caption: '1girl, portrait', char_captions: [] }, use_coords: false, use_order: true });
+    expect(body.parameters.v4_negative_prompt).toMatchObject({ caption: { base_caption: 'low quality', char_captions: [] }, legacy_uc: false });
     expect(new Headers(request.init.headers).get('authorization')).toBe('Bearer test-token');
     expect(new Headers(request.init.headers).get('accept')).toBe('application/zip, application/json, image/*');
 
