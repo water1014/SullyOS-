@@ -211,7 +211,7 @@ describe('image generation clients', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(archive, { status: 200 })));
 
     const blob = await generateNaiImage(
-      { apiKey: 'thirdparty-token', model: 'nai-diffusion-5-full', provider: 'thirdparty', baseUrl: 'https://nai-proxy.example', customHeaders: '{"x-provider":"studio-test"}' },
+      { apiKey: 'sk-test', model: 'nai-diffusion-4-5-full', provider: 'thirdparty', baseUrl: 'https://std.loliyc.com/novelai', customHeaders: '{"x-provider":"studio-test"}' },
       '1girl, blue hair',
       'blurry',
       { width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 0 },
@@ -220,8 +220,8 @@ describe('image generation clients', () => {
     expect(blob.type).toBe('image/png');
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
     const [url, request] = vi.mocked(fetch).mock.calls[0];
-    expect(url).toBe('https://nai-proxy.example/ai/generate-image');
-    expect(new Headers(request.headers).get('Authorization')).toBe('Bearer thirdparty-token');
+    expect(url).toBe('https://std.loliyc.com/novelai/ai/generate-image');
+    expect(new Headers(request.headers).get('Authorization')).toBe('Bearer sk-test');
     expect(new Headers(request.headers).get('x-provider')).toBe('studio-test');
     expect(new Headers(request.headers).get('Accept')).toBe('*/*');
     const requestBody = JSON.parse(String(request.body));
@@ -229,10 +229,10 @@ describe('image generation clients', () => {
     expect(requestBody).toMatchObject({
       action: 'generate',
       use_new_shared_trial: true,
-      model: 'nai-diffusion-5-full',
+      model: 'nai-diffusion-4-5-full',
       parameters: {
         width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral',
-        seed: 0, negative_prompt: 'blurry', ucPreset: 0, params_version: 4,
+        seed: 0, negative_prompt: 'blurry', ucPreset: 0, params_version: 3,
         cfg_rescale: 0, qualityToggle: true, noise_schedule: 'karras', n_samples: 1,
       },
     });
