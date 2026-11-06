@@ -237,7 +237,7 @@ describe('image generation clients', () => {
       },
     });
     expect(requestBody).toHaveProperty('use_new_shared_trial', true);
-    expect(requestBody.parameters).not.toHaveProperty('stream');
+    expect(requestBody.parameters).toHaveProperty('stream', 'msgpack');
     expect(requestBody.parameters).not.toHaveProperty('dynamic_thresholding');
   });
 
