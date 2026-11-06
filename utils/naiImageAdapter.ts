@@ -36,7 +36,7 @@ function makeNaiHeaders(config: NaiImageConfig): Headers {
   const headers = new Headers({
     'Content-Type': 'application/json',
     Authorization: 'Bearer ' + config.apiKey.trim(),
-    Accept: 'application/zip',
+    Accept: (config.provider || 'official') === 'thirdparty' ? '*/*' : 'application/zip',
   });
   const raw = config.customHeaders || '';
   if (!raw.trim()) return headers;
@@ -66,6 +66,7 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
     input: prompt.trim(),
     model,
     action: 'generate',
+    ...((config.provider || 'official') === 'thirdparty' ? { use_new_shared_trial: true } : {}),
     parameters: {
       width: options.width,
       height: options.height,
