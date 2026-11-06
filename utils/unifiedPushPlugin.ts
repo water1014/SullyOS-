@@ -58,11 +58,26 @@ export const getUnifiedPushStatus = async (): Promise<UnifiedPushStatus> => {
     };
   }
 
-  const [status, permission] = await Promise.all([
-    NativeUnifiedPush.getStatus(),
-    readPermission(),
-  ]);
-  return { ...status, permission };
+  const permission = await readPermission().catch(() => 'prompt' as const);
+  try {
+    const status = await NativeUnifiedPush.getStatus();
+    return { ...status, permission };
+  } catch (error) {
+    // Capacitor registerPlugin() can create a JS proxy even when the Android
+    // implementation was never registered in MainActivity. Treat that as a
+    // missing native capability, not as an empty distributor list.
+    const detail = error instanceof Error ? error.message : String(error || '');
+    return {
+      native: true,
+      distributors: [],
+      distributor: null,
+      subscription: null,
+      lastError: detail
+        ? `当前 APK 未安装 UnifiedPush 原生桥接插件（${detail}）。此通道暂不可用，请勿把它当作已开启的后台推送。`
+        : '当前 APK 未安装 UnifiedPush 原生桥接插件。此通道暂不可用，请勿把它当作已开启的后台推送。',
+      permission,
+    };
+  }
 };
 
 const requireNotificationPermission = async (): Promise<void> => {
@@ -84,7 +99,17 @@ export const ensureUnifiedPushSubscription = async (
   if (!isUnifiedPushPlatform()) throw new Error('UnifiedPush 仅用于 Android 原生 App。');
   await requireNotificationPermission();
 
-  const before = await NativeUnifiedPush.getStatus();
+  let before: Omit<UnifiedPushStatus, 'permission'>;
+  try {
+    before = await NativeUnifiedPush.getStatus();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error || '');
+    throw new Error(
+      detail
+        ? `当前 APK 未包含 UnifiedPush 原生插件，暂时无法注册后台推送（${detail}）。`
+        : '当前 APK 未包含 UnifiedPush 原生插件，暂时无法注册后台推送。',
+    );
+  }
   if (!before.distributor && before.distributors.length === 0) {
     throw new Error('没有检测到 UnifiedPush 服务。请先安装并打开 ntfy 的无 Firebase 版本，允许它后台运行后再试。');
   }
