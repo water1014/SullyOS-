@@ -155,6 +155,7 @@ const ImageStudioApp: React.FC = () => {
   const [aiPrompt, setAiPrompt] = useState('');
   const [enhancingPrompt, setEnhancingPrompt] = useState(false);
   const [imageWorldbook, setImageWorldbook] = useState<ImageWorldbookEntry[]>(readImageWorldbook);
+  const [applyImageWorldbook, setApplyImageWorldbook] = useState(true);
   const [worldbookEditorOpen, setWorldbookEditorOpen] = useState(false);
   const [worldbookTitle, setWorldbookTitle] = useState('');
   const [worldbookKeywords, setWorldbookKeywords] = useState('');
@@ -590,8 +591,9 @@ const ImageStudioApp: React.FC = () => {
       const sourcePrompt = promptMode === 'ai' ? aiPrompt : prompt;
       if (!sourcePrompt.trim()) throw new Error(promptMode === 'ai' ? '请先生成或填写 AI 提示词' : '请先填写正向提示词');
       const scenePrompt = mergeCharacterVisualContextPrompt(sourcePrompt, currentAppearanceProfile, visualMemories);
-      const promptWithWorldbook = imageWorldbookContext
-        ? [scenePrompt, imageWorldbookContext].filter(Boolean).join(', ')
+      const activeWorldbookContext = applyImageWorldbook ? imageWorldbookContext : '';
+      const promptWithWorldbook = activeWorldbookContext
+        ? [scenePrompt, activeWorldbookContext].filter(Boolean).join(', ')
         : scenePrompt;
       const fixedPositive = engine === 'nai'
         ? (hasSharedImageConfig ? sharedImageConfig.naiPositivePrompt : '')
@@ -1154,6 +1156,7 @@ const ImageStudioApp: React.FC = () => {
                 <div className="flex items-center gap-2"><BookOpen size={17} className="text-sky-600"/><div><div className="text-xs font-semibold text-slate-700">生图世界书</div><div className="text-[10px] text-slate-400">独立于聊天世界书，按关键词自动注入</div></div></div>
                 <button type="button" onClick={() => { resetWorldbookDraft(); setWorldbookEditorOpen(value => !value); }} className="soft rounded-xl px-3 py-2 text-[10px] font-semibold">{worldbookEditorOpen ? '收起' : '管理设定'}</button>
               </div>
+              <label className="flex items-center gap-2 text-[10px] text-slate-600"><input type="checkbox" checked={applyImageWorldbook} onChange={event => setApplyImageWorldbook(event.target.checked)}/>本次生图应用世界书设定</label>
               <div className="text-[10px] text-slate-500">当前命中 {matchedImageWorldbook.length} 条设定{matchedImageWorldbook.length ? '：' + matchedImageWorldbook.map(item => item.title).join('、') : '。填写提示词关键词后自动匹配；常驻条目始终生效。'}</div>
               {worldbookEditorOpen && <>
                 <div className="space-y-2 rounded-xl bg-sky-50/70 p-3">
