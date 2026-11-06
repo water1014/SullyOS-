@@ -180,9 +180,10 @@ describe('image generation clients', () => {
 
     const [, request] = vi.mocked(fetch).mock.calls[0];
     const body = JSON.parse(String(request.body));
-    expect(body.parameters).toHaveProperty('stream', 'msgpack');
+    expect(body.parameters.stream).toBeUndefined();
+    expect(body).not.toHaveProperty('use_new_shared_trial');
     expect(body.parameters).toHaveProperty('ucPreset', 0);
-    expect(new Headers(request.headers).get('Accept')).toBe('application/zip');
+    expect(new Headers(request.headers).get('Accept')).toBe('application/zip, application/json, image/*');
   });
 
   it('decodes NovelAI JSON base64 image responses from third-party gateways', async () => {
@@ -201,7 +202,10 @@ describe('image generation clients', () => {
 
     expect(blob.type).toBe('image/png');
     expect(new Uint8Array(await blob.arrayBuffer()).slice(0, 8)).toEqual(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
-    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Accept')).toBe('*/*');
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Accept')).toBe('application/zip, application/json, image/*');
+    const sentBody = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(sentBody.parameters.stream).toBeUndefined();
+    expect(sentBody).not.toHaveProperty('use_new_shared_trial');
   });
 
   it('extracts the first image from NovelAI ZIP output', async () => {
