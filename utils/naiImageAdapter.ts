@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { unzipSync } from 'fflate';
 import { ZipReader, Uint8ArrayReader, Uint8ArrayWriter } from '@zip.js/zip.js';
 import { normalizeApiHeaders } from './apiConfigNormalize';
 
@@ -307,6 +308,19 @@ async function parseNaiJsonResponse(buffer: Uint8Array): Promise<Blob> {
   return decodeBase64Image(image.encoded);
 }
 
+/** Exact ZIP extraction route used by BaiBai: fflate.unzipSync over the untouched response bytes. */
+function extractImageWithFflate(buffer: Uint8Array): Blob {
+  const files = unzipSync(buffer);
+  const names = Object.keys(files).filter(name => !name.endsWith('/'));
+  const imageName = names.find(name => /\.(png|jpe?g|webp)$/i.test(name)) || names[0];
+  if (!imageName) throw new Error('ZIP 内没有图片文件');
+  const bytes = files[imageName];
+  if (!bytes?.length) throw new Error('ZIP 图片文件为空');
+  const mime = sniffImageMime(bytes);
+  if (!mime) throw new Error('ZIP 首个文件不是受支持的图片格式：' + imageName);
+  return new Blob([bytes], { type: mime });
+}
+
 /** Read once, validate actual image bytes, and never rewrite ZIP offsets or CRC metadata. */
 export async function readNaiImageResponse(response: Response): Promise<Blob> {
   const contentType = (response.headers.get('content-type') || '').toLowerCase();
@@ -317,10 +331,10 @@ export async function readNaiImageResponse(response: Response): Promise<Blob> {
   const prefix = new TextDecoder().decode(buffer.subarray(0, Math.min(buffer.length, 32))).trimStart();
   if (contentType.includes('json') || contentType.startsWith('text/') || prefix.startsWith('{') || prefix.startsWith('[')) return parseNaiJsonResponse(buffer);
   if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
-    // Compatibility first: use the same JSZip reader as the last known working build.
-    // Some gateways prepend transport bytes without updating EOCD offsets; let JSZip
-    // apply its own offset handling instead of rejecting the archive with a stricter
-    // preflight that the old reader never performed.
+    // Primary path matches BaiBai exactly: fflate.unzipSync on the original ZIP bytes.
+    let fflateError = '';
+    try { return extractImageWithFflate(buffer); }
+    catch (error) { fflateError = error instanceof Error ? error.message : String(error); }
     let jsZipError = '';
     try { return await extractImageFromJsZip(buffer); }
     catch (error) { jsZipError = error instanceof Error ? error.message : String(error); }
@@ -330,7 +344,7 @@ export async function readNaiImageResponse(response: Response): Promise<Blob> {
     let localEntryError = '';
     try { return await extractImageFromLocalZipHeaders(buffer); }
     catch (error) { localEntryError = error instanceof Error ? error.message : String(error); }
-    throw new Error('NAI 返回 ZIP，但 ZIP 结构或图片校验失败：' + jsZipError.slice(0, 120)
+    throw new Error('NAI 返回 ZIP，但 ZIP 结构或图片校验失败：fflate：' + fflateError.slice(0, 100) + '；JSZip：' + jsZipError.slice(0, 100)
       + '；zip.js：' + zipJsError.slice(0, 100) + '；本地文件头恢复：' + localEntryError.slice(0, 100)
       + '。未修改响应元数据。响应诊断：' + describeNaiZip(buffer, response));
   }
@@ -344,14 +358,68 @@ function responseError(payload: unknown, fallback: string): string {
   if (error && typeof error === 'object' && typeof error.message === 'string') return error.message;
   return String(object.message || object.detail || fallback);
 }
+const NAI_MAX_ATTEMPTS = 4;
+const NAI_RETRY_BASE_MS = 2000;
+const NAI_MAX_RETRY_WAIT_MS = 60000;
+
+function naiRetryAfterMs(value: string | null): number | null {
+  const raw = (value || '').trim();
+  if (!raw) return null;
+  if (/^\d+$/.test(raw)) return Math.min(Number(raw) * 1000, NAI_MAX_RETRY_WAIT_MS);
+  const date = Date.parse(raw);
+  return Number.isNaN(date) ? null : Math.min(Math.max(0, date - Date.now()), NAI_MAX_RETRY_WAIT_MS);
+}
+
+function isRetryableNaiNetworkError(error: unknown): boolean {
+  const item = error as { name?: string; message?: string } | null;
+  const message = String(item?.message || error || '');
+  return item?.name === 'TypeError'
+    || /unexpected end of stream|connection reset|connection aborted|failed to connect|socket closed|network request failed|networkerror|timed? ?out/i.test(message);
+}
+
+function naiRetryDelay(attempt: number, retryAfter: number | null): number {
+  const exponential = Math.min(NAI_RETRY_BASE_MS * 2 ** Math.max(0, attempt - 1), NAI_MAX_RETRY_WAIT_MS);
+  const jittered = Math.round(exponential * (0.5 + 0.5 * Math.random()));
+  return Math.min(Math.max(jittered, retryAfter || 0), NAI_MAX_RETRY_WAIT_MS);
+}
+
 export async function generateNaiImage(config: NaiImageConfig, prompt: string, negativePrompt: string, options: NaiImageOptions, signal?: AbortSignal): Promise<Blob> {
   const request = buildNaiGenerateRequest(config, prompt, negativePrompt, options);
-  const response = await fetch(request.url, { ...request.init, signal });
-  if (!response.ok) {
-    const raw = await response.text().catch(() => '');
-    let message = raw;
-    try { message = responseError(JSON.parse(raw), raw); } catch { /* response is not JSON */ }
-    throw new Error('NAI 生图失败（HTTP ' + response.status + '）：' + message.slice(0, 240));
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= NAI_MAX_ATTEMPTS; attempt++) {
+    if (signal?.aborted) throw signal.reason || new DOMException('已取消', 'AbortError');
+    try {
+      const response = await fetch(request.url, { ...request.init, signal });
+      if (!response.ok) {
+        const raw = await response.text().catch(() => '');
+        let message = raw;
+        try { message = responseError(JSON.parse(raw), raw); } catch { /* response is not JSON */ }
+        const error = new Error('NAI 生图失败（HTTP ' + response.status + '）：' + message.slice(0, 240)) as Error & { status?: number; retryAfterMs?: number };
+        error.status = response.status;
+        error.retryAfterMs = naiRetryAfterMs(response.headers.get('Retry-After')) || undefined;
+        if (!(response.status === 408 || response.status === 429 || (response.status >= 500 && response.status !== 501))) throw error;
+        lastError = error;
+        if (attempt === NAI_MAX_ATTEMPTS) throw error;
+        const waitMs = naiRetryDelay(attempt, error.retryAfterMs ?? null);
+        console.warn('[NAI] upstream transient HTTP failure; retrying', { attempt, max: NAI_MAX_ATTEMPTS - 1, status: response.status, waitMs });
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(resolve, waitMs);
+          signal?.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason || new DOMException('已取消', 'AbortError')); }, { once: true });
+        });
+        continue;
+      }
+      return await readNaiImageResponse(response);
+    } catch (error) {
+      lastError = error;
+      if (signal?.aborted || (error as { name?: string })?.name === 'AbortError') throw error;
+      if (!isRetryableNaiNetworkError(error) || attempt === NAI_MAX_ATTEMPTS) throw error;
+      const waitMs = naiRetryDelay(attempt, null);
+      console.warn('[NAI] network transport failed before a complete response; retrying', { attempt, max: NAI_MAX_ATTEMPTS - 1, waitMs, error: String(error) });
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, waitMs);
+        signal?.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason || new DOMException('已取消', 'AbortError')); }, { once: true });
+      });
+    }
   }
-  return readNaiImageResponse(response);
+  throw lastError instanceof Error ? lastError : new Error(String(lastError || 'NAI 生图失败'));
 }
