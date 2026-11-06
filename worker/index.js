@@ -1098,7 +1098,7 @@ async function fetchFromAnyUpstream(upstreamPath, env, timeoutMs = 8000) {
       if (!res.ok) { errors.push(new URL(base).host + ' HTTP ' + res.status); continue; }
       let shouldFailover = false;
       try { const j = JSON.parse(text); if (j?.code === -460 || j?.code === -7) shouldFailover = true; } catch { /* Non-JSON success responses pass through. */ }
-      if (shouldFailover && order.length > 1) { errors.push(new URL(base).host + ' risk-control (code=-460/-7)'); continue; }
+      if (shouldFailover) { errors.push(new URL(base).host + ' risk-control (code=-460/-7)'); continue; }
       return { text, status: res.status, upstream: new URL(base).host, error: null, tried: errors.length + 1 };
     } catch (e) { errors.push(new URL(base).host + ' ' + (e.name === 'AbortError' ? 'timeout' : e.message)); }
     finally { clearTimeout(timer); }
