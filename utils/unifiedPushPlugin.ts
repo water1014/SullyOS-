@@ -112,7 +112,7 @@ export const ensureUnifiedPushSubscription = async (
     );
   }
   if (!before.distributor && before.distributors.length === 0) {
-    throw new Error('没有检测到 UnifiedPush 服务。请先安装并打开 ntfy 的无 Firebase 版本，允许它后台运行后再试。');
+    throw new Error('没有检测到 UnifiedPush 服务。请先安装并打开支持 UnifiedPush 的分发器（例如 ntfy 无 Firebase 版），允许它后台运行后再试。');
   }
 
   await NativeUnifiedPush.register({ vapidPublicKey });
@@ -131,7 +131,7 @@ export const ensureUnifiedPushSubscription = async (
     await delay(250);
   }
 
-  throw new Error('UnifiedPush 注册超时。请确认 ntfy 已打开并允许它在后台运行。');
+  throw new Error('UnifiedPush 注册超时。请确认 UnifiedPush 分发器已打开并允许它在后台运行。');
 };
 
 export const readUnifiedPushSubscription = async () =>
