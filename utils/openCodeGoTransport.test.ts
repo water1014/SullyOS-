@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createOpenCodeGoTransport, normalizeOpenCodeGoRequestUrl } from './openCodeGoTransport';
-import { configureOpenCodeGoNativeTransport, fetchOpenCodeGo } from './openCodeGoTransport';
+import { configureOpenCodeGoNativeTransport } from './openCodeGoTransport';
 import { safeFetchJson } from './safeApi';
 
 describe('OpenCode Go transport', () => {
