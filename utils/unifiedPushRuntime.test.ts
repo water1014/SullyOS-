@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { addListener, drain, isAndroid, ingest } = vi.hoisted(() => ({
+const { acknowledge, addListener, drain, isAndroid, ingest } = vi.hoisted(() => ({
+  acknowledge: vi.fn().mockResolvedValue(undefined),
   addListener: vi.fn(),
   drain: vi.fn(),
   isAndroid: vi.fn(() => true),
@@ -12,6 +13,7 @@ vi.mock('./nativeAmsgInbox', () => ({
   parseNativeAmsgPayload: vi.fn(() => ({ metadata: { charId: 'character-1' } })),
 }));
 vi.mock('./unifiedPushPlugin', () => ({
+  acknowledgeUnifiedPushMessages: acknowledge,
   addUnifiedPushListener: addListener,
   drainUnifiedPushMessages: drain,
   isUnifiedPushPlatform: isAndroid,
@@ -20,6 +22,8 @@ vi.mock('./unifiedPushPlugin', () => ({
 describe('UnifiedPush runtime recovery', () => {
   beforeEach(() => {
     vi.resetModules();
+    acknowledge.mockReset();
+    acknowledge.mockResolvedValue(undefined);
     addListener.mockReset();
     drain.mockReset();
     ingest.mockReset();
@@ -46,5 +50,6 @@ describe('UnifiedPush runtime recovery', () => {
     expect(addListener).toHaveBeenCalledTimes(2);
     expect(drain).toHaveBeenCalledTimes(1);
     expect(ingest).toHaveBeenCalledWith('{"metadata":{"charId":"c1"}}');
+    expect(acknowledge).toHaveBeenCalledWith(0);
   });
 });
