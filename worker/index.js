@@ -1070,14 +1070,14 @@ function shuffleCopy(arr) {
 }
 
 function resolveNeteaseUpstreams(env) {
-  const configured = typeof env?.NETEASE_UPSTREAMS === 'string' ? env.NETEASE_UPSTREAMS.split(/[\\s,;]+/).filter(Boolean) : [];
+  const configured = typeof env?.NETEASE_UPSTREAMS === 'string' ? env.NETEASE_UPSTREAMS.split(/[\s,;]+/).filter(Boolean) : [];
   const candidates = configured.length ? configured : NETEASE_UPSTREAMS;
   const valid = [];
   for (const candidate of candidates) {
     try {
       const url = new URL(candidate);
       if (url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash && (url.pathname === '/' || !url.pathname.includes('..'))) {
-        const normalized = url.origin + url.pathname.replace(/\\/+$/, '');
+        const normalized = url.origin + url.pathname.replace(/\/+$/, '');
         if (!valid.includes(normalized)) valid.push(normalized);
       }
     } catch { /* Ignore malformed upstream configuration. */ }
