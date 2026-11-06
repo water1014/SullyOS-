@@ -29,7 +29,6 @@ import {
 import { DB } from '../db';
 import { buildChatRequestPayload } from '../chatRequestPayload';
 import { safeFetchJson } from '../safeApi';
-import { buildApiRequestHeaders, getOpenCodeSessionId } from '../apiConfigNormalize';
 import { processNewMessagesWithAutoArchive } from '../memoryPalace/autoArchive';
 import { loadMusicCfgStandalone } from '../../context/MusicContext';
 import { getCharLyricSnippet } from '../charLyricCache';
@@ -610,13 +609,13 @@ async function runVRSessionUnlocked(deps: VRSessionDeps): Promise<VRSessionResul
         try {
             data = await safeFetchJson(`${baseUrl}/chat/completions`, {
                 method: 'POST',
-                headers: buildApiRequestHeaders(vrApi.apiKey || 'sk-none', vrApi.customHeaders, { baseUrl: vrApi.baseUrl, sessionId: getOpenCodeSessionId(`vr:${char.id}`) }),
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${vrApi.apiKey || 'sk-none'}` },
                 body: JSON.stringify({
                     model: vrApi.model,
                     messages: [{ role: 'system', content: systemPrompt }, ...payload.cleanedApiMessages, { role: 'user', content: roomTurn }],
                     temperature: vrApi.temperature ?? 0.9, stream: vrApi.stream ?? false,
                 }),
-            }, 2, 0, { appName: '彼方', charId: char.id, charName: char.name, purpose: '自由活动' }, undefined, true);
+            }, 2, 0, { appName: '彼方', charId: char.id, charName: char.name, purpose: '自由活动' });
             logVRApiCall({ ts: callStart, charId: char.id, charName: char.name, charEnabled: !!char.vrState?.enabled, room: room.id, model: vrApi.model, baseUrl, ok: true, ms: Date.now() - callStart });
         } catch (e: any) {
             modelCallFailed = true;
