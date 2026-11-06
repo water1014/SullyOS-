@@ -9,7 +9,8 @@ import { processImage } from '../utils/file';
 import Modal from '../components/os/Modal';
 import TokenImg from '../components/os/TokenImg';
 import { isImageValue } from '../utils/blobRef';
-import { safeResponseJson, extractJson } from '../utils/safeApi';
+import { safeResponseJson, extractJson, formatApiErrorPayload } from '../utils/safeApi';
+import { buildApiRequestHeaders, getOpenCodeSessionId } from '../utils/apiConfigNormalize';
 import { normalizeMessageContent } from '../utils/messageFormat';
 import { injectMemoryPalace, ingestDiaryToPalace, type DiaryIngestResult } from '../utils/memoryPalace/pipeline';
 import { getRoomLabel } from '../utils/memoryPalace/types';
@@ -516,7 +517,7 @@ Structure:
 
             const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiConfig.apiKey}` },
+                headers: buildApiRequestHeaders(apiConfig.apiKey, apiConfig.customHeaders, { baseUrl: apiConfig.baseUrl, sessionId: getOpenCodeSessionId(`journal:${selectedChar.id}`) }),
                 body: JSON.stringify({
                     model: apiConfig.model,
                     messages: (await ContextBuilder.buildCharacterRequest(characterContextInput, [
@@ -527,7 +528,12 @@ Structure:
                 })
             });
 
-            if (!response.ok) throw new Error('API Error');
+            if (!response.ok) {
+                let detail = '';
+                try { detail = formatApiErrorPayload(await safeResponseJson(response), response.status); }
+                catch (error) { detail = error instanceof Error ? error.message : String(error); }
+                throw new Error(`交换日记 API 失败（HTTP ${response.status}）：${detail}`);
+            }
             const data = await safeResponseJson(response);
             let content = data.choices[0].message.content.trim();
             content = content.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -636,7 +642,12 @@ ${charPart}
                     max_tokens: 1200,
                 }),
             });
-            if (!response.ok) throw new Error(`主 API 失败 (${response.status})`);
+            if (!response.ok) {
+                let detail = '';
+                try { detail = formatApiErrorPayload(await safeResponseJson(response), response.status); }
+                catch (error) { detail = error instanceof Error ? error.message : String(error); }
+                throw new Error(`日记归档 API 失败（HTTP ${response.status}）：${detail}`);
+            }
             const data = await safeResponseJson(response);
             let s = (data.choices?.[0]?.message?.content || '').trim();
             s = s.replace(/^["'「『]|["'」』]$/g, '').trim();
