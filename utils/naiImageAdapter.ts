@@ -73,11 +73,6 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
   const caption = (text: string) => ({ caption: { base_caption: text, char_captions: [] }, use_coords: false, use_order: true });
   const provider = config.provider || 'official';
   const endpoint = normalizeNaiGenerateEndpoint(config.baseUrl || (provider === 'official' ? 'https://image.novelai.net' : ''), provider);
-  let isLoliYcNovelAiRoute = false;
-  try {
-    const parsedEndpoint = new URL(endpoint);
-    isLoliYcNovelAiRoute = /\.loliyc\.com$/i.test(parsedEndpoint.hostname) && /\/novelai$/i.test(parsedEndpoint.pathname);
-  } catch { /* malformed endpoints are rejected by the normalizer */ }
   const body = {
     input: prompt.trim(),
     model,
@@ -95,7 +90,7 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
       cfg_rescale: 0,
       qualityToggle: true,
       ucPreset: 0,
-      // Match Morpho's proven NAI 4.5 payload contract for the /novelai route.
+      // Match Morpho's standard NAI 4.5 payload contract.
       params_version: 3,
       dynamic_thresholding: false,
       controlnet_strength: 1,
