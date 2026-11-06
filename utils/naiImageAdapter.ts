@@ -358,7 +358,9 @@ function responseError(payload: unknown, fallback: string): string {
   if (error && typeof error === 'object' && typeof error.message === 'string') return error.message;
   return String(object.message || object.detail || fallback);
 }
-const NAI_MAX_ATTEMPTS = 4;
+// A generation may already have completed upstream before the stream is cut.
+// Limit recovery to one retry to avoid duplicate paid generations.
+const NAI_MAX_ATTEMPTS = 2;
 const NAI_RETRY_BASE_MS = 2000;
 const NAI_MAX_RETRY_WAIT_MS = 60000;
 
