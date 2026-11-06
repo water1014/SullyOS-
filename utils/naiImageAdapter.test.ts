@@ -21,6 +21,15 @@ describe('NAI synchronous ZIP generation contract', () => {
     expect(body.parameters.v4_prompt.caption.base_caption).toBe('1girl, portrait');
     expect(body.parameters.v4_negative_prompt.caption.base_caption).toBe('low quality');
     expect(new Headers(request.init.headers).get('authorization')).toBe('Bearer test-token');
+    expect(new Headers(request.init.headers).get('accept')).toBe('application/zip, application/json, image/*');
+
+    const legacySugarPath = buildNaiGenerateRequest({
+      apiKey: 'test-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty',
+      baseUrl: 'https://std.loliyc.com/api/generate',
+    }, '1girl, portrait', '', {
+      width: 832, height: 1216, steps: 28, scale: 5, sampler: 'k_euler_ancestral', seed: 123,
+    });
+    expect(legacySugarPath.url).toBe('https://std.loliyc.com/novelai');
   });
 
   it('keeps the msgpack ZIP route for other third-party NAI gateways', () => {
