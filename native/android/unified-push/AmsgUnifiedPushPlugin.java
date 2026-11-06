@@ -158,7 +158,6 @@ public class AmsgUnifiedPushPlugin extends Plugin {
         android.content.SharedPreferences prefs = getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         String raw = prefs.getString(KEY_MESSAGES, "[]");
         String launchPayload = prefs.getString(KEY_LAUNCH_PAYLOAD, null);
-        prefs.edit().remove(KEY_MESSAGES).remove(KEY_LAUNCH_PAYLOAD).commit();
         JSArray messages = new JSArray();
         try {
             JSONArray stored = new JSONArray(raw);
@@ -175,6 +174,27 @@ public class AmsgUnifiedPushPlugin extends Plugin {
         result.put("messages", messages);
         result.put("launchPayload", launchPayload);
         call.resolve(result);
+    }
+
+    @PluginMethod
+    public void acknowledgePendingPushes(PluginCall call) {
+        Long throughValue = call.getLong("throughReceivedAt");
+        long throughReceivedAt = throughValue == null ? 0L : throughValue;
+        android.content.SharedPreferences prefs = getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String raw = prefs.getString(KEY_MESSAGES, "[]");
+        try {
+            JSONArray current = new JSONArray(raw);
+            JSONArray remaining = new JSONArray();
+            for (int i = 0; i < current.length(); i++) {
+                JSONObject item = current.optJSONObject(i);
+                if (item != null && item.optLong("receivedAt", 0L) > throughReceivedAt) remaining.put(item);
+            }
+            android.content.SharedPreferences.Editor editor = prefs.edit().putString(KEY_MESSAGES, remaining.toString());
+            editor.remove(KEY_LAUNCH_PAYLOAD).commit();
+            call.resolve();
+        } catch (Exception error) {
+            call.reject("确认 UnifiedPush 收件箱失败", error);
+        }
     }
 
     @Override
