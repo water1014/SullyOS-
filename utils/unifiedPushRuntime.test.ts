@@ -17,8 +17,6 @@ vi.mock('./unifiedPushPlugin', () => ({
   isUnifiedPushPlatform: isAndroid,
 }));
 
-import { initUnifiedPushRuntime } from './unifiedPushRuntime';
-
 describe('UnifiedPush runtime recovery', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -32,17 +30,19 @@ describe('UnifiedPush runtime recovery', () => {
 
   it('does not permanently lock initialization after a missing native bridge', async () => {
     addListener.mockRejectedValueOnce(new Error('Plugin not implemented'));
-    await expect(initUnifiedPushRuntime()).resolves.toBeUndefined();
+    const runtime = await import('./unifiedPushRuntime');
+    await expect(runtime.initUnifiedPushRuntime()).resolves.toBeUndefined();
 
     addListener.mockResolvedValue({ remove: vi.fn().mockResolvedValue(undefined) });
-    await expect(initUnifiedPushRuntime()).resolves.toBeUndefined();
+    await expect(runtime.initUnifiedPushRuntime()).resolves.toBeUndefined();
     expect(addListener).toHaveBeenCalledTimes(3);
     expect(drain).toHaveBeenCalledTimes(1);
   });
 
   it('drains cold-start messages after listeners are attached', async () => {
     drain.mockResolvedValueOnce({ messages: [{ payload: '{"metadata":{"charId":"c1"}}' }] });
-    await initUnifiedPushRuntime();
+    const runtime = await import('./unifiedPushRuntime');
+    await runtime.initUnifiedPushRuntime();
     expect(addListener).toHaveBeenCalledTimes(2);
     expect(drain).toHaveBeenCalledTimes(1);
     expect(ingest).toHaveBeenCalledWith('{"metadata":{"charId":"c1"}}');
