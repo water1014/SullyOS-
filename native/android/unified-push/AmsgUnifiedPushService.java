@@ -59,7 +59,7 @@ public class AmsgUnifiedPushService extends PushService {
         android.content.SharedPreferences.Editor editor = getSharedPreferences(AmsgUnifiedPushPlugin.PREFS, Context.MODE_PRIVATE)
             .edit()
             .putString(AmsgUnifiedPushPlugin.KEY_ENDPOINT, endpoint.getUrl())
-            .putBoolean(AmsgUnifiedPushPlugin.KEY_TEMPORARY, endpoint.getTemporary())
+            .putBoolean(AmsgUnifiedPushPlugin.KEY_TEMPORARY, false)
             .remove(AmsgUnifiedPushPlugin.KEY_LAST_ERROR);
         if (endpoint.getPubKeySet() != null) {
             editor.putString(AmsgUnifiedPushPlugin.KEY_P256DH, endpoint.getPubKeySet().getPubKey());
@@ -81,13 +81,6 @@ public class AmsgUnifiedPushService extends PushService {
             .remove(AmsgUnifiedPushPlugin.KEY_P256DH)
             .remove(AmsgUnifiedPushPlugin.KEY_AUTH)
             .commit();
-        AmsgUnifiedPushPlugin.sendEvent(this, AmsgUnifiedPushPlugin.ACTION_REGISTRATION, null);
-    }
-
-    @Override
-    public void onTempUnavailable(String instance) {
-        getSharedPreferences(AmsgUnifiedPushPlugin.PREFS, Context.MODE_PRIVATE).edit()
-            .putString(AmsgUnifiedPushPlugin.KEY_LAST_ERROR, "UnifiedPush 分发器暂时不可用").commit();
         AmsgUnifiedPushPlugin.sendEvent(this, AmsgUnifiedPushPlugin.ACTION_REGISTRATION, null);
     }
 
