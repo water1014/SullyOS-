@@ -114,8 +114,8 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
   // Morpho's native /novelai endpoint expects its standard synchronous JSON-to-ZIP contract instead.
   const parsedEndpoint = new URL(endpoint);
   const isMorphoNativeRoute = config.provider === 'thirdparty'
-    && /\\.loliyc\\.com$/i.test(parsedEndpoint.hostname)
-    && /\\/novelai$/i.test(parsedEndpoint.pathname);
+    && /\.loliyc\.com$/i.test(parsedEndpoint.hostname)
+    && /\/novelai$/i.test(parsedEndpoint.pathname);
   if (!isMorphoNativeRoute) {
     // 智绘姬 sends these compatibility fields for the standard /ai/generate-image route,
     // then still reads the response as a ZIP. They are not used by Morpho's /novelai adapter.
