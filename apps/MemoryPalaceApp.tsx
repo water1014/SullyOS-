@@ -3250,6 +3250,23 @@ export default function MemoryPalaceApp() {
                             </div>
                         </div>
                     )}
+                    <div style={{ marginBottom: 10 }}>
+                        <button type="button" onClick={() => {
+                            setLightUrl('https://opencode.ai/zen/go');
+                            if (apiConfig?.baseUrl?.includes('opencode.ai')) {
+                                setLightKey(apiConfig.apiKey || '');
+                                setLightModel(apiConfig.model || '');
+                            }
+                        }} style={{
+                            padding: '7px 11px', borderRadius: 9, fontSize: 11, fontWeight: 700,
+                            border: '1px solid #bae6fd', background: '#f0f9ff', color: '#0369a1',
+                        }}>
+                            填入 OpenCode Go
+                        </button>
+                        <div style={{ fontSize: 10, color: '#64748b', marginTop: 5, lineHeight: 1.6 }}>
+                            这里是记忆提取、总结等后台文字任务，可以直接使用 Go 订阅。若主 API 已配置 Go，会顺手带入同一把 Key 和模型；否则请在下方填写 Go Key 与支持的模型。会自动补充会话标识。
+                        </div>
+                    </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div>
@@ -3362,6 +3379,8 @@ export default function MemoryPalaceApp() {
                     <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
                         新手可使用硅基流动（SiliconFlow），请先在网页版完成实名认证才能使用。
                         下方选择向量模型并填入 API Key 后保存。熟悉 Embedding 的用户也可配置其他兼容向量模型；不要填聊天模型。
+                        <br />
+                        <span style={{ color: '#a16207', fontWeight: 600 }}>OpenCode Go 是对话推理服务，没有公开的 /embeddings 向量端点，因此不能替代这里的 Embedding API。</span>
                         <br/>
                         <span style={{ color: '#a16207', fontWeight: 600 }}>
                             注意：Embedding 用的是 <code>/embeddings</code> 端点，和主 API 不通用，因此
@@ -3579,7 +3598,7 @@ export default function MemoryPalaceApp() {
                         fontSize: 11, color: '#1e3a8a', lineHeight: 1.7,
                     }}>
                         <div style={{ fontWeight: 700, marginBottom: 4 }}>rerank 是干啥的？</div>
-                        开了之后能让跟你这句话最相关的记忆更准地被翻出来；可选增强，不开也不影响。
+                        开了之后能让跟你这句话最相关的记忆更准地被翻出来；可选增强，不开也不影响。OpenCode Go 没有公开的 /rerank 端点，这里仍需使用独立的 Rerank 服务。
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>

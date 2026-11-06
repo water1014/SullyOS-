@@ -7,6 +7,7 @@
 
 import { waitForPalaceRequest, readMaintenanceSettings } from './maintenanceMode';
 import type { EmbeddingConfig } from './types';
+import { isOpenCodeGoEndpoint } from '../apiConfigNormalize';
 
 // ─── 核心 API 调用 ────────────────────────────────────
 
@@ -112,6 +113,9 @@ async function callEmbeddingAPI(
     // 自动修正常见 URL 错误
     let baseUrl = config.baseUrl.replace(/\/+$/, '');
     baseUrl = baseUrl.replace('ai.siliconflow.cn', 'api.siliconflow.cn');
+    if (isOpenCodeGoEndpoint(baseUrl)) {
+        throw new Error('OpenCode Go 订阅不提供 /embeddings 向量端点。请为记忆宫殿单独配置 Embedding 服务商。');
+    }
     const url = `${baseUrl}/embeddings`;
 
     const body: Record<string, unknown> = {

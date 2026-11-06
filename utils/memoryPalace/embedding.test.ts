@@ -47,6 +47,12 @@ beforeEach(() => {
 });
 
 describe('getEmbeddings 分批 / 并行保序', () => {
+    it('明确拒绝把 OpenCode Go 当作 Embedding 服务', async () => {
+        await expect(getEmbeddings(['测试'], { ...config, baseUrl: 'https://opencode.ai/zen/go/v1' }))
+            .rejects.toThrow('OpenCode Go 订阅不提供 /embeddings');
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
     it('空输入返回空数组，不发请求', async () => {
         const out = await getEmbeddings([], config);
         expect(out).toEqual([]);

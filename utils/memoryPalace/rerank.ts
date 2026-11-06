@@ -21,6 +21,7 @@
  */
 
 import { safeFetchJson } from '../safeApi';
+import { isOpenCodeGoEndpoint } from '../apiConfigNormalize';
 
 export interface RerankApiConfig {
     baseUrl: string;
@@ -51,7 +52,11 @@ export async function rerankDocuments(
 ): Promise<RerankResult[]> {
     if (documents.length === 0 || !query.trim()) return [];
 
-    const url = `${config.baseUrl.replace(/\/+$/, '')}/rerank`;
+    const baseUrl = config.baseUrl.replace(/\/+$/, '');
+    if (isOpenCodeGoEndpoint(baseUrl)) {
+        throw new Error('OpenCode Go 订阅不提供 /rerank 端点。请为记忆宫殿单独配置 Rerank 服务商，或关闭 Rerank。');
+    }
+    const url = `${baseUrl}/rerank`;
     const body = {
         model: config.model,
         query,
