@@ -9,7 +9,7 @@ import type { Message } from '../../types';
 import type { MemoryEntity, MemoryNode, MemoryRoom } from './types';
 import type { LightLLMConfig } from './pipeline';
 import { safeFetchJson } from '../safeApi';
-import { buildApiRequestHeaders, getOpenCodeSessionId } from '../apiConfigNormalize';
+import { buildApiRequestHeaders, getOpenCodeSessionId, isOpenCodeGoEndpoint } from '../apiConfigNormalize';
 import { safeParseJsonArray } from './jsonUtils';
 import { buildSARMemoryBoundaryInstruction, formatMessageForPrompt } from '../messageFormat';
 import { readRecallRuntimeSnapshot } from './trace';
@@ -522,7 +522,7 @@ pinDays 仅在需要置顶时才写，大多数记忆不需要。
                     stream: false,
                 }),
             },
-            2, 180_000, { appName: '记忆宫殿', purpose: '记忆提取' }
+            2, 180_000, { appName: '记忆宫殿', purpose: '记忆提取' }, undefined, isOpenCodeGoEndpoint(llmConfig.baseUrl)
         );
 
         const reply = data.choices?.[0]?.message?.content || '';
