@@ -4,7 +4,7 @@ import { Directory, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import JSZip from 'jszip';
 import {
-  ArrowLeft, ArrowsClockwise, Check, Copy, DownloadSimple, GearSix, ImageSquare,
+  ArrowLeft, ArrowsClockwise, BookOpen, Check, Copy, DownloadSimple, GearSix, ImageSquare,
   Images, MagicWand, Sparkle, Trash,
 } from '@phosphor-icons/react';
 import { useOS } from '../context/OSContext';
@@ -12,6 +12,11 @@ import { DB } from '../utils/db';
 import { deleteBlobRef, getBlobForRef, putImageBlob } from '../utils/blobRef';
 import { visualCompanionRepository } from '../utils/visualCompanion/repository';
 import { mergeCharacterVisualContextPrompt } from '../utils/visualCompanion/identityPrompt';
+import { fetchLlm } from '../utils/anthropicApi';
+import {
+  formatImageWorldbookContext, matchImageWorldbookEntries, readImageWorldbook,
+  IMAGE_WORLDBOOK_STORAGE_KEY, type ImageWorldbookEntry,
+} from '../utils/imageStudioWorldbook';
 import type { CharacterVisualProfile, VisualTask } from '../utils/visualCompanion/types';
 import {
   generateGptImage, editGptImage, generateNaiImage,
@@ -146,6 +151,16 @@ const ImageStudioApp: React.FC = () => {
   const [engine, setEngine] = useState<ImageEngine>('gpt');
   const [config, setConfig] = useState<StudioConfig>(readConfig);
   const [prompt, setPrompt] = useState('');
+  const [promptMode, setPromptMode] = useState<'manual' | 'ai'>('manual');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [enhancingPrompt, setEnhancingPrompt] = useState(false);
+  const [imageWorldbook, setImageWorldbook] = useState<ImageWorldbookEntry[]>(readImageWorldbook);
+  const [worldbookEditorOpen, setWorldbookEditorOpen] = useState(false);
+  const [worldbookTitle, setWorldbookTitle] = useState('');
+  const [worldbookKeywords, setWorldbookKeywords] = useState('');
+  const [worldbookContent, setWorldbookContent] = useState('');
+  const [worldbookConstant, setWorldbookConstant] = useState(false);
+  const [editingWorldbookId, setEditingWorldbookId] = useState<string | null>(null);
   const [appearanceProfile, setAppearanceProfile] = useState<CharacterVisualProfile | null>(null);
   const [appearanceLoading, setAppearanceLoading] = useState(false);
   const [savingBaseReference, setSavingBaseReference] = useState(false);
@@ -297,6 +312,99 @@ const ImageStudioApp: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(TEMPLATES_KEY, JSON.stringify(naiTemplates));
   }, [naiTemplates]);
+
+  useEffect(() => {
+    localStorage.setItem(IMAGE_WORLDBOOK_STORAGE_KEY, JSON.stringify(imageWorldbook));
+  }, [imageWorldbook]);
+
+  const matchedImageWorldbook = matchImageWorldbookEntries(imageWorldbook, prompt);
+  const imageWorldbookContext = formatImageWorldbookContext(matchedImageWorldbook);
+
+  const resetWorldbookDraft = () => {
+    setEditingWorldbookId(null);
+    setWorldbookTitle('');
+    setWorldbookKeywords('');
+    setWorldbookContent('');
+    setWorldbookConstant(false);
+  };
+
+  const saveImageWorldbookEntry = () => {
+    if (!worldbookTitle.trim() || !worldbookContent.trim()) {
+      addToast('请填写设定名称和内容', 'error');
+      return;
+    }
+    const entry: ImageWorldbookEntry = {
+      id: editingWorldbookId || ('image_wb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+      title: worldbookTitle.trim(),
+      keywords: worldbookKeywords.split(/[,，、\\n]/).map(value => value.trim()).filter(Boolean),
+      content: worldbookContent.trim(),
+      enabled: true,
+      constant: worldbookConstant,
+      updatedAt: Date.now(),
+    };
+    setImageWorldbook(current => editingWorldbookId
+      ? current.map(item => item.id === editingWorldbookId ? entry : item)
+      : [entry, ...current]);
+    resetWorldbookDraft();
+    setWorldbookEditorOpen(false);
+    addToast('生图世界书已保存', 'success');
+  };
+
+  const editImageWorldbookEntry = (entry: ImageWorldbookEntry) => {
+    setEditingWorldbookId(entry.id);
+    setWorldbookTitle(entry.title);
+    setWorldbookKeywords(entry.keywords.join(', '));
+    setWorldbookContent(entry.content);
+    setWorldbookConstant(entry.constant);
+    setWorldbookEditorOpen(true);
+  };
+
+  const enhanceImagePrompt = async () => {
+    if (enhancingPrompt || !prompt.trim()) return;
+    if (!apiConfig.apiKey?.trim() || !apiConfig.baseUrl?.trim() || !apiConfig.model?.trim()) {
+      addToast('请先在聊天 API 设置中配置可用的模型', 'error');
+      return;
+    }
+    setEnhancingPrompt(true);
+    setError('');
+    try {
+      const base = apiConfig.baseUrl.trim().replace(/\\/+$/, '');
+      const anthropic = apiConfig.apiType === 'anthropic';
+      const endpoint = anthropic
+        ? (base.endsWith('/messages') ? base : base + '/messages')
+        : (base.endsWith('/chat/completions') ? base : base + '/chat/completions');
+      const headers = new Headers({ 'Content-Type': 'application/json' });
+      if (anthropic) {
+        headers.set('x-api-key', apiConfig.apiKey);
+        headers.set('anthropic-version', '2023-06-01');
+      } else {
+        headers.set('Authorization', 'Bearer ' + apiConfig.apiKey);
+      }
+      Object.entries(apiConfig.customHeaders || {}).forEach(([name, value]) => headers.set(name, value));
+      const systemPrompt = engine === 'nai'
+        ? 'You are an expert NovelAI anime image prompt writer. Convert the user\'s natural-language image idea into a precise, detailed English tag-style positive prompt. Preserve the requested subject, appearance, clothing, pose, composition, lighting, background and mood. Use comma-separated tags and concise descriptive phrases. Do not add unrelated subjects, do not invent identity details, do not include negative prompts, explanations, Markdown or quotes. Output only the finished positive prompt.'
+        : 'You are an expert image prompt writer. Convert the user\'s idea into a clear, detailed image-generation prompt. Preserve all requested details and output only the prompt, without explanations or Markdown.';
+      const body = anthropic
+        ? { model: apiConfig.model, max_tokens: 1200, system: systemPrompt, messages: [{ role: 'user', content: prompt.trim() }] }
+        : { model: apiConfig.model, temperature: 0.6, max_tokens: 1200, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt.trim() }] };
+      const response = await fetchLlm(endpoint, { method: 'POST', headers, body: JSON.stringify(body) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error?.message || payload?.message || payload?.error || ('AI 提示词整理失败（HTTP ' + response.status + '）'));
+      const result = anthropic
+        ? (Array.isArray(payload?.content) ? payload.content.filter((item: any) => item.type === 'text').map((item: any) => item.text).join('') : '')
+        : (payload?.choices?.[0]?.message?.content || '');
+      if (typeof result !== 'string' || !result.trim()) throw new Error('AI 没有返回可用的提示词');
+      setAiPrompt(result.trim().replace(/^\`\`\`(?:text)?\\s*/i, '').replace(/\\s*\`\`\`$/, ''));
+      setPromptMode('ai');
+      addToast('AI 提示词已整理好，可以继续编辑', 'success');
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'AI 提示词整理失败';
+      setError(message);
+      addToast(message.slice(0, 80), 'error');
+    } finally {
+      setEnhancingPrompt(false);
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem(NAI_SETTINGS_KEY, JSON.stringify({ size: naiSize, steps: naiSteps, scale: naiScale, sampler: naiSampler, seed: naiSeed }));
@@ -479,14 +587,19 @@ const ImageStudioApp: React.FC = () => {
       const visualMemories = activeCharacterId
         ? await visualCompanionRepository.listMemories(activeCharacterId)
         : [];
-      const scenePrompt = mergeCharacterVisualContextPrompt(prompt, currentAppearanceProfile, visualMemories);
+      const sourcePrompt = promptMode === 'ai' ? aiPrompt : prompt;
+      if (!sourcePrompt.trim()) throw new Error(promptMode === 'ai' ? '请先生成或填写 AI 提示词' : '请先填写正向提示词');
+      const scenePrompt = mergeCharacterVisualContextPrompt(sourcePrompt, currentAppearanceProfile, visualMemories);
+      const promptWithWorldbook = imageWorldbookContext
+        ? [scenePrompt, imageWorldbookContext].filter(Boolean).join(', ')
+        : scenePrompt;
       const fixedPositive = engine === 'nai'
         ? (hasSharedImageConfig ? sharedImageConfig.naiPositivePrompt : '')
         : (hasSharedImageConfig ? sharedImageConfig.gptPositivePrompt : '');
       const fixedSuffix = engine === 'nai'
         ? (hasSharedImageConfig ? sharedImageConfig.naiPositiveSuffix : '')
         : (hasSharedImageConfig ? sharedImageConfig.gptPositiveSuffix : '');
-      const effectivePrompt = [fixedPositive, scenePrompt, fixedSuffix].map(part => (part || '').trim()).filter(Boolean).join(', ');
+      const effectivePrompt = [fixedPositive, promptWithWorldbook, fixedSuffix].map(part => (part || '').trim()).filter(Boolean).join(', ');
       const effectiveNegativePrompt = hasSharedImageConfig
         ? (engine === 'nai' ? (sharedImageConfig.naiNegativePrompt || negativePrompt) : (sharedImageConfig.gptNegativePrompt || ''))
         : negativePrompt;
@@ -1023,7 +1136,42 @@ const ImageStudioApp: React.FC = () => {
 
           <section className="glass rounded-[24px] p-4 space-y-3">
             <div className="flex items-center justify-between"><div><div className="text-[10px] tracking-[.2em] text-sky-700/55 font-bold">YOUR IMAGINATION</div><div className="text-sm font-semibold mt-1">描述你想要的画面</div></div><span className="text-[10px] text-slate-400">PROMPT</span></div>
-            <div className="space-y-2"><label className="block text-xs font-semibold text-slate-600">正向提示词</label><textarea className="field min-h-[132px] resize-y leading-6" value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={engine === 'gpt' ? (referenceImage ? '描述你希望如何修改这张参考图……' : '例如：雨后的玻璃花房，蓝色月光落在白色花瓣上，电影感构图……') : 'masterpiece, best quality, 1girl, ...'} /></div>{engine === 'gpt' && <div className="space-y-2"><label className="block text-xs font-semibold text-slate-600">负向提示词 <span className="font-normal text-slate-400">· 可选</span></label><textarea className="field min-h-[84px] resize-y leading-6" value={negativePrompt} onChange={event => setNegativePrompt(event.target.value)} placeholder="填写希望避免的内容，例如：模糊、文字、水印、畸形结构……" /></div>}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-slate-600">你的原始描述 / 正向提示词</label>
+              <textarea className="field min-h-[132px] resize-y leading-6" value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={engine === 'gpt' ? (referenceImage ? '描述你希望如何修改这张参考图……' : '例如：雨后的玻璃花房，蓝色月光落在白色花瓣上，电影感构图……') : '可以直接填写中文或英文提示词，例如：masterpiece, 1girl, ...'} />
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setPromptMode('manual')} className={`rounded-xl py-2.5 text-[11px] font-semibold border ${promptMode === 'manual' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white/75 text-slate-600 border-sky-100'}`}>直接使用我的提示词</button>
+                <button type="button" onClick={() => setPromptMode('ai')} className={`rounded-xl py-2.5 text-[11px] font-semibold border ${promptMode === 'ai' ? 'bg-sky-600 text-white border-sky-600' : 'bg-white/75 text-slate-600 border-sky-100'}`}>让 AI 整理成提示词</button>
+              </div>
+              {promptMode === 'ai' && <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2"><div className="text-xs font-semibold text-slate-700">AI 提示词草稿</div><button type="button" disabled={enhancingPrompt || !prompt.trim()} onClick={() => void enhanceImagePrompt()} className="primary rounded-xl px-3 py-2 text-[10px] font-semibold disabled:opacity-50">{enhancingPrompt ? '整理中…' : aiPrompt ? '重新整理' : 'AI 帮我写'}</button></div>
+                <textarea className="field min-h-[120px] resize-y leading-6" value={aiPrompt} onChange={event => setAiPrompt(event.target.value)} placeholder="点击「AI 帮我写」，生成后也可以在这里自行修改。"/>
+                <p className="text-[10px] text-slate-500">使用聊天 API 配置的模型整理，不会自动发送生图；确认内容后再点击生成。</p>
+              </div>}
+            </div>
+            <section className="rounded-2xl border border-sky-100 bg-white/60 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2"><BookOpen size={17} className="text-sky-600"/><div><div className="text-xs font-semibold text-slate-700">生图世界书</div><div className="text-[10px] text-slate-400">独立于聊天世界书，按关键词自动注入</div></div></div>
+                <button type="button" onClick={() => { resetWorldbookDraft(); setWorldbookEditorOpen(value => !value); }} className="soft rounded-xl px-3 py-2 text-[10px] font-semibold">{worldbookEditorOpen ? '收起' : '管理设定'}</button>
+              </div>
+              <div className="text-[10px] text-slate-500">当前命中 {matchedImageWorldbook.length} 条设定{matchedImageWorldbook.length ? '：' + matchedImageWorldbook.map(item => item.title).join('、') : '。填写提示词关键词后自动匹配；常驻条目始终生效。'}</div>
+              {worldbookEditorOpen && <>
+                <div className="space-y-2 rounded-xl bg-sky-50/70 p-3">
+                  <div className="text-xs font-semibold text-slate-700">{editingWorldbookId ? '编辑生图设定' : '新增生图设定'}</div>
+                  <input className="field" value={worldbookTitle} onChange={event => setWorldbookTitle(event.target.value)} placeholder="设定名称，例如：宋祁的固定外貌"/>
+                  <input className="field" value={worldbookKeywords} onChange={event => setWorldbookKeywords(event.target.value)} placeholder="触发关键词，用逗号分隔；留空则仅常驻生效"/>
+                  <textarea className="field min-h-[100px] resize-y" value={worldbookContent} onChange={event => setWorldbookContent(event.target.value)} placeholder="填写希望生图时遵守的外貌、服装、画风、场景规则…"/>
+                  <label className="flex items-center gap-2 text-[11px] text-slate-600"><input type="checkbox" checked={worldbookConstant} onChange={event => setWorldbookConstant(event.target.checked)}/>常驻设定，每次生图都注入</label>
+                  <div className="flex gap-2"><button type="button" onClick={saveImageWorldbookEntry} className="primary flex-1 rounded-xl py-2.5 text-xs font-semibold">保存设定</button><button type="button" onClick={resetWorldbookDraft} className="soft rounded-xl px-3 py-2 text-xs">清空</button></div>
+                </div>
+                {imageWorldbook.length > 0 ? <div className="space-y-2">{imageWorldbook.map(entry => <div key={entry.id} className="flex items-start gap-2 rounded-xl border border-sky-50 bg-white/75 p-3">
+                  <div className="min-w-0 flex-1"><div className="text-xs font-semibold text-slate-700">{entry.title}</div><div className="text-[10px] text-slate-400 mt-1">{entry.constant ? '常驻' : entry.keywords.join('、') || '未设置触发词'} · {entry.enabled ? '启用' : '停用'}</div><div className="text-[10px] text-slate-500 mt-1 line-clamp-2">{entry.content}</div></div>
+                  <button type="button" onClick={() => setImageWorldbook(current => current.map(item => item.id === entry.id ? {...item, enabled: !item.enabled} : item))} className="text-[10px] text-sky-700">{entry.enabled ? '停用' : '启用'}</button>
+                  <button type="button" onClick={() => editImageWorldbookEntry(entry)} className="text-[10px] text-slate-600">编辑</button>
+                  <button type="button" onClick={() => setImageWorldbook(current => current.filter(item => item.id !== entry.id))} className="text-[10px] text-rose-500">删除</button>
+                </div>)}</div> : <p className="text-[10px] text-slate-400">还没有生图设定，可以先添加角色外貌、服装和画风规则。</p>}
+              </>}
+            </section>{engine === 'gpt' && <div className="space-y-2"><label className="block text-xs font-semibold text-slate-600">负向提示词 <span className="font-normal text-slate-400">· 可选</span></label><textarea className="field min-h-[84px] resize-y leading-6" value={negativePrompt} onChange={event => setNegativePrompt(event.target.value)} placeholder="填写希望避免的内容，例如：模糊、文字、水印、畸形结构……" /></div>}
             {activeCharacterId && (
               <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-[11px] text-sky-800 flex items-center gap-2">
                 <Sparkle size={14}/>
@@ -1134,7 +1282,7 @@ const ImageStudioApp: React.FC = () => {
           </section>
 
           {error && <div className="rounded-2xl border border-rose-200 bg-rose-50/90 p-3 text-xs text-rose-700 leading-5">{error}</div>}
-          <button onClick={handleGenerate} disabled={generating || !configured || !prompt.trim()} className="primary w-full rounded-2xl py-4 flex items-center justify-center gap-2 text-sm font-bold">
+          <button onClick={handleGenerate} disabled={generating || !configured || !(promptMode === 'manual' ? prompt.trim() : aiPrompt.trim())} className="primary w-full rounded-2xl py-4 flex items-center justify-center gap-2 text-sm font-bold">
             {generating ? <><ArrowsClockwise size={18} className="animate-spin"/>{referenceImage && engine === 'gpt' ? '正在编辑参考图…' : '正在绘制，请稍候…'}</> : <><Sparkle size={18}/>{referenceImage && engine === 'gpt' ? '开始编辑图片' : '开始生成'}</>}
           </button>
           {generating && <button onClick={() => generationAbortRef.current?.abort()} className="soft w-full rounded-xl py-2.5 text-xs font-semibold text-rose-600">取消本次生成</button>}
