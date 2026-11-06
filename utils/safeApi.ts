@@ -500,7 +500,11 @@ export async function safeFetchJson(
                     let delay = Math.pow(2, attempt) * 1000;
                     if (chatCompletionRequest && retryChatOverloadOnce && response.status === 429) {
                         const bodyText = await response.clone().text().catch(() => '');
-                        retryThisResponse = /overloaded/i.test(bodyText);
+                        // OpenCode Go emits both [overloaded] and [prefill_cap_refused].
+                        // The latter often carries its retry hint only in the JSON message body.
+                        retryThisResponse = /overloaded|prefill_cap_refused|cell is at capacity/i.test(bodyText);
+                        const bodyRetryAfter = bodyText.match(/after\\s+(\\d+(?:\\.\\d+)?)\\s*s/i);
+                        if (bodyRetryAfter) delay = Math.min(Math.max(Number(bodyRetryAfter[1]) * 1000, 1000), 60000);
                         const retryAfter = response.headers.get('retry-after');
                         if (retryAfter) {
                             const seconds = Number(retryAfter);
