@@ -2543,6 +2543,7 @@ export const amsgHooks = {
               emotionEvalSpec, evalApi, instantMessages,
               toolPack.charName || ctx.task.contactName || '角色',
               undefined, ctx.signal,
+              typeof ctx.task.metadata?.charId === 'string' ? ctx.task.metadata.charId : 'default',
             );
           })();
       }
