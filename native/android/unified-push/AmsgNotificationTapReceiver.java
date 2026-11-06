@@ -14,7 +14,9 @@ public class AmsgNotificationTapReceiver extends BroadcastReceiver {
             .putString(AmsgUnifiedPushPlugin.KEY_LAUNCH_PAYLOAD, payload)
             .putLong(AmsgUnifiedPushPlugin.KEY_LAUNCH_PAYLOAD_AT, System.currentTimeMillis())
             .commit();
-        AmsgUnifiedPushPlugin.sendEvent(context, AmsgUnifiedPushPlugin.ACTION_TAP, payload);
+        AmsgUnifiedPushPlugin.sendEvent(context, AmsgUnifiedPushPlugin.ACTION_TAP, payload,
+            context.getSharedPreferences(AmsgUnifiedPushPlugin.PREFS, Context.MODE_PRIVATE)
+                .getLong(AmsgUnifiedPushPlugin.KEY_LAUNCH_PAYLOAD_AT, 0L));
         Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
         if (launch != null) {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
