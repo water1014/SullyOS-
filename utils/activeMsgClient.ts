@@ -1,6 +1,7 @@
 import { buildChatOutputStylePrompt, readChatTranslationConfig } from './chatOutputStylePrompt';
 import { resolveDialogueApi } from './characterApi';
 import { isAnthropicEndpoint } from './llmEndpoint';
+import { isOpenCodeGoEndpoint } from './apiConfigNormalize';
 import { ackStoppedReplyReceipts, stoppedReplyStateEntries } from './amsgStoppedReplyClient';
 import { loadCharacterContextMessages } from './chatContextRange';
 import { ReiClient, classifyClientStateWrite } from '@rei-standard/amsg-client';
@@ -580,8 +581,11 @@ const initializeClient = (config: ActiveMsg2GlobalConfig) => {
 const resolveApiConfig = (char: CharacterProfile, _config: ActiveMsg2CharacterConfig, apiConfig: APIConfig) => {
   const source = resolveDialogueApi(apiConfig, char);
 
-  if (Object.keys(source.customHeaders || {}).length > 0) {
-    throw new Error('当前 API 配置使用自定义请求头，主动消息 2.0 云端执行暂不支持；请先清空自定义请求头。OpenCode Go 所需的 x-opencode-session 会由云端请求通道自动添加。');
+  const unsupportedHeaders = Object.keys(source.customHeaders || {}).filter((name) =>
+    !isOpenCodeGoEndpoint(source.baseUrl) || name.toLowerCase() !== 'x-opencode-session'
+  );
+  if (unsupportedHeaders.length > 0) {
+    throw new Error('主动消息 2.0 云端执行暂不支持当前 API 的自定义请求头：' + unsupportedHeaders.join(', ') + '。OpenCode Go 的 x-opencode-session 会由云端请求通道自动添加。');
   }
   if (!source.baseUrl || !source.apiKey || !source.model) {
     throw new Error('主动消息 2.0 缺少可用的 API URL / Key / Model。');
