@@ -336,7 +336,7 @@ const ImageStudioApp: React.FC = () => {
     const entry: ImageWorldbookEntry = {
       id: editingWorldbookId || ('image_wb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
       title: worldbookTitle.trim(),
-      keywords: worldbookKeywords.split(/[,，、\\n]/).map(value => value.trim()).filter(Boolean),
+      keywords: worldbookKeywords.split(/[,，、\n]/).map(value => value.trim()).filter(Boolean),
       content: worldbookContent.trim(),
       enabled: true,
       constant: worldbookConstant,
@@ -368,7 +368,7 @@ const ImageStudioApp: React.FC = () => {
     setEnhancingPrompt(true);
     setError('');
     try {
-      const base = apiConfig.baseUrl.trim().replace(/\\/+$/, '');
+      const base = apiConfig.baseUrl.trim().replace(/\/+$/, '');
       const anthropic = apiConfig.apiType === 'anthropic';
       const endpoint = anthropic
         ? (base.endsWith('/messages') ? base : base + '/messages')
@@ -394,7 +394,7 @@ const ImageStudioApp: React.FC = () => {
         ? (Array.isArray(payload?.content) ? payload.content.filter((item: any) => item.type === 'text').map((item: any) => item.text).join('') : '')
         : (payload?.choices?.[0]?.message?.content || '');
       if (typeof result !== 'string' || !result.trim()) throw new Error('AI 没有返回可用的提示词');
-      setAiPrompt(result.trim().replace(/^\`\`\`(?:text)?\\s*/i, '').replace(/\\s*\`\`\`$/, ''));
+      setAiPrompt(result.trim().replace(/^```(?:text)?\s*/i, '').replace(/\s*```$/, ''));
       setPromptMode('ai');
       addToast('AI 提示词已整理好，可以继续编辑', 'success');
     } catch (cause) {
@@ -547,12 +547,12 @@ const ImageStudioApp: React.FC = () => {
     }
   };
 
-  const saveImage = useCallback(async (blob: Blob, generatedSeed?: number, profileVersion?: number, requestPrompt?: string, requestNegativePrompt?: string) => {
+  const saveImage = useCallback(async (blob: Blob, generatedSeed?: number, profileVersion?: number, requestPrompt?: string, requestNegativePrompt?: string, usedPrompt?: string) => {
     const id = `studio_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const blobId = `image-studio:${id}`;
     await DB.putBlobAsset(blobId, blob);
     const item: SavedImage = {
-      id, blobId, engine, prompt: prompt.trim(), negativePrompt: engine === 'nai' ? negativePrompt.trim() : '',
+      id, blobId, engine, prompt: (usedPrompt || prompt).trim(), negativePrompt: engine === 'nai' ? negativePrompt.trim() : '',
       ...(engine === 'nai' && requestPrompt !== undefined ? { requestPrompt, requestNegativePrompt: requestNegativePrompt || '' } : {}),
       model: engine === 'gpt' ? config.gpt.model : config.nai.model,
       ...(profileVersion !== undefined ? { appearanceProfileVersion: profileVersion } : {}),
@@ -650,7 +650,7 @@ const ImageStudioApp: React.FC = () => {
           ? await editGptImage(config.gpt, effectiveReferenceImage, gptRequestPrompt, { size: gptSize, quality: gptQuality, negativePrompt: gptNegativeField, signal: controller.signal })
           : await generateGptImage(config.gpt, gptRequestPrompt, { size: gptSize, quality: gptQuality, negativePrompt: gptNegativeField, signal: controller.signal })
         : await generateNaiImage(config.nai, effectivePrompt, effectiveNegativePrompt, naiOptions, controller.signal);
-      await saveImage(blob, effectiveNaiSeed, currentAppearanceProfile?.status === 'active' ? currentAppearanceProfile.version : undefined, engine === 'nai' ? effectivePrompt.trim() : undefined, engine === 'nai' ? effectiveNegativePrompt.trim() : undefined);
+      await saveImage(blob, effectiveNaiSeed, currentAppearanceProfile?.status === 'active' ? currentAppearanceProfile.version : undefined, engine === 'nai' ? effectivePrompt.trim() : undefined, engine === 'nai' ? effectiveNegativePrompt.trim() : undefined, sourcePrompt.trim());
       addToast('图片已生成并保存到我的画廊', 'success');
     } catch (cause) {
       if (cause instanceof Error && cause.name === 'AbortError') {
