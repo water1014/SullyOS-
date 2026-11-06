@@ -328,18 +328,62 @@ function describeNaiZip(buffer: Uint8Array, response: Response): string {
   ].join('；');
 }
 
+function findNaiImageReference(value: unknown, depth = 0): { kind: 'data' | 'url'; value: string } | null {
+  if (depth > 10 || value == null) return null;
+  if (typeof value === 'string') {
+    const text = value.trim();
+    const dataMatch = text.match(/data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s_-]+/i);
+    if (dataMatch) return { kind: 'data', value: dataMatch[0].replace(/\s/g, '') };
+    const markdownMatch = text.match(/!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/i);
+    const urlMatch = text.match(/https?:\/\/[^\s)"'<>]+?\.(?:png|jpe?g|webp)(?:\?[^\s)"'<>]*)?/i);
+    const url = markdownMatch?.[1] || urlMatch?.[0];
+    if (url) return { kind: 'url', value: url.replace(/[),.;]+$/, '') };
+    return null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findNaiImageReference(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof value === 'object') {
+    for (const item of Object.values(value as Record<string, unknown>)) {
+      const found = findNaiImageReference(item, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 async function parseNaiJsonResponse(buffer: Uint8Array): Promise<Blob> {
   const raw = new TextDecoder().decode(buffer);
   let payload: unknown;
   try { payload = JSON.parse(raw); }
   catch { throw new Error('NAI 返回文本，但不是有效 JSON：' + raw.slice(0, 180)); }
-  const image = findNaiBase64(payload);
-  if (!image) {
-    const providerError = responseError(payload, '');
-    if (providerError) throw new Error(providerError.slice(0, 240));
-    throw new Error('NAI 服务返回 JSON，但没有可识别的图片 Base64 数据');
+  // OVO scans the complete JSON text for data:image URLs, image URLs and Markdown image links.
+  // Do the same instead of assuming the gateway uses a small set of Base64 property names.
+  const image = findNaiImageReference(payload);
+  if (image?.kind === 'data') {
+    const match = image.value.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
+    if (!match) throw new Error('NAI JSON 返回了格式不完整的图片 Data URL');
+    const blob = decodeBase64Image(match[2]);
+    return new Blob([blob], { type: match[1] || blob.type });
   }
-  return decodeBase64Image(image.encoded);
+  if (image?.kind === 'url') {
+    const response = await fetch(image.value);
+    if (!response.ok) throw new Error('NAI JSON 返回了图片链接，但读取失败（HTTP ' + response.status + '）');
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const mimeType = sniffImageMime(bytes);
+    if (!mimeType) throw new Error('NAI JSON 返回的图片链接内容不是有效的 PNG/JPEG/WebP 图片');
+    return new Blob([bytes], { type: mimeType });
+  }
+  const base64 = findNaiBase64(payload);
+  if (base64) return decodeBase64Image(base64.encoded);
+  const providerError = responseError(payload, '');
+  if (providerError) throw new Error(providerError.slice(0, 240));
+  const topLevelKeys = payload && typeof payload === 'object' ? Object.keys(payload as Record<string, unknown>).slice(0, 20).join(', ') : typeof payload;
+  throw new Error('NAI 服务返回 JSON，但未找到图片 Data URL、图片链接或 Base64 字段。响应字段：' + (topLevelKeys || '无'));
 }
 
 /** Exact ZIP extraction route used by BaiBai: fflate.unzipSync over the untouched response bytes. */
