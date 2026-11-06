@@ -38,7 +38,8 @@ export function createOpenCodeGoTransport(isNative: boolean, nativeFetch: Native
     if (!isOpenCodeGoEndpoint(rawUrl)) return fallback(resource, init);
     const url = normalizeOpenCodeGoRequestUrl(rawUrl);
     const method = (init?.method || request?.method || 'GET').toUpperCase();
-    const headers = new Headers(init?.headers || request?.headers);
+    const headers = new Headers(request?.headers);
+    new Headers(init?.headers).forEach((value, name) => headers.set(name, value));
     const requestMeta = (init as (RequestInit & { __sullyMeta?: { charId?: string } }) | undefined)?.__sullyMeta;
     if (!headers.has('x-opencode-session')) {
       const scope = requestMeta?.charId ? 'conversation:' + requestMeta.charId : 'app-default';
