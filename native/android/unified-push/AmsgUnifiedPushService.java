@@ -30,8 +30,8 @@ public class AmsgUnifiedPushService extends PushService {
         byte[] content = message.getContent();
         if (content == null || content.length == 0 || content.length > 16384) return;
         String payload = new String(content, StandardCharsets.UTF_8);
-        long receivedAt = System.currentTimeMillis();
         android.content.SharedPreferences prefs = getSharedPreferences(AmsgUnifiedPushPlugin.PREFS, Context.MODE_PRIVATE);
+        long receivedAt = Math.max(System.currentTimeMillis(), prefs.getLong("last_received_at", 0L) + 1L);
         try {
             JSONArray queue = new JSONArray(prefs.getString(AmsgUnifiedPushPlugin.KEY_MESSAGES, "[]"));
             JSONObject entry = new JSONObject();
@@ -43,7 +43,8 @@ public class AmsgUnifiedPushService extends PushService {
                 for (int i = queue.length() - 50; i < queue.length(); i++) trimmed.put(queue.get(i));
                 queue = trimmed;
             }
-            prefs.edit().putString(AmsgUnifiedPushPlugin.KEY_MESSAGES, queue.toString()).commit();
+            prefs.edit().putString(AmsgUnifiedPushPlugin.KEY_MESSAGES, queue.toString())
+                .putLong("last_received_at", receivedAt).commit();
         } catch (Exception error) {
             android.util.Log.e("SullyOSUnifiedPush", "Unable to persist push message", error);
             return;
