@@ -82,7 +82,6 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
     input: prompt.trim(),
     model,
     action: 'generate',
-    ...((provider === 'thirdparty' && !isLoliYcNovelAiRoute) ? { use_new_shared_trial: true } : {}),
     parameters: {
       width: options.width,
       height: options.height,
@@ -111,14 +110,13 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
       reference_strength_multiple: [],
       deliberate_euler_ancestral_bug: false,
       prefer_brownian: true,
-      // Other third-party NAI gateways retain the msgpack transport contract.
-      ...(!isLoliYcNovelAiRoute ? { stream: 'msgpack' } : {}),
       v4_prompt: { ...caption(prompt.trim()), use_coords: false, use_order: true },
       v4_negative_prompt: { ...caption(negativePrompt.trim()), legacy_uc: false },
     },
   };
   const headers = makeNaiHeaders(config);
-  if (isLoliYcNovelAiRoute) headers.set('Accept', 'application/zip, application/json, image/*');
+  // Match Morpho's standard NAI request: JSON payload, ZIP/JSON/image response, no msgpack stream flag.
+  headers.set('Accept', 'application/zip, application/json, image/*');
   return {
     url: endpoint,
     init: { method: 'POST', headers, body: JSON.stringify(body) },
