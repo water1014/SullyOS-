@@ -67,6 +67,32 @@ describe('NAI synchronous ZIP generation contract', () => {
   });
 
 
+  it('extracts image data URLs nested anywhere in a JSON response, like OVO', async () => {
+    const response = new Response(JSON.stringify({
+      result: { message: 'generation complete', images: ['data:image/png;base64,iVBORw0KGgo='] },
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const image = await readNaiImageResponse(response);
+    expect(image.type).toBe('image/png');
+    expect(new Uint8Array(await image.arrayBuffer()).slice(0, 8)).toEqual(
+      new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    );
+  });
+
+  it('follows image URLs embedded in a JSON response, like OVO', async () => {
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0]);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(png, {
+      status: 200, headers: { 'content-type': 'image/png' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const response = new Response(JSON.stringify({
+      data: [{ url: 'https://cdn.example.test/generated/image.png?token=redacted' }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+    const image = await readNaiImageResponse(response);
+    expect(fetchMock).toHaveBeenCalledWith('https://cdn.example.test/generated/image.png?token=redacted');
+    expect(image.type).toBe('image/png');
+    expect(new Uint8Array(await image.arrayBuffer())).toEqual(png);
+  });
+
   it('does not resend an ambiguous Android stream failure that may already have been billed', async () => {
     const fetchMock = vi.fn().mockRejectedValue(
       new Error('unexpected end of stream on com.android.okhttp.Address@test'),
