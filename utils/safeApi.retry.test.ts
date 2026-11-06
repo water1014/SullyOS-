@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('./anthropicApi', () => ({
+    fetchLlm: (resource: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(resource, init),
+}));
+
 import { safeFetchJson } from './safeApi';
 
 describe('OpenCode Go explicit overload retry', () => {
@@ -38,7 +43,7 @@ describe('OpenCode Go explicit overload retry', () => {
             true,
         );
 
-        await vi.advanceTimersByTimeAsync(6000);
+        await vi.runAllTimersAsync();
         await expect(pending).resolves.toMatchObject({
             choices: [{ message: { content: 'ok' } }],
         });
