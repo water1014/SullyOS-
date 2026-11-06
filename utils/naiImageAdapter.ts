@@ -28,6 +28,16 @@ export function normalizeNaiGenerateEndpoint(baseUrl: string, provider: 'officia
   catch { throw new Error('NAI API Base URL 必须是完整的 http:// 或 https:// 地址'); }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error('NAI API Base URL 只支持 HTTP 或 HTTPS 地址');
   const basePath = parsed.pathname.replace(/^\/+|\/+$/g, '');
+  // Morpho treats /novelai as the complete API endpoint, not a base URL.
+  // Its sugar-painting web paths /api/generate and /generate map to /novelai.
+  if (/\/novelai$/i.test('/' + basePath)) {
+    parsed.pathname = '/' + basePath;
+    return parsed.toString().replace(/\/$/, '');
+  }
+  if (/\.loliyc\.com$/i.test(parsed.hostname) && /\/(?:api\/generate|generate)$/i.test(parsed.pathname)) {
+    parsed.pathname = '/novelai';
+    return parsed.toString().replace(/\/$/, '');
+  }
   const hasGenerationPath = basePath === 'ai/generate-image' || basePath.endsWith('/ai/generate-image');
   parsed.pathname = hasGenerationPath ? '/' + basePath : basePath ? '/' + basePath + '/ai/generate-image' : '/ai/generate-image';
   return parsed.toString().replace(/\/$/, '');
@@ -63,11 +73,17 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
   const isV5 = model.startsWith('nai-diffusion-5');
   const caption = (text: string) => ({ caption: { base_caption: text, char_captions: [] }, use_coords: false, use_order: true });
   const provider = config.provider || 'official';
+  const endpoint = normalizeNaiGenerateEndpoint(config.baseUrl || (provider === 'official' ? 'https://image.novelai.net' : ''), provider);
+  let isLoliYcNovelAiRoute = false;
+  try {
+    const parsedEndpoint = new URL(endpoint);
+    isLoliYcNovelAiRoute = /\.loliyc\.com$/i.test(parsedEndpoint.hostname) && /\/novelai$/i.test(parsedEndpoint.pathname);
+  } catch { /* malformed endpoints are rejected by the normalizer */ }
   const body = {
     input: prompt.trim(),
     model,
     action: 'generate',
-    ...((config.provider || 'official') === 'thirdparty' ? { use_new_shared_trial: true } : {}),
+    ...((provider === 'thirdparty' && !isLoliYcNovelAiRoute) ? { use_new_shared_trial: true } : {}),
     parameters: {
       width: options.width,
       height: options.height,
@@ -82,15 +98,14 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
       qualityToggle: true,
       ucPreset: 0,
       params_version: isV5 ? 4 : 3,
-      // 柏宝绘与智绘姬的同步 NAI ZIP 路线都显式声明 msgpack 传输模式。
-      // 第三方兼容站依赖此字段选择 ZIP 响应，缺失时可能走错误的响应编码路径。
-      stream: 'msgpack',
+      // Morpho's /novelai route accepts standard JSON and returns ZIP directly.
+      ...(!isLoliYcNovelAiRoute ? { stream: 'msgpack' } : {}),
       v4_prompt: caption(prompt.trim()),
       v4_negative_prompt: caption(negativePrompt.trim()),
     },
   };
   return {
-    url: normalizeNaiGenerateEndpoint(config.baseUrl || (provider === 'official' ? 'https://image.novelai.net' : ''), provider),
+    url: endpoint,
     init: { method: 'POST', headers: makeNaiHeaders(config), body: JSON.stringify(body) },
   };
 }
@@ -372,13 +387,6 @@ function naiRetryAfterMs(value: string | null): number | null {
   return Number.isNaN(date) ? null : Math.min(Math.max(0, date - Date.now()), NAI_MAX_RETRY_WAIT_MS);
 }
 
-function isRetryableNaiNetworkError(error: unknown): boolean {
-  const item = error as { name?: string; message?: string } | null;
-  const message = String(item?.message || error || '');
-  return item?.name === 'TypeError'
-    || /unexpected end of stream|connection reset|connection aborted|failed to connect|socket closed|network request failed|networkerror|timed? ?out/i.test(message);
-}
-
 function naiAbortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -418,7 +426,8 @@ export async function generateNaiImage(config: NaiImageConfig, prompt: string, n
         const error = new Error('NAI 生图失败（HTTP ' + response.status + '）：' + message.slice(0, 240)) as Error & { status?: number; retryAfterMs?: number };
         error.status = response.status;
         error.retryAfterMs = naiRetryAfterMs(response.headers.get('Retry-After')) || undefined;
-        if (!(response.status === 408 || response.status === 429 || (response.status >= 500 && response.status !== 501))) throw error;
+        // Only 429 is a confirmed rejection; 408/5xx can happen after generation was billed.
+        if (response.status !== 429) throw error;
         lastError = error;
         if (attempt === NAI_MAX_ATTEMPTS) throw error;
         const waitMs = naiRetryDelay(attempt, error.retryAfterMs ?? null);
@@ -429,11 +438,9 @@ export async function generateNaiImage(config: NaiImageConfig, prompt: string, n
       return await readNaiImageResponse(response);
     } catch (error) {
       lastError = error;
+      // A cut response does not prove upstream generation failed. Never resend an ambiguous paid request.
       if (signal?.aborted || (error as { name?: string })?.name === 'AbortError') throw error;
-      if (!isRetryableNaiNetworkError(error) || attempt === NAI_MAX_ATTEMPTS) throw error;
-      const waitMs = naiRetryDelay(attempt, null);
-      console.warn('[NAI] network transport failed before a complete response; retrying', { attempt, max: NAI_MAX_ATTEMPTS - 1, waitMs, error: String(error) });
-      await naiAbortableDelay(waitMs, signal);
+      throw error;
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError || 'NAI 生图失败'));
