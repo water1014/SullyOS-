@@ -503,7 +503,7 @@ export async function safeFetchJson(
                         // OpenCode Go emits both [overloaded] and [prefill_cap_refused].
                         // The latter often carries its retry hint only in the JSON message body.
                         retryThisResponse = /overloaded|prefill_cap_refused|cell is at capacity/i.test(bodyText);
-                        const bodyRetryAfter = bodyText.match(/after\\s+(\\d+(?:\\.\\d+)?)\\s*s/i);
+                        const bodyRetryAfter = bodyText.match(/after\s+(\d+(?:\.\d+)?)\s*s/i);
                         if (bodyRetryAfter) delay = Math.min(Math.max(Number(bodyRetryAfter[1]) * 1000, 1000), 60000);
                         const retryAfter = response.headers.get('retry-after');
                         if (retryAfter) {
