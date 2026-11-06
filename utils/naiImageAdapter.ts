@@ -70,7 +70,6 @@ export function buildNaiGenerateRequest(config: NaiImageConfig, prompt: string, 
     throw new Error('NAI Seed 必须是 0 到 4294967295 之间的整数');
   }
   const model = config.model || 'nai-diffusion-5-full';
-  const isV5 = model.startsWith('nai-diffusion-5');
   const caption = (text: string) => ({ caption: { base_caption: text, char_captions: [] }, use_coords: false, use_order: true });
   const provider = config.provider || 'official';
   const endpoint = normalizeNaiGenerateEndpoint(config.baseUrl || (provider === 'official' ? 'https://image.novelai.net' : ''), provider);
