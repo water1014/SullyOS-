@@ -49,7 +49,7 @@ public class AmsgUnifiedPushService extends PushService {
             android.util.Log.e("SullyOSUnifiedPush", "Unable to persist push message", error);
             return;
         }
-        AmsgUnifiedPushPlugin.sendEvent(this, AmsgUnifiedPushPlugin.ACTION_PUSH, payload);
+        AmsgUnifiedPushPlugin.sendEvent(this, AmsgUnifiedPushPlugin.ACTION_PUSH, payload, receivedAt);
         showNotification(payload);
     }
 
