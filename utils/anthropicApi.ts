@@ -221,7 +221,8 @@ export async function fetchLlm(resource: RequestInfo | URL, init?: RequestInit, 
         try {parsed=typeof body==='string' ? JSON.parse(body) : undefined;} catch { /* Other services may also use /messages. */ }
         if(typeof parsed?.model!=='string' || !Array.isArray(parsed.messages))return transport(resource,init);
     } else if(method!=='GET' || !/\/messages\/models\/?$/.test(new URL(inputUrl).pathname)) return transport(resource,init);
-    const headers=new Headers(init?.headers || request?.headers);
+    const headers=new Headers(request?.headers);
+    new Headers(init?.headers).forEach((value,name)=>headers.set(name,value));
     const key=headers.get('x-api-key') || headers.get('authorization')?.replace(/^Bearer\s+/i,'') || '';
     headers.delete('authorization');headers.set('x-api-key',key);headers.set('anthropic-version','2023-06-01');
     if(browser)headers.set('anthropic-dangerous-direct-browser-access','true');
