@@ -39,7 +39,7 @@ describe('NAI synchronous ZIP generation contract', () => {
     expect(legacySugarPath.url).toBe('https://std.loliyc.com/novelai');
   });
 
-  it('keeps the msgpack ZIP route for other third-party NAI gateways', () => {
+  it('uses the 智绘姬-compatible msgpack hint for generic third-party gateways without changing the ZIP response contract', () => {
     const request = buildNaiGenerateRequest({
       apiKey: 'test-token', model: 'nai-diffusion-4-5-full', provider: 'thirdparty',
       baseUrl: 'https://proxy.example',
@@ -48,7 +48,7 @@ describe('NAI synchronous ZIP generation contract', () => {
     });
     const body = JSON.parse(String(request.init.body));
     expect(request.url).toBe('https://proxy.example/ai/generate-image');
-    expect(body.use_new_shared_trial).toBe(true);
+    expect(body.use_new_shared_trial).toBeUndefined();
     expect(body.parameters.stream).toBe('msgpack');
   });
 
