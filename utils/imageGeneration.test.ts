@@ -180,7 +180,7 @@ describe('image generation clients', () => {
 
     const [, request] = vi.mocked(fetch).mock.calls[0];
     const body = JSON.parse(String(request.body));
-    expect(body.parameters).not.toHaveProperty('stream');
+    expect(body.parameters).toHaveProperty('stream', 'msgpack');
     expect(body.parameters).toHaveProperty('ucPreset', 0);
     expect(new Headers(request.headers).get('Accept')).toBe('application/zip');
   });
@@ -225,7 +225,7 @@ describe('image generation clients', () => {
     expect(new Headers(request.headers).get('x-provider')).toBe('studio-test');
     expect(new Headers(request.headers).get('Accept')).toBe('*/*');
     const requestBody = JSON.parse(String(request.body));
-    expect(requestBody.parameters).not.toHaveProperty('stream');
+    expect(requestBody.parameters).toHaveProperty('stream', 'msgpack');
     expect(requestBody).toMatchObject({
       action: 'generate',
       use_new_shared_trial: true,
