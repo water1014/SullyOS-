@@ -8,6 +8,8 @@
  * 零浏览器 / 零 worker 运行时依赖（会被打进 amsg worker bundle）。
  */
 
+import { isOpenCodeGoEndpoint } from './apiConfigNormalize';
+
 /** 副 API 凭据（没单独配就是主 API 那一份）。 */
 export interface EmotionEvalApi { baseUrl: string; apiKey: string; model: string }
 
@@ -103,6 +105,7 @@ export const requestEmotionEval = async (
   promptContent: string,
   timeoutMs: number = EMOTION_EVAL_TIMEOUT_MS,
   signal?: AbortSignal,
+  sessionScope = 'default',
 ): Promise<EmotionEvalOutcome> => {
   const controller = new AbortController();
   const abort = () => controller.abort(signal?.reason);
@@ -111,12 +114,19 @@ export const requestEmotionEval = async (
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const baseUrl = String(api.baseUrl).replace(/\/+$/, '');
+    const headers = new Headers({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${api.apiKey || 'sk-none'}`,
+    });
+    if (isOpenCodeGoEndpoint(baseUrl)) {
+      // Cloudflare Worker has no localStorage. The character scope makes the
+      // session stable across proactive-message and emotion-evaluation turns.
+      const safeScope = String(sessionScope || 'default').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+      headers.set('x-opencode-session', `ses_sullyos_emotion_${safeScope}`);
+    }
     const res = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${api.apiKey || 'sk-none'}`,
-      },
+      headers,
       body: JSON.stringify({
         model: api.model,
         messages: [{ role: 'user', content: promptContent }],
