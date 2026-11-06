@@ -15,6 +15,7 @@ import { installIOSStatusBarEdge } from './utils/iosStatusBarEdge';
 import { installWakeListener } from './utils/proactivePushConfig';
 import { initAnalytics } from './utils/analytics';
 import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { configureOpenCodeGoNativeTransport } from './utils/openCodeGoTransport';
 import { createOpenCodeGoNativeFetch } from './utils/openCodeGoNativePlugin';
 import { refreshAndroidSafeArea } from './utils/androidSafeArea';
@@ -34,6 +35,19 @@ startDatabaseOpenDiagnostics();
 const databaseReady = checkDatabaseReadable(openDB);
 void databaseReady.then(releaseDatabaseDiagnosticPersistence, releaseDatabaseDiagnosticPersistence);
 const keepAliveReady = KeepAlive.init();
+
+// Android may suspend the WebView while the app is backgrounded. A native
+// app-state transition is more reliable than relying on browser focus alone.
+// Reconcile persisted schedules and drain the AMSG inbox whenever the app
+// returns to the foreground. Both entry points are idempotent.
+if (Capacitor.isNativePlatform()) {
+  void CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+    if (!isActive) return;
+    void KeepAlive.init();
+    ProactiveChat.resume();
+    void ActiveMsgRuntime.init();
+  });
+}
 Promise.all([databaseReady, keepAliveReady]).then(() => {
   recordDatabaseOpen('background-ready');
   // Resume any active proactive schedule after SW is ready
