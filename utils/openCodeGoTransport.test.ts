@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createOpenCodeGoTransport, normalizeOpenCodeGoRequestUrl } from './openCodeGoTransport';
+import { configureOpenCodeGoNativeTransport, fetchOpenCodeGo } from './openCodeGoTransport';
+import { safeFetchJson } from './safeApi';
 
 describe('OpenCode Go transport', () => {
   it('normalizes raw Go roots for feature-specific API callers', () => {
@@ -138,5 +140,26 @@ describe('OpenCode Go transport', () => {
     const [, request] = fallback.mock.calls[0];
     expect(new Headers(request?.headers).get('x-opencode-session')).toBeTruthy();
     expect(await response.json()).toEqual({ ok: true });
+  });
+
+  it('routes safeFetchJson feature requests through the configured Android native bridge', async () => {
+    const native = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(url)).toBe('https://opencode.ai/inference/go/openai/v1/chat/completions');
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer feature-key');
+      expect(new Headers(init?.headers).get('x-opencode-session')).toBeTruthy();
+      return Response.json({ choices: [{ message: { content: 'feature-ok' } }] });
+    });
+    configureOpenCodeGoNativeTransport(true, native);
+    try {
+      const result = await safeFetchJson(
+        'https://opencode.ai/inference/go/openai/v1/chat/completions',
+        { method: 'POST', headers: { Authorization: 'Bearer feature-key' }, body: JSON.stringify({ model: 'deepseek-v4.1-flash', messages: [{ role: 'user', content: 'ping' }] }) },
+        0,
+      );
+      expect(result.choices[0].message.content).toBe('feature-ok');
+      expect(native).toHaveBeenCalledOnce();
+    } finally {
+      configureOpenCodeGoNativeTransport(false);
+    }
   });
 });
