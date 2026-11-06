@@ -9,7 +9,7 @@ import { processImage } from '../utils/file';
 import Modal from '../components/os/Modal';
 import TokenImg from '../components/os/TokenImg';
 import { isImageValue } from '../utils/blobRef';
-import { safeResponseJson, extractJson, formatApiErrorPayload } from '../utils/safeApi';
+import { safeResponseJson, safeFetchJson, extractJson, formatApiErrorPayload } from '../utils/safeApi';
 import { buildApiRequestHeaders, getOpenCodeSessionId } from '../utils/apiConfigNormalize';
 import { normalizeMessageContent } from '../utils/messageFormat';
 import { injectMemoryPalace, ingestDiaryToPalace, type DiaryIngestResult } from '../utils/memoryPalace/pipeline';
@@ -515,7 +515,7 @@ Structure:
   "stickers": ["sticker1", "http://custom-sticker-url..."] (从默认列表或 Custom Stickers 中选0-3个)
 }`;
 
-            const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+            const data = await safeFetchJson(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                 method: 'POST',
                 headers: buildApiRequestHeaders(apiConfig.apiKey, apiConfig.customHeaders, { baseUrl: apiConfig.baseUrl, sessionId: getOpenCodeSessionId(`journal:${selectedChar.id}`) }),
                 body: JSON.stringify({
@@ -526,15 +526,7 @@ Structure:
                     ])),
                     temperature: 0.85
                 })
-            });
-
-            if (!response.ok) {
-                let detail = '';
-                try { detail = formatApiErrorPayload(await safeResponseJson(response), response.status); }
-                catch (error) { detail = error instanceof Error ? error.message : String(error); }
-                throw new Error(`交换日记 API 失败（HTTP ${response.status}）：${detail}`);
-            }
-            const data = await safeResponseJson(response);
+            }, 2, 0, { appName: '日记', charId: selectedChar.id, charName: selectedChar.name, purpose: '交换日记' }, undefined, true);
             let content = data.choices[0].message.content.trim();
             content = content.replace(/```json/g, '').replace(/```/g, '').trim();
             
@@ -632,7 +624,7 @@ ${charPart}
 3. **细节胜过抽象**: 多说具体的事 (人名、地点、物件、当时的情绪),少用"我们度过了美好的一天"这种空话。
 4. **篇幅**: 150~300 字之间的一段中文叙述,不要分段,不要列表,不要任何前缀和标题,直接出叙述。
 `;
-            const response = await fetch(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+            const data = await safeFetchJson(`${apiConfig.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                 method: 'POST',
                 headers: buildApiRequestHeaders(apiConfig.apiKey, apiConfig.customHeaders, { baseUrl: apiConfig.baseUrl, sessionId: getOpenCodeSessionId(`journal:${selectedChar.id}`) }),
                 body: JSON.stringify({
@@ -641,14 +633,7 @@ ${charPart}
                     temperature: 0.4,
                     max_tokens: 1200,
                 }),
-            });
-            if (!response.ok) {
-                let detail = '';
-                try { detail = formatApiErrorPayload(await safeResponseJson(response), response.status); }
-                catch (error) { detail = error instanceof Error ? error.message : String(error); }
-                throw new Error(`日记归档 API 失败（HTTP ${response.status}）：${detail}`);
-            }
-            const data = await safeResponseJson(response);
+            }, 2, 0, { appName: '日记', charId: selectedChar.id, charName: selectedChar.name, purpose: '日记归档' }, undefined, true);
             let s = (data.choices?.[0]?.message?.content || '').trim();
             s = s.replace(/^["'「『]|["'」』]$/g, '').trim();
             if (!s) throw new Error('归档总结为空');
