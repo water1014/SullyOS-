@@ -399,3 +399,33 @@ export const NETWORK_SELF_CHECK_STEPS: string[] = [
     '换一个浏览器或换手机热点各试一次，能定位到是「这台设备」还是「这个网络」',
     '如果只有部分功能报错，去设置里看对应的服务地址是不是填错了（少 https://、多空格、多结尾斜杠）',
 ];
+
+
+// DOMException / 跨 realm 的报错不一定过得了 instanceof Error，按形状认。
+type ConsoleErrorLike = { name: string; message: string; stack?: string };
+const isConsoleErrorLike = (value: unknown): value is ConsoleErrorLike =>
+    value instanceof Error || (!!value && typeof value === 'object'
+        && typeof (value as ConsoleErrorLike).name === 'string' && typeof (value as ConsoleErrorLike).message === 'string');
+
+/**
+ * console.error 的参数 → 日志正文与堆栈。
+ * 对象参数只提取直接挂在上面的报错，其余字段不展开，避免把聊天内容或配置写进可外发日志。
+ */
+export const describeConsoleErrorArgs = (args: unknown[]): { message: string; stacks: string } => {
+    const errors: ConsoleErrorLike[] = [];
+    const message = args.map((arg) => {
+        if (isConsoleErrorLike(arg)) {
+            errors.push(arg);
+            return arg.message;
+        }
+        if (arg && typeof arg === 'object') {
+            const nested = Object.values(arg).filter(isConsoleErrorLike);
+            if (nested.length) {
+                errors.push(...nested);
+                return nested.map(e => `${e.name}: ${e.message}`).join('; ');
+            }
+        }
+        return String(arg);
+    }).join(' ');
+    return { message, stacks: errors.map(e => e.stack || '').filter(Boolean).join('\\n') };
+};
