@@ -238,6 +238,14 @@ export const plateCloudGate = async (args: {
     return 'local';
   }
 
+  // 后台任务只靠 cron 捞。明确暂停时，交云端的整理不会执行，且恢复后可能因过期被丢弃。
+  // 只把明确的 enabled:false 当作暂停；状态问不到时保留原有的在飞任务判定，避免重复整理。
+  const cron = await ActiveMsgClient.getCronTriggerState();
+  if (cron?.supported === true && cron.enabled === false) {
+    console.log(`${HEADER} 后台任务（定时触发）暂停着，这轮在本地整理`);
+    return 'local';
+  }
+
   const inFlight = readPlateJobInFlight(args.charId);
   if (inFlight) {
     console.log(`${HEADER} 上一份整理还在云端跑（job ${inFlight.jobId}），这轮不重复交`);
