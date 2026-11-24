@@ -8,9 +8,10 @@
 // 也是「同一件活儿的一部分」，同样要从叶子里取、同样要送到云端那条路上。
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { scheduleBackgroundJob, probeBackgroundJobSupportDetailed, plateStore, charStore } = vi.hoisted(() => ({
+const { scheduleBackgroundJob, probeBackgroundJobSupportDetailed, getCronTriggerState, plateStore, charStore } = vi.hoisted(() => ({
   scheduleBackgroundJob: vi.fn(async () => ({ uuid: 'remote-uuid' })),
   probeBackgroundJobSupportDetailed: vi.fn(async () => 'supported' as string),
+  getCronTriggerState: vi.fn(async (): Promise<{ supported: boolean; enabled?: boolean } | null> => ({ supported: true, enabled: true })),
   /** 假门牌库：落地那半截要读要写，node 上没有 IndexedDB。 */
   plateStore: { plates: new Map<string, any>(), saveError: null as Error | null },
   /** 假角色库：落地前要确认这个角色还在。 */
@@ -19,7 +20,7 @@ const { scheduleBackgroundJob, probeBackgroundJobSupportDetailed, plateStore, ch
 /** 「这条任务可能已经在远端建起来了」的标记，跟真身同款（见 activeMsgClient）。 */
 const MAYBE_CREATED = '__amsgBackgroundJobMaybeCreated';
 vi.mock('../activeMsgClient', () => ({
-  ActiveMsgClient: { scheduleBackgroundJob, probeBackgroundJobSupportDetailed },
+  ActiveMsgClient: { scheduleBackgroundJob, probeBackgroundJobSupportDetailed, getCronTriggerState },
   mayHaveCreatedBackgroundJob: (error: unknown) =>
     (error as Record<string, unknown> | null)?.['__amsgBackgroundJobMaybeCreated'] === true,
 }));
@@ -101,6 +102,7 @@ const submit = (over: Record<string, unknown> = {}) => submitPlateConsolidation(
 beforeEach(() => {
   scheduleBackgroundJob.mockClear().mockResolvedValue({ uuid: 'remote-uuid' });
   probeBackgroundJobSupportDetailed.mockClear().mockResolvedValue('supported');
+  getCronTriggerState.mockClear().mockResolvedValue({ supported: true, enabled: true });
   vi.mocked(settleCloudApiCall).mockClear();
   vi.mocked(recordCloudApiCall).mockClear();
   vi.mocked(RoomPlateDB.save).mockClear();
@@ -181,6 +183,22 @@ describe('同一角色同时只许一份整理在飞', () => {
     await submit();
 
     expect(await gate(), '退回本地会白烧一次 API，结果还跟在飞那份互相盖').toBe('skip');
+  });
+
+  it('后台任务暂停时（cron 关闭）→ 本地整理', async () => {
+    getCronTriggerState.mockResolvedValue({ supported: true, enabled: false });
+    expect(await gate()).toBe('local');
+  });
+
+  it('后台任务暂停时，即使已有一份云端任务在飞也退回本地', async () => {
+    await submit();
+    getCronTriggerState.mockResolvedValue({ supported: true, enabled: false });
+    expect(await gate()).toBe('local');
+  });
+
+  it('cron 状态问不到时不当作暂停：无在飞任务仍可提交', async () => {
+    getCronTriggerState.mockResolvedValue(null);
+    expect(await gate()).toBe('submit');
   });
 
   it('结果回来（记号清掉）之后照常放行', async () => {
