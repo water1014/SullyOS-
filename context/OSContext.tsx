@@ -60,7 +60,7 @@ import { captureApiRequestOnce, getApiCallAmbientContext, recordApiCall, setApiC
 import { isUserLocationLookupUrl } from '../utils/userLocationPrivacy';
 import { isGlobalStreamEnabled, upgradeChatBodyToStream, assembleUpgradedResponse } from '../utils/streamUpgrade';
 import { rewriteStaleWorkerUrl } from '../utils/proxyWorker';
-import { buildFetchFailureDetail, classifyFetchFailure, describeReachabilityProbe, parseTargetUrl, probeOriginReachability, shouldProbeReachability, summarizeFetchRequestBody } from '../utils/networkFailureDiagnosis';
+import { describeConsoleErrorArgs, buildFetchFailureDetail, classifyFetchFailure, describeReachabilityProbe, parseTargetUrl, probeOriginReachability, shouldProbeReachability, summarizeFetchRequestBody } from '../utils/networkFailureDiagnosis';
 import { INSTALLED_APPS, HIDDEN_APP_NAMES } from '../constants';
 import { isAnalyticsRequestUrl, trackEvent, shouldReportSnapshot, trackDataScaleOnce, trackCurrentAppearanceOnce, trackCurrentCharSettingsOnce, trackCurrentFeaturesOnce, trackCurrentSARFeaturesOnce } from '../utils/analytics';
 import { loadChatInputPreferences, saveChatInputPreferences } from '../utils/chatInputPreferences';
@@ -1460,7 +1460,7 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
       const originalConsoleError = console.error;
       console.error = (...args) => {
-          const msg = args.map(a => (a instanceof Error ? a.message : String(a))).join(' ');
+          const { message: msg, stacks } = describeConsoleErrorArgs(args);
           // MediaPipe/TFLite 把这条成功初始化信息写到了 stderr，浏览器因而走
           // console.error；改回 info，避免系统日志把“CPU 加速创建成功”报成红色错误。
           if (isBenignApplicationConsoleMessage(msg)) {
@@ -1473,11 +1473,7 @@ export const OSProvider: React.FC<{ children: React.ReactNode }> = ({ children }
           // 对「多个非 Error 参数」会产出 "\n"（truthy），把回退短路掉——
           // 日志面板里只剩被 100 字截断的 message（排查 Embedding 400 这类
           // 长响应时，关键的服务商完整响应体全丢，detail 只有一个换行符）。
-          const stacks = args
-              .filter((a): a is Error => a instanceof Error)
-              .map(a => a.stack || '')
-              .filter(Boolean)
-              .join('\n');
+          // Fall back to the full message when no stack is available.
           if (msg.includes('Warning:')) return;
           setSystemLogs(prev => [{
               id: `log-${Date.now()}-${Math.random()}`,
