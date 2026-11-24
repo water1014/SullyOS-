@@ -15,6 +15,7 @@ import {
     buildFetchFailureDetail,
     classifyFetchFailure,
     describeReachabilityProbe,
+    describeConsoleErrorArgs,
     parseTargetUrl,
     probeOriginReachability,
     readResourceTimingHint,
@@ -489,5 +490,23 @@ describe('parseTargetUrl / 自查清单', () => {
     it('自查清单第一步就是「换节点 / 关梯子直连」', () => {
         expect(NETWORK_SELF_CHECK_STEPS.length).toBeGreaterThanOrEqual(4);
         expect(NETWORK_SELF_CHECK_STEPS[0]).toContain('梯子');
+    });
+});
+
+
+describe('describeConsoleErrorArgs', () => {
+    it('extracts nested errors but does not expose sibling private fields', () => {
+        const error = new TypeError('Failed to fetch dynamically imported module');
+        const result = describeConsoleErrorArgs(['request failed', { messageId: 'private-chat-text', error, attempts: 2 }]);
+        expect(result.message).toBe('request failed TypeError: Failed to fetch dynamically imported module');
+        expect(result.message).not.toContain('private-chat-text');
+        expect(result.stacks).toBe(error.stack);
+    });
+    it('recognizes DOMException-shaped objects', () => {
+        expect(describeConsoleErrorArgs(['write failed', { error: { name: 'QuotaExceededError', message: 'quota exceeded' } }]).message)
+            .toBe('write failed QuotaExceededError: quota exceeded');
+    });
+    it('keeps ordinary arguments unchanged', () => {
+        expect(describeConsoleErrorArgs(['x', new Error('boom'), { a: 1 }]).message).toBe('x boom [object Object]');
     });
 });
