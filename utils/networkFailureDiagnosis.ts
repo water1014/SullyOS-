@@ -419,3 +419,23 @@ export const describeConsoleErrorArgs = (args: unknown[]): { message: string; st
     }).join(' ');
     return { message, stacks: errors.map(e => e.stack || '').filter(Boolean).join('\\n') };
 };
+
+
+// Extract nested errors without serializing other object fields that may contain private chat/config data.
+type ConsoleErrorLike = { name: string; message: string; stack?: string };
+const isConsoleErrorLike = (value: unknown): value is ConsoleErrorLike =>
+    value instanceof Error || (!!value && typeof value === 'object'
+        && typeof (value as ConsoleErrorLike).name === 'string' && typeof (value as ConsoleErrorLike).message === 'string');
+
+export const describeConsoleErrorArgs = (args: unknown[]): { message: string; stacks: string } => {
+    const errors: ConsoleErrorLike[] = [];
+    const message = args.map((arg) => {
+        if (isConsoleErrorLike(arg)) { errors.push(arg); return arg.message; }
+        if (arg && typeof arg === 'object') {
+            const nested = Object.values(arg).filter(isConsoleErrorLike);
+            if (nested.length) { errors.push(...nested); return nested.map(e => `${e.name}: ${e.message}`).join('; '); }
+        }
+        return String(arg);
+    }).join(' ');
+    return { message, stacks: errors.map(e => e.stack || '').filter(Boolean).join('\\n') };
+};
