@@ -427,5 +427,5 @@ export const describeConsoleErrorArgs = (args: unknown[]): { message: string; st
         }
         return String(arg);
     }).join(' ');
-    return { message, stacks: errors.map(e => e.stack || '').filter(Boolean).join('\\n') };
+    return { message, stacks: errors.map(e => e.stack || '').filter(Boolean).join('\n') };
 };
